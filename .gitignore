@@ -1,0 +1,29 @@
+# Local OS/editor files
+.DS_Store
+*.swp
+*.swo
+
+# Python runtime/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node/runtime artifacts
+node_modules/
+dist/
+build/
+
+# Rust build outputs
+target/
+
+# Pixi/conda materialized environments
+.pixi/
+
+# Local logs and scratch output
+*.log
+tmp/
+scratch/
