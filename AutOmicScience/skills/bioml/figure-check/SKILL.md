@@ -201,27 +201,16 @@ The model successfully merges batches while preserving cell-type structure (ARI 
 
 ---
 
-## Pitfalls
+## Pitfalls & fixes
 
-- **Skipping `pdf.fonttype=42`** — the PDF looks fine but embeds bitmap fonts
-- **Not verifying with `pdffonts`** — you assume it's vector but it's not
-- **Ignoring empty quadrants** — wasted canvas space
-- **Legend covering data** — place it in a blank region or use `loc='best'` as a starting point
-- **Colormap without a colorbar** — readers can't interpret the colors
-- **3D plots** — hard to read, avoid
-- **Saving as PNG for publication** — use PDF or SVG for vector graphics
-
----
-
-## When Things Go Wrong
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| **`pdffonts` shows Type 3** | `pdf.fonttype` not set | Add the rcParams block at the top |
-| **Labels overlap** | `tight_layout()` not called, or axes too small | Call `plt.tight_layout()` before save; or enlarge figsize |
-| **Legend obscures data** | Auto-placement failed | Manually set `loc='upper right'` or place outside with `bbox_to_anchor=(1.05, 1)` |
-| **Empty bottom-left quadrant** | Data doesn't span axes | Set `ax.set_xlim` / `ax.set_ylim` to crop whitespace |
-| **Text too small** | Default font size (10–12 pt) not adjusted | Use the rcParams block above (7 pt body, 6 pt ticks) |
+| Symptom / mistake | Cause | Fix |
+|-------------------|-------|-----|
+| `pdffonts` shows Type 3 (bitmap fonts) | `pdf.fonttype=42` not set or not verified | Add the rcParams block at the top; verify with `pdffonts` |
+| Labels overlap / text too small | `tight_layout()` not called, axes too small, or default font size (10–12 pt) | `plt.tight_layout()` before save, enlarge figsize; rcParams (7 pt body, 6 pt ticks) |
+| Legend obscures data | Auto-placement failed | Set `loc='upper right'`, or place outside with `bbox_to_anchor=(1.05, 1)` |
+| Empty quadrant / wasted canvas | Data doesn't span the axes | Crop with `ax.set_xlim` / `ax.set_ylim` |
+| Colors uninterpretable | Colormap without a colorbar | Always add a colorbar |
+| Not publication-quality | Saved as PNG, or used a 3D plot | Save PDF / SVG (vector); avoid 3D plots |
 
 ---
 

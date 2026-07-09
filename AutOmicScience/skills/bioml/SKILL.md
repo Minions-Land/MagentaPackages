@@ -11,11 +11,7 @@ extends: omics-shared
 
 # BioML — Bioinformatics Machine-Learning Engineering
 
-BioML covers the tasks where the deliverable is a **trained or reproduced machine-learning model** on biological data — not a standard analytical write-up. Think: reproduce SATURN / scPoli / scVI / a sequence foundation model / a spatial GNN to a tight objective metric, or build a competitive DL baseline on omics data.
-
-Builds on `omics-shared` (loaded automatically — its evidence/grounding rules apply). This parent skill provides the ML-engineering mental model and routes to modality-specific subskills.
-
----
+BioML covers the tasks where the deliverable is a **trained or reproduced machine-learning model** on biological data — not a standard analytical write-up. Think: reproduce SATURN / scPoli / scVI / a sequence foundation model / a spatial GNN to a tight objective metric, or build a competitive DL baseline on omics data. Builds on `omics-shared` (loaded automatically — don't restate its rules). This parent gives the ML-engineering mental model and routes to subskills.
 
 ## The Core Insight (read this first)
 
@@ -26,8 +22,6 @@ For most BioML reproduction tasks, **the winning move is not to reinvent the met
 3. **Exploit escape hatches.** Sometimes a strong baseline beats the "SOTA" method on the exact metric being scored. Always check whether a simpler path clears the bar before committing to a heavy pipeline.
 
 Only reimplement from scratch when no repo runs and no simpler method fits. The #1 capability here is **ML-engineering: get the paper's code running, get its weights, adapt the outputs** — the domain method is secondary.
-
----
 
 ## Routing: Which Subskill?
 
@@ -42,45 +36,12 @@ Only reimplement from scratch when no repo runs and no simpler method fits. The 
 
 The subskills are chapters of this skill and cannot be invoked independently. Read the one that matches your current step.
 
----
+## BioML foundations (details in `omics-shared` + the subskill)
 
-## Shared BioML Foundations
-
-### 1. Environment & Compute Reality
-
-- **Confirm the environment before training.** GPU availability (`nvidia-smi`), CUDA/torch versions, available RAM/disk. Many BioML tasks are bound by **data size + wall-clock**, not GPU FLOPs.
-- **Stream, don't load blindly.** Multi-GB datasets: read shapes/metadata first, load lazily or in chunks. A 116 GB dataset does not fit in memory.
-- **Prefer the package's pinned envs** — run compute through `omics_compute` / pixi environments where the standardized path exists; only build a fresh env when the paper repo demands it.
-- **Sanity-check small before scaling.** Train on a subset / few epochs, confirm the loss moves and the output shape is right, then scale.
-
-### 2. Reproduce to an EXACT Output Contract
-
-Reproduction work is judged by whether your outputs match the paper's reported results. Therefore:
-
-- **Read the required output spec first** — file name, format (`.npy` / `.h5ad` / `.csv`), array shape, dtype, and the exact metric (ARI, Pearson, MCC, cosine, silhouette…).
-- **Match the contract exactly.** A model that trains perfectly but writes the wrong shape scores zero. Verify the output shape/dtype programmatically before declaring done.
-- **Know the baseline.** If the score is normalized against a published SOTA, find that number and target it explicitly.
-
-### 3. Honest ML, No Faked Success
-
-- **Never fabricate metrics.** Every reported number comes from a real run against real data, cited as evidence.
-- **Surface failures.** A training run that diverged, a repo that would not install, an OOM — report it as a blocker, do not paper over it. (See `coding/` silent-failure discipline.)
-- **Ground every claim** — loss curves, metric values, output artifacts → emit a trailing JSON `report` and cite exact numbers.
-
-### 4. Fetch Discipline (code & weights)
-
-- Getting the paper's code and weights is usually step one. Use `repro/`'s fetch recipes.
-- **GitHub**: prefer `gh api` / `gh repo clone --depth=1`; fall back to `raw.githubusercontent.com`.
-- **Hugging Face**: emphasize **mirror endpoints** when the canonical host is slow/blocked; the environment's `WebFetch`/network layer already probes local proxies automatically, but `hf`/`git-lfs` paths often need an explicit mirror + `GIT_LFS_SKIP_SMUDGE=1`.
-- Always record: source repo + commit SHA, where bytes landed, and the **license** (it gates whether you can reuse the code/weights downstream).
-
-### 5. Evidence & Grounding (from omics-shared)
-
-- Every quantitative claim → emit a trailing JSON `report`, cite exact numbers.
-- Every figure → inspect it before it backs a claim (see `figure-check/`).
-- Preserve provenance: repo SHA, env lockfile, exact reproduction commands (see `coding/` snapshot discipline).
-
----
+- **Confirm compute before training** — GPU (`nvidia-smi`), CUDA/torch versions, RAM/disk. Many BioML tasks are bound by data size + wall-clock, not GPU FLOPs. Stream multi-GB data (read shapes first, load lazily); sanity-check on a subset / few epochs before scaling. Prefer the pinned envs via `omics_compute`; build a fresh env only when the paper repo demands it.
+- **Reproduce to an EXACT output contract** — read the required file name / format / array shape / dtype and the exact metric (ARI, Pearson, MCC, cosine, silhouette…) first; a model that trains perfectly but writes the wrong shape scores zero. Know the baseline you target.
+- **Honest ML, no faked success** — every reported number comes from a real run against real data; surface failures (diverged run, repo that won't install, OOM) as blockers, don't paper over them.
+- **Fetch discipline (code & weights)** — GitHub via `gh` / `raw.githubusercontent.com`; Hugging Face via mirror endpoints + `GIT_LFS_SKIP_SMUDGE=1`; always record source repo + commit SHA, where bytes landed, and the **license**. Recipes in `repro/`. (Evidence/grounding rules: `omics-shared`; figure inspection: `figure-check/`.)
 
 ## Next Steps
 

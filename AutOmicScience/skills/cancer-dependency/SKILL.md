@@ -200,27 +200,16 @@ Dependency alone: "this gene is essential in cancer X." Dependency + phospho upr
 
 ---
 
-## Pitfalls
+## Pitfalls & fixes
 
-- **Wrong sign** — treating negative as "no effect" (it's lethal)
-- **No pan-essentiality filter** — prioritizing ribosomal proteins
-- **Threshold inconsistency** — switching between −0.5 and −0.3 mid-analysis
-- **Two-sided Fisher for SL** — mutual exclusivity needs one-sided (depletion of co-dependency)
-- **No FDR** — testing thousands of gene pairs inflates false positives
-- **No SL priors** — accepting any exclusivity pair as biologically plausible
-- **Pharos Tdark treated as actionable** — Tdark = no known ligand/tool compound; not druggable
-
----
-
-## When Things Go Wrong
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| **All genes "dependent"** | Threshold too high (e.g., −0.1) | Use −0.5 (DepMap standard) |
-| **No selective dependencies** | normLRT not applied; just used mean | Run normLRT per cancer type |
-| **SL pairs look random** | No priors, two-sided test | Filter to paralog/PPI candidates, use one-sided Fisher |
-| **Pharos API 404** | Gene symbol mismatch | Standardize to HGNC; try UniProt ID |
-| **Therapeutic-window list dominated by housekeeping** | No pan-essentiality gate | Filter to <90% frequency |
+| Symptom / mistake | Cause | Fix |
+|-------------------|-------|-----|
+| All genes look "dependent" | Threshold too high, or sign flipped (negative read as "no effect") | Use −0.5 (DepMap standard); negative = lethal, keep the sign |
+| Inconsistent dependency calls | Threshold switched mid-analysis (−0.5 vs −0.3) | Fix one threshold and state it |
+| No selective dependencies | normLRT not applied (used mean) | Run normLRT per cancer type |
+| Therapeutic-window list is housekeeping genes | No pan-essentiality gate | Filter to genes essential in <90% of lines |
+| SL pairs look random | No priors + two-sided test + no FDR | Filter to paralog / PPI / canonical, one-sided Fisher, apply FDR |
+| Pharos 404, or Tdark cited as a target | Gene-symbol mismatch; Tdark = no tool compound | Standardize to HGNC / UniProt; don't treat Tdark as druggable |
 
 ---
 

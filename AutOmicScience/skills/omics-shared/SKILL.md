@@ -58,6 +58,9 @@ After `omics_preflight` confirms the modality, read its skill and the specific m
 | Metabolomics / lipidomics | `skills/metabolomics/SKILL.md` | `skills/metabolomics/assets/references/*.md` |
 | Microbiome (16S / metagenomics) | `skills/microbiome/SKILL.md` | `skills/microbiome/assets/references/*.md` |
 | Cancer dependency (DepMap / CCLE CRISPR screens) | `skills/cancer-dependency/SKILL.md` | `skills/cancer-dependency/assets/references/*.md` |
+| Statistical / population genetics — GWAS, heritability, fine-mapping, colocalization | `skills/statistical-genetics/SKILL.md` | `skills/statistical-genetics/assets/references/*.md` |
+| Immune repertoire — TCR / BCR clonotypes (AIRR-seq) | `skills/immune-repertoire/SKILL.md` | `skills/immune-repertoire/assets/references/*.md` |
+| Biomolecular phase separation / condensates (sequence & biophysical properties) | `skills/phase-separation/SKILL.md` | `skills/phase-separation/assets/references/*.md` |
 
 **Cross-cutting layers (combine with any data skill above):**
 

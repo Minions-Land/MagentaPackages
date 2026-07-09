@@ -5,6 +5,87 @@ kind = "domain"
 domain = "bioinformatics"
 description = "Single-cell and spatial omics harness package migrated from AOSE optimize_omics."
 
+# Empty = no default narrowing: `--harness-package AutOmicScience` loads every
+# component. Narrow with a selector, e.g.
+# `--harness-package AutOmicScience:single-cell,spatial`.
+# The foundation skill (omics-shared), tools, runtime, env, and brand are
+# untagged and always load regardless of the selected profiles.
+default_profiles = []
+
+# === Profiles for selective loading (one per domain family) ===
+
+[[profiles]]
+name = "single-cell"
+description = "Single-cell RNA / ATAC / multiome analysis"
+extends = []
+
+[[profiles]]
+name = "spatial"
+description = "Spatial transcriptomics analysis"
+extends = []
+
+[[profiles]]
+name = "bulk"
+description = "Bulk RNA-seq and epigenomics"
+extends = []
+
+[[profiles]]
+name = "genomics"
+description = "Cancer somatic variants (MAF/CNA) and statistical genetics"
+extends = []
+
+[[profiles]]
+name = "proteomics"
+description = "Proteomics (Olink / mass-spec / phospho)"
+extends = []
+
+[[profiles]]
+name = "metabolomics"
+description = "Metabolomics / lipidomics"
+extends = []
+
+[[profiles]]
+name = "microbiome"
+description = "Microbiome (16S / metagenomics)"
+extends = []
+
+[[profiles]]
+name = "dependency"
+description = "Cancer dependency (DepMap / CCLE CRISPR screens)"
+extends = []
+
+[[profiles]]
+name = "clinical"
+description = "Clinical survival analysis (KM / Cox)"
+extends = []
+
+[[profiles]]
+name = "bioml"
+description = "Bioinformatics ML engineering and model reproduction"
+extends = []
+
+[[profiles]]
+name = "phase-separation"
+description = "Biomolecular phase separation / condensates"
+extends = []
+
+[[profiles]]
+name = "immune"
+description = "Immune repertoire (TCR / BCR)"
+extends = []
+
+[[profiles]]
+name = "all"
+description = "All AutOmicScience modality skills"
+extends = ["single-cell", "spatial", "bulk", "genomics", "proteomics", "metabolomics", "microbiome", "dependency", "clinical", "bioml", "phase-separation", "immune"]
+
+# === Components ===
+# Untagged skill (omics-shared) + tools/runtime/env/brand are package-wide
+# essentials: they load under any selector. Modality skills carry a profile tag
+# and load on bare selection (no narrowing) or when their profile is selected.
+# Only the foundation and the two most common modalities stay in context by
+# default; the rest are available on demand (loaded when routed to or selected).
+
 [[components]]
 kind = "brand"
 name = "AutOmicScience"
@@ -21,78 +102,91 @@ kind = "skill"
 name = "single-cell"
 path = "skills/single-cell"
 include_in_context = true
+profiles = ["single-cell"]
 
 [[components]]
 kind = "skill"
 name = "spatial"
 path = "skills/spatial"
 include_in_context = true
+profiles = ["spatial"]
 
 [[components]]
 kind = "skill"
 name = "bulk"
 path = "skills/bulk"
-include_in_context = true
+include_in_context = false
+profiles = ["bulk"]
 
 [[components]]
 kind = "skill"
 name = "bioml"
 path = "skills/bioml"
-include_in_context = true
+include_in_context = false
+profiles = ["bioml"]
 
 [[components]]
 kind = "skill"
 name = "cancer-genomics"
 path = "skills/cancer-genomics"
-include_in_context = true
+include_in_context = false
+profiles = ["genomics"]
 
 [[components]]
 kind = "skill"
 name = "proteomics"
 path = "skills/proteomics"
-include_in_context = true
+include_in_context = false
+profiles = ["proteomics"]
 
 [[components]]
 kind = "skill"
 name = "cancer-dependency"
 path = "skills/cancer-dependency"
-include_in_context = true
+include_in_context = false
+profiles = ["dependency"]
 
 [[components]]
 kind = "skill"
 name = "metabolomics"
 path = "skills/metabolomics"
-include_in_context = true
+include_in_context = false
+profiles = ["metabolomics"]
 
 [[components]]
 kind = "skill"
 name = "clinical-survival"
 path = "skills/clinical-survival"
-include_in_context = true
+include_in_context = false
+profiles = ["clinical"]
 
 [[components]]
 kind = "skill"
 name = "microbiome"
 path = "skills/microbiome"
-include_in_context = true
+include_in_context = false
+profiles = ["microbiome"]
 
 [[components]]
 kind = "skill"
 name = "phase-separation"
 path = "skills/phase-separation"
-include_in_context = true
+include_in_context = false
+profiles = ["phase-separation"]
 
 [[components]]
 kind = "skill"
 name = "statistical-genetics"
 path = "skills/statistical-genetics"
-include_in_context = true
+include_in_context = false
+profiles = ["genomics"]
 
 [[components]]
 kind = "skill"
 name = "immune-repertoire"
 path = "skills/immune-repertoire"
-include_in_context = true
+include_in_context = false
+profiles = ["immune"]
 
 [[components]]
 kind = "append-system-prompt"

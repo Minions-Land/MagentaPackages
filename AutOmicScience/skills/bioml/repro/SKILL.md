@@ -148,26 +148,17 @@ Complex fetch scenarios (multi-GB LFS repos, auth tokens, rate limits, git-lfs c
 
 ---
 
-## Pitfalls
+## Pitfalls & fixes
 
-- **Skipping the escape-hatch check** — investing in a complex pipeline when `scANVI` already clears the bar.
-- **Cloning without `--depth=1`** — pulling full git history for a 10 GB repo.
-- **Running on full data before sanity-checking small** — OOMing 3 hours into training.
-- **Writing the wrong output shape** — the model trains perfectly but the output fails the format check (scored as wrong).
-- **Ignoring silent failures** — logs show warnings but the script exits 0; see `../coding/` silent-failure audit.
-- **Forgetting the license** — you build on GPL code and cannot share downstream.
-
----
-
-## When Things Go Wrong
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| **Repo won't install** | Dependency conflict, pinned to old Python | Try the paper's Docker image if provided; or downgrade Python/torch to match |
-| **Weights download times out** | Canonical HF is slow/blocked | Use mirror endpoint (see `assets/references/huggingface_fetch.md`) |
-| **OOM during training** | Batch size too large, data not streamed | Halve batch size, load data lazily |
-| **Output shape wrong** | Misunderstood the contract | Read the expected output spec (or the local scoring script) to see exactly what it expects |
-| **Score far below SOTA** | Wrong hyperparams, data leakage, or the baseline was cherry-picked | Check the paper's exact train/test split and config; try the escape-hatch baseline |
+| Symptom / mistake | Cause | Fix |
+|-------------------|-------|-----|
+| Repo won't install | Dependency conflict / pinned to old Python | Use the paper's Docker image if provided; else downgrade Python/torch to match |
+| Weights download times out | Canonical Hugging Face slow/blocked | Use a mirror endpoint (`assets/references/huggingface_fetch.md`); clone with `--depth=1` to skip full history |
+| OOM during training | Batch too large / data not streamed; or ran full data before a small sanity check | Halve batch size, load lazily; always sanity-check on a subset first |
+| Output shape wrong / fails format check | Misunderstood the output contract | Read the expected output spec (or local scoring script) and match shape/dtype exactly |
+| Score far below SOTA | Wrong hyperparams, data leakage, or a cherry-picked baseline; or skipped the escape-hatch | Check the paper's exact train/test split + config; try the escape-hatch baseline (e.g. scANVI) |
+| Silent failure (script exits 0 with warnings) | Unchecked error path | See `../coding/` silent-failure audit |
+| Can't share results downstream | Built on GPL code, license overlooked | Record source repo + commit SHA + license up front; it gates reuse |
 
 ---
 

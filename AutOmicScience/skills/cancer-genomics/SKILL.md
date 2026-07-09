@@ -179,29 +179,18 @@ Never cite an oncoplot you didn't render and inspect.
 
 ---
 
-## Pitfalls
+## Pitfalls & fixes
 
-- **Wrong variant-classification rule** — treating all Missense as pathogenic, or excluding Nonsense as "not interesting"
-- **Silent mutations in TMB** — TMB should count only non-silent variants
-- **Mean±SD for TMB** — distribution is skewed; use median+IQR
-- **Summing pathway hits** — patient with TP53+MDM2 mutations counts once, not twice
-- **Two-sided test for exclusivity** — mutual exclusivity needs `alternative="less"`
-- **No minimum-support gate** — singleton genes inflate FDR family
-- **Not collapsing stage substages** — T1a/T1b/T1c as separate categories loses power
-- **Clinical variable leakage** — keeping "Discrepancy" rows or mixing PATH/CLIN
-- **Ungrounded oncoplot** — citing a figure you didn't inspect
-
----
-
-## When Things Go Wrong
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| **Recurrence looks wrong** | Silent variants not excluded | Filter to pathogenic only (see variant_classification.md) |
-| **Fisher p-values all 1.0** | Wrong contingency table | Check crosstab orientation; ensure binary gene_mut |
-| **TMB outliers dominate** | Using mean instead of median | Report median + IQR |
-| **Pathway frequency > 100%** | Summing instead of any-hit | Use `.any()` not `.sum()` |
-| **Oncoplot shows "?" for genes** | Gene name mismatch (HGNC vs alias) | Standardize to HGNC symbols before plotting |
+| Symptom / mistake | Cause | Fix |
+|-------------------|-------|-----|
+| Recurrence / TMB looks wrong | Silent variants counted | Count only non-silent; filter to pathogenic (`variant_classification.md`) |
+| Ungrounded pathogenicity | All Missense treated pathogenic, or Nonsense excluded | Use CGC / COSMIC / ClinVar tiers; document the rule |
+| TMB outliers dominate | Mean ± SD on a right-skewed distribution | Report median + IQR |
+| Pathway frequency > 100% | Summing hits instead of any-hit | `.any()` per gene set, not `.sum()` (one patient counts once) |
+| Fisher p-values all 1.0, or exclusivity missed | Wrong contingency orientation, or two-sided test for exclusivity | Check crosstab / binary `gene_mut`; use `alternative="less"` for exclusivity |
+| Inflated FDR family | No minimum-support gate (singleton-mutated genes) | Require expected ≥5 per 2×2 cell; drop singletons before FDR |
+| Lost power / leakage in clinical association | Uncollapsed substages, or "Discrepancy" / mixed PATH+CLIN rows | Collapse T1a/b→T1, N0/Nx→N0; prefer PATH_; drop Discrepancy |
+| Oncoplot shows "?" or is uncited | Gene-name mismatch (HGNC vs alias), or figure not inspected | Standardize to HGNC; render + inspect before citing |
 
 ---
 

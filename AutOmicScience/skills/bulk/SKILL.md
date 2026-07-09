@@ -11,65 +11,25 @@ extends: omics-shared
 
 # Bulk Omics Analysis
 
-Bulk omics analysis routes through **modality-specific subskills**. This parent skill provides shared foundations and routing. All bulk work builds on `omics-shared` (loaded automatically — its evidence/grounding rules apply).
+Bulk work routes to a **subskill** by data type. This parent does routing plus the bulk-wide statistical notes; the shared compute/evidence/grounding contract lives in `omics-shared` (loaded automatically — don't restate it), and the recipes live in each subskill.
 
----
+## Routing: which subskill?
 
-## Routing: Which Subskill?
+| Your data | Subskill | When |
+|-----------|----------|------|
+| **Bulk RNA-seq** (gene-count matrix) | `rna/SKILL.md` | Bulk/pseudobulk gene counts + sample metadata: count-based DE, normalization, GSEA/ORA, WGCNA |
+| **ChIP-seq / bulk ATAC-seq** (peak files) | `epigenomics/SKILL.md` | Peak BED files: differential occupancy/accessibility, TSS annotation, histone marks, TF footprinting |
 
-Identify the data type and read the appropriate subskill:
+**Bulk vs single-cell:** a gene × sample count matrix (dozens of samples) is bulk; cells × genes with per-cell resolution is the `single-cell` skill. Single-cell summed to donor/group level (**pseudobulk**) is analyzed here with bulk methods. The subskills are chapters of this skill and cannot be invoked independently.
 
-| Your data | Subskill | When to use |
-|-----------|----------|-------------|
-| **Bulk RNA-seq** (gene-count matrix) | `rna/SKILL.md` | Bulk or pseudobulk gene-count matrices with sample metadata. Count-based DE, normalization, GSEA/ORA, WGCNA. |
-| **ChIP-seq / bulk ATAC-seq** (peak files) | `epigenomics/SKILL.md` | Peak BED files. Differential occupancy/accessibility, TSS annotation, histone-mark interpretation, TF footprinting. |
+## Bulk-wide notes (details in `omics-shared` + the subskill)
 
-**Bulk vs single-cell:** if the data is a gene × sample count matrix (dozens of samples, not thousands of cells), it's bulk. If it's cells × genes with per-cell resolution, use the `single-cell` skill instead. Single-cell data summed to donor/group level (**pseudobulk**) is analyzed here with bulk methods.
+- **Tabular, counts-first** — a gene × sample **raw integer count** matrix + a sample metadata table; never start DE from TPM/FPKM/normalized values. You may `omics_compute load_dataset` a count matrix into AnnData to reuse the grounded `enrichment`/`pathway_activity` subcommands, but the count-model steps (DE, normalization, WGCNA) are hand-written Python/`Rscript`.
+- **Count-based models** — raw counts → DESeq2/edgeR/limma-voom (negative-binomial / voom); a Welch t-test or OLS on log-CPM is statistically weaker. Normalize by goal: VST/rlog for clustering/PCA, TMM+logCPM or size-factors for the DE model input; never z-score raw counts.
+- **Effect size ≠ significance** — shrink fold changes (apeglm/ashr) before ranking or GSEA; rank by shrunken |log2FC| with an FDR gate, and report both axes.
+- **Model covariates in the design** — batch/sex/age/RIN/library-prep/site when present; an unmodeled confound is the most common silent error. State the design formula.
+- **State your conventions** — normalization, shrinkage estimator, ranking metric, FDR method, background universe: a result is only reproducible alongside its method. (Evidence/grounding rules and figure inspection: `omics-shared`.)
 
-After identifying the data type, **read the corresponding subskill** for detailed guidance. The subskills are chapters of this skill and cannot be invoked independently.
+## Next
 
----
-
-## Shared Bulk Foundations
-
-These conventions apply across bulk analyses:
-
-### 1. Counts-First Tabular Analysis
-
-Bulk omics is **tabular** (a gene × sample matrix + a sample metadata table), not AnnData/scanpy. The core inputs:
-
-1. A **raw integer count** matrix (genes × samples) — never start DE from TPM/FPKM/normalized values
-2. A **sample metadata** table aligning each column to condition + covariates (batch, sex, age, RIN, …)
-
-You can `omics_compute load_dataset` a count matrix into AnnData to reuse the grounded `enrichment` / `pathway_activity` subcommands, but the count-model steps (DE, normalization, WGCNA) are hand-written in Python / `Rscript`.
-
-### 2. Use Count-Based Statistical Models
-
-- **DE model input** = raw counts → DESeq2/edgeR/limma-voom (negative-binomial / voom variance modeling)
-- A Welch t-test or OLS on log-CPM is statistically weaker (ignores the count mean–variance relationship)
-- **Normalization by goal**: VST/rlog for clustering/PCA; TMM+logCPM or size-factors for the DE model input; never z-score raw counts
-
-### 3. Effect Size + Significance Are Separate Axes
-
-- **Shrink fold changes** (apeglm/ashr) before ranking or GSEA — unshrunk LFC over-weights low-count genes
-- When asked "which genes change most", rank by **shrunken |log2FC|** with an FDR gate, not by adjusted p
-- Report both effect size and significance
-
-### 4. Model Covariates in the Design
-
-Batch/sex/age/RIN/library-prep/site when present — an unmodeled confound is the most common silent error. State the design formula.
-
-### 5. State Your Conventions
-
-Normalization, shrinkage estimator, ranking metric, FDR method, background universe — a result is only interpretable and reproducible alongside its method.
-
-### 6. Evidence & Grounding (from omics-shared)
-
-- Every quantitative claim → emit a trailing JSON `report` and cite exact numbers (log2FC, padj, NES, module sizes)
-- Every plot (volcano/MA/heatmap) → inspect the figure before it backs a claim
-
----
-
-## Next Steps
-
-Read the subskill matching your data type (currently: `rna/` for bulk RNA-seq, `epigenomics/` for ChIP-seq / bulk ATAC-seq). Follow its capability menu and method docs for the opinionated defaults, exact parameters, and failure modes.
+Read the subskill matching your data (`rna/` for bulk RNA-seq, `epigenomics/` for ChIP-seq / bulk ATAC-seq) for its capability menu, method docs, opinionated defaults, exact parameters, and failure modes.

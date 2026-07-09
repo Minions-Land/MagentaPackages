@@ -172,27 +172,16 @@ Phosphoproteomics measures **phosphosites** (e.g., `TP53_S15`), not total protei
 
 ---
 
-## Pitfalls
+## Pitfalls & fixes
 
-- **Not filtering by QC flag** — WARN/FAIL values degrade results
-- **Unpaired test on paired data** — loses power, wrong test
-- **Wrong hypergeometric universe** — using the full proteome instead of measured proteins
-- **Ranking by p-value** — misses effect size; sample-size-driven significance
-- **Not checking directional concordance** — conflating discordance with replication
-- **MaxQuant multi-header not parsed** — reading the wrong row as header, scrambling column names
-- **Phosphosite treated as gene** — `TP53_S15` ≠ TP53 total protein
-
----
-
-## When Things Go Wrong
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| **Hypergeometric p=1.0** | Universe too large (full proteome used) | Restrict to measured proteins |
-| **t-test gives weird results** | Used `ttest_ind` instead of `ttest_rel` | Use paired test for within-subject |
-| **MaxQuant columns scrambled** | Multi-header Excel not parsed | Use `pd.read_excel(header=[0,1])` or skip rows |
-| **Phosphosite enrichment weak** | No ActivatingSite filter | Filter to kinase substrates |
-| **Low overlap in cross-cohort** | Different effect-size thresholds or FDR | Align cutoffs; check directional concordance |
+| Symptom / mistake | Cause | Fix |
+|-------------------|-------|-----|
+| Hypergeometric p=1.0 or inflated enrichment | Universe too large (full proteome, not measured proteins) | Restrict the universe to proteins measured in both cohorts |
+| t-test results underpowered / wrong | Unpaired `ttest_ind` on within-subject data | Use paired `ttest_rel` |
+| MaxQuant columns scrambled | Multi-header Excel not parsed | `pd.read_excel(header=[0,1])` or skip metadata rows |
+| Weak phosphosite enrichment | No ActivatingSite filter | Filter to kinase substrates before interpretation |
+| Low cross-cohort overlap | Mismatched effect-size / FDR cutoffs, or ignoring direction | Align cutoffs; require directional concordance |
+| Noisy / degraded results | WARN/FAIL QC values kept, or ranked by p-value | Filter by QC flag; rank by effect size (log2FC/t), not p |
 
 ---
 

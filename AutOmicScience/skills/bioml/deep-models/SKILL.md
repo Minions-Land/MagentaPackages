@@ -200,24 +200,15 @@ Emit these metrics in a `report` dict — cite the exact numbers.
 
 ---
 
-## Pitfalls
+## Pitfalls & fixes
 
-- **Passing normalized counts** — models expect raw UMI counts in `adata.layers["counts"]`, not log-normalized.
-- **Not validating the embedding** — a trained model can produce garbage if hyperparams are wrong; always UMAP + metric check.
-- **Comparing to SOTA on the wrong metric** — benchmark papers often cherry-pick the favorable metric; check which metric actually matters for the task.
-- **Skipping the baseline** — scVI + KMeans might already clear the bar; don't jump to a transformer before checking.
-- **Ignoring batch structure** — if batch effects are weak, integration can degrade biology; always compare ARI before/after.
-
----
-
-## When Things Go Wrong
-
-| Problem | Likely Cause | Fix |
-|---------|--------------|-----|
-| **Loss doesn't decrease** | Learning rate too high, or data has issues (all zeros, wrong format) | Check `adata.layers["counts"]` is raw integers; try lower LR |
-| **OOM** | Batch size too large for GPU | Halve `train_size` in `.train(train_size=0.5)` |
-| **Embedding looks like noise** | Too few epochs, or `n_latent` too low | Train longer (800 epochs), or increase `n_latent` to 50 |
-| **Worse than baseline** | Integration too aggressive, biological signal lost | Check ARI/NMI vs unintegrated; if worse, don't integrate |
+| Symptom / mistake | Cause | Fix |
+|-------------------|-------|-----|
+| Loss doesn't decrease | LR too high, or non-raw input (log-normalized / all-zeros / wrong format) | Ensure raw UMI counts in `adata.layers["counts"]`; lower the LR |
+| OOM during training | Batch size too large for the GPU | Halve `train_size` (`.train(train_size=0.5)`) |
+| Embedding looks like noise | Too few epochs / `n_latent` too low; embedding never validated | Train longer (~800 epochs), raise `n_latent` (~50); always UMAP + metric check |
+| Worse than baseline | Integration too aggressive (biology lost), or the baseline was skipped | Compare ARI/NMI vs unintegrated (don't integrate if it degrades); check scVI + KMeans clears the bar first |
+| "Beats SOTA" that doesn't hold up | Compared on a cherry-picked metric | Confirm which metric actually matters for the task |
 
 ---
 
