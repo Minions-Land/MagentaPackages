@@ -120,7 +120,7 @@ profiles = ["design"]
 kind = "skill"
 name = "design-solublempnn"
 path = "skills/solublempnn"
-description = "Design soluble proteins with SolubleMP NN"
+description = "Design soluble proteins with SolubleMPNN"
 include_in_context = false
 profiles = ["design"]
 

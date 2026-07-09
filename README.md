@@ -1,8 +1,9 @@
 # Magenta Packages
 
-This repository holds Magenta harness overlay packages extracted from the
-Magenta3 `packages/` tree. It is intentionally maintained outside the main
-Magenta codebase so domain packages can evolve independently from the core
+This repository holds Magenta harness overlay packages — domain, brand, and
+harness bundles that extend Magenta with domain-specific skills and tools. It is
+maintained as a standalone repository, independent of the core Magenta codebase,
+so these domain packages can evolve on their own cadence without touching the
 coding-agent framework.
 
 A package is a domain, brand, or harness bundle with a root `package.toml`.
@@ -30,18 +31,17 @@ manifests, tools, skills, prompts, and package-local runtimes.
 
 ## Repository maintenance
 
-Run the repository validator before pushing:
+Run the repository validator before pushing (requires Python >= 3.11):
 
 ```bash
-python3.13 scripts/validate_packages.py
+python3 scripts/validate_packages.py
 ```
 
 The validator parses TOML, verifies package component paths, checks skill entry
 points, and prevents generated environments/build outputs from being committed.
-Rust tool workspaces can be checked independently:
+The bio-API Rust workspace can be checked independently:
 
 ```bash
-cargo test --locked --manifest-path AutOmicScience/tools/visual-inspector/Cargo.toml
 cargo test --locked --manifest-path AutOmicScience/tools/bio-api/rust/Cargo.toml --workspace
 ```
 
@@ -53,7 +53,7 @@ manifests and locks when needed.
 
 | Package | Domain | Shape | What it adds |
 |---|---|---|---|
-| [`AutOmicScience`](./AutOmicScience/) | Single-cell / spatial / bulk omics, cancer & clinical genomics | 11 skills · 5 tools · system prompt · brand · Python/Pixi runtime | Production omics analysis grounded in a real compute tool (`omics_compute`) |
+| [`AutOmicScience`](./AutOmicScience/) | Single-cell / spatial / bulk omics, cancer & clinical genomics | 14 skills · 5 tools · system prompt · brand · Python/Pixi runtime | Production omics analysis grounded in a real compute tool (`omics_compute`) |
 | [`Biomni`](./Biomni/) | Biomedical AI (Stanford SNAP Lab) | 3 skills bundling executable tools | CRISPR sgRNA design, single-cell annotation, and a broad biomedical toolkit copied in-tree |
 | [`ClaudeScience`](./ClaudeScience/) | Computational biology research | 32 skills · 9 profiles | Structure prediction, protein design, genomics, literature, viz, compute — selected by profile |
 | [`PantheonOS`](./PantheonOS/) | Bioinformatics workflow best practices | 16 skills · 5 profiles | scverse/nf-core workflow guidance, foundation models, bio-imaging, scientific communication |

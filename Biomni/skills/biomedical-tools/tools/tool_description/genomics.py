@@ -156,12 +156,6 @@ description = [
         "name": "get_uce_embeddings_scRNA",
         "optional_parameters": [
             {
-                "default": "/dfs/project/bioagentos/data/singlecell/",
-                "description": "Root directory for single-cell data storage",
-                "name": "DATA_ROOT",
-                "type": "str",
-            },
-            {
                 "default": None,
                 "description": "Custom command line arguments to pass to the UCE script",
                 "name": "custom_args",
@@ -179,6 +173,12 @@ description = [
                 "default": None,
                 "description": "Directory where the input data is stored and output will be saved",
                 "name": "data_dir",
+                "type": "str",
+            },
+            {
+                "default": None,
+                "description": "Root directory for single-cell data storage",
+                "name": "DATA_ROOT",
                 "type": "str",
             },
         ],

@@ -11,7 +11,7 @@ ClaudeScience is organized into **domain-specific profiles** for selective loadi
 | Profile | Description | Skills |
 |---------|-------------|--------|
 | `structure` | Protein structure prediction | AlphaFold2, ESMFold2, Chai-1, Boltz, OpenFold3 |
-| `design` | Protein design | ProteinMPNN, LigandMPNN, SolubleMP NN |
+| `design` | Protein design | ProteinMPNN, LigandMPNN, SolubleMPNN |
 | `genomics` | Genomics & molecular biology | DiffDock, Borzoi, Evo2, ESM-2 |
 | `singlecell` | Single-cell analysis | scvi-tools, scGPT |
 | `research` | Literature & research workflows | Literature review, PDF explore, Paper narrative, Indication dossier |

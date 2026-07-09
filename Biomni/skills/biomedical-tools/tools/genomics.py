@@ -857,11 +857,10 @@ def create_harmony_embeddings_scRNA(adata_filename, batch_key, data_dir):
     return "\n".join(steps)
 
 
-## TODO: the environment is not ready for this tool
 def get_uce_embeddings_scRNA(
     adata_filename,
     data_dir,
-    DATA_ROOT="/dfs/project/bioagentos/data/singlecell/",
+    DATA_ROOT,
     custom_args=None,
 ):
     """The UCE embeddings are usually our default tools to get cell embeddings, we map UCE embeddings to IMA referece dataset and get the cell types for a better understanding.
