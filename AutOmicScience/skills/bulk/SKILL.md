@@ -2,9 +2,6 @@
 name: bulk
 description: Bulk RNA & epigenomics analysis — normalization (TMM / VST / logCPM),count-based differential expression (DESeq2 / edgeR / limma-voom), pathway enrichment (GSEA / ORA), co-expression networks (WGCNA). Use when the user has a bulk or pseudobulk gene-count matrix with sample metadata (not single-cell data).
 requiredTools: [run_python, bash, read, write, omics_preflight, omics_compute]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, bulk, bulk-rna, rna-seq, differential-expression, deseq2, gsea, wgcna]
 extends: omics-shared
 ---

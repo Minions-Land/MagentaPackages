@@ -2,9 +2,6 @@
 name: proteomics
 description: Proteomics analysis — plasma Olink targeted panels (NPX QC, paired within-subject differential expression), mass-spectrometry shotgun proteomics (MaxQuant/Perseus, log2-ratio tables), phosphoproteomics (activating-site filtering, occupancy), cross-cohort hypergeometric enrichment with correct universe, directional concordance, effect-size ranking. Use when the user has Olink NPX files, MaxQuant output, phosphoproteomics data, or asks to test differential protein expression, identify enriched pathways, or integrate proteomics with dependency/transcriptomics.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, proteomics, olink, npx, mass-spec, maxquant, phosphoproteomics, differential-expression, hypergeometric, effect-size]
 extends: omics-shared
 ---

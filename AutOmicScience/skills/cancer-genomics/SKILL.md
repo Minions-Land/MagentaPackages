@@ -2,9 +2,6 @@
 name: cancer-genomics
 description: Tabular cancer genomics analysis — MAF/CNA somatic mutation and copy-number alteration parsing, variant classification (pathogenic/LoF vs benign), per-patient gene recurrence, tumor mutational burden (TMB), copy-number burden, pathway-alteration gene-set analysis, hotspot/protein-domain filtering, mutation×phenotype association (Fisher exact + FDR), oncoplots (maftools-style). Use when the user has MAF files, CNA segment files, or asks to analyze somatic mutations, identify recurrently altered genes, compute TMB, test mutation-phenotype associations, or generate oncoplots.
 requiredTools: [run_python, bash, read, write, observe_figure, omics_preflight, omics_compute]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, cancer, genomics, maf, cna, somatic-mutations, tmb, oncoplot, variant-classification, fisher-test]
 extends: omics-shared
 ---

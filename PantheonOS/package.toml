@@ -31,11 +31,6 @@ name = "infrastructure"
 description = "Data analysis infrastructure and pipelines"
 extends = []
 
-[[profiles]]
-name = "all"
-description = "All PantheonOS skills"
-extends = ["omics", "imaging", "communication", "infrastructure"]
-
 # === Omics Analysis Skills ===
 
 [[components]]

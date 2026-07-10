@@ -2,9 +2,6 @@
 name: microbiome
 description: Microbiome analysis — 16S rRNA amplicon (OTU/ASV tables) and shotgun metagenomic taxonomic/functional abundance profiles, CLR transformation, alpha/beta diversity, differential abundance (DESeq2/ANCOM/ALDEx2), taxonomy filtering, survival integration. Use when the user has microbial abundance tables (taxa × samples), asks for diversity analysis, taxon differential abundance, or microbiome-phenotype association.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, microbiome, 16S, metagenomics, taxonomy, diversity, clr, differential-abundance, ancom, aldex2]
 extends: omics-shared
 ---

@@ -14,7 +14,6 @@ PantheonOS is organized into **4 domain profiles** for selective loading:
 | `imaging` | Bio-image processing & segmentation | 2 skills |
 | `communication` | Paper writing, figures, presentations | 3 skills |
 | `infrastructure` | Data pipelines & HPC | 2 skills |
-| `all` | All skills (extends all profiles above) | 16 skills |
 
 ## Usage
 
@@ -39,7 +38,8 @@ magenta --harness-package PantheonOS:all
 ```
 
 Each skill is tagged with the profile(s) it belongs to, so a profile selector
-loads exactly that subset; `all` extends every profile.
+loads exactly that subset. To load everything, use the built-in `:all` (or `:*`)
+selector — no `all` profile needs to be declared.
 
 ### Multi-Package Loading
 

@@ -2,9 +2,6 @@
 name: immune-repertoire
 description: Single-cell immune repertoire (AIRR-seq) analysis with dandelion + scirpy — raw 10x V(D)J contig preprocessing/reannotation (IgBLAST/TIgGER), contig QC, paired scTCR/scBCR clonotype definition from CDR3 + V/J across both chains, clonal expansion, public / shared clonotype discovery across donors, BCR somatic-hypermutation / isotype / clonal-lineage analysis, and linkage of clonality to GEX cell state. Use when you have T-cell or B-cell receptor data (10x VDJ contigs, AIRR rearrangement tables, or per-cell paired-chain annotations) and need to reannotate/QC it, define clonotypes, quantify expansion, find clonotypes shared across patients, analyze BCR mutation/lineage, or connect receptor clonality to cell phenotype.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [immune-repertoire, airr, sctcr, scbcr, tcr, bcr, clonotype, clonal-expansion, public-clonotype, shm, dandelion, scirpy, single-cell]
 extends: omics-shared
 ---

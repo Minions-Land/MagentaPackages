@@ -2,9 +2,6 @@
 name: phase-separation
 description: Biomolecular condensate & liquid-liquid phase separation (LLPS) sequence analysis — amino-acid composition profiling and fold-change versus non-phase-separating controls, intrinsically disordered region (IDR) restricted composition, sticker-spacer and prion-like / low-complexity domain features, and benchmarking phase-separation predictors (PScore, PLAAC, catGRANULE, FuzDrop, and composite SaPS/PdPS feature-model scores) by ROC-AUC. Use when you have protein sequences and/or precomputed phase-separation propensity scores with condensate-related labels (self-assembling vs partner-dependent vs non-PS, or membraneless-organelle participants vs membrane-bound controls) and need to compare sequence composition or evaluate how well predictors discriminate phase-separating proteins.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [protein, phase-separation, llps, condensate, idr, prion-like, sticker-spacer, roc-auc, sequence-biophysics]
 extends: omics-shared
 ---

@@ -74,11 +74,6 @@ name = "immune"
 description = "Immune repertoire (TCR / BCR)"
 extends = []
 
-[[profiles]]
-name = "all"
-description = "All AutOmicScience modality skills"
-extends = ["single-cell", "spatial", "bulk", "genomics", "proteomics", "metabolomics", "microbiome", "dependency", "clinical", "bioml", "phase-separation", "immune"]
-
 # === Components ===
 # Untagged skill (omics-shared) + tools/runtime/env/brand are package-wide
 # essentials: they load under any selector. Modality skills carry a profile tag

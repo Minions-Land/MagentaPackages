@@ -51,11 +51,6 @@ name = "meta"
 description = "Self-improvement and meta-learning skills"
 extends = []
 
-[[profiles]]
-name = "all"
-description = "All ClaudeScience skills"
-extends = ["structure", "design", "genomics", "singlecell", "research", "visualization", "compute", "meta"]
-
 # === Structure Prediction Skills ===
 
 [[components]]

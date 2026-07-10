@@ -2,9 +2,6 @@
 name: multi-omics
 description: Single-cell multiome (paired RNA + ATAC) — MuData assembly, per-modality preprocess, joint embedding (WNN / MultiVI), joint clustering & annotation, chromatin-aware velocity (MultiVelo), eGRN (SCENIC+), cross-modal interpretation.
 requiredTools: [run_python, create_notebook, add_cell, observe_figure, omics_preflight, omics_compute]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [multiome, multimodal, rna, atac, scverse, mudata, muon, single-cell]
 extends: omics-shared
 ---

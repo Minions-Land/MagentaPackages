@@ -18,7 +18,6 @@ ClaudeScience is organized into **domain-specific profiles** for selective loadi
 | `visualization` | Figure composition | Figure composer, Figure style, Algorithmic art, Web artifacts |
 | `compute` | Infrastructure & compute | Remote SSH, Modal, Env setup, Model endpoints |
 | `meta` | Self-improvement | Skill creator, Learn, Self-awareness, Customize |
-| `all` | All skills (extends all profiles above) | All 32 skills |
 
 ## Usage
 
@@ -37,14 +36,10 @@ magenta --harness-package ClaudeScience:all
 
 ### Profile Inheritance
 
-Profiles can extend other profiles. For example, the `all` profile extends all other profiles:
-
-```toml
-[[profiles]]
-name = "all"
-description = "All ClaudeScience skills"
-extends = ["structure", "design", "genomics", "singlecell", "research", "visualization", "compute", "meta"]
-```
+Profiles can extend other profiles via `extends`, composing larger profiles from
+smaller ones (see [Creating Sub-Categories](#creating-sub-categories)). To load
+everything, use the built-in `:all` (or `:*`) selector — it pulls in every
+declared profile, so no `all` profile needs to be declared.
 
 ### Default Behavior
 
@@ -119,7 +114,7 @@ magenta --harness-package ClaudeScience:structure,design
 # Load comprehensive set
 magenta --harness-package ClaudeScience:structure,design,genomics,singlecell,compute
 
-# Or simply use the 'all' profile
+# Or use the built-in :all selector (loads every profile)
 magenta --harness-package ClaudeScience:all
 ```
 

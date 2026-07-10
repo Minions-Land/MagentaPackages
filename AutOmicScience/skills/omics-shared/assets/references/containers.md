@@ -29,15 +29,6 @@ This document covers the decision tree for choosing the right data container, ke
 - **Load with**: `spatialdata.read_zarr(path)`
 - **Note**: Not currently implemented in `omics_io`; use native `spatialdata` library
 
-### Quick Decision Guide
-
-```
-Is it multi-modal (RNA + ATAC, RNA + protein)?
-├─ Yes → MuData (.h5mu)
-└─ No → Is it spatial with complex imaging layers?
-    ├─ Yes → Consider SpatialData (.zarr)
-    └─ No → AnnData (.h5ad)
-```
 
 ## Key Conventions (from `conventions.py`)
 

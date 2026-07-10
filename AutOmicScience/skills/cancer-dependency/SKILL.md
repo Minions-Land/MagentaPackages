@@ -2,9 +2,6 @@
 name: cancer-dependency
 description: Cancer functional genomics & dependency analysis — DepMap/CCLE CRISPR gene-effect screens (dependency scoring, normLRT selective-dependency test), Pharos druggability annotations (Tclin/Tchem/Tbio/Tdark tiers), therapeutic-window prioritization, synthetic lethality discovery (mutual-exclusivity Fisher test, paralog/PPI priors, BRCA-PARP canonical pairs), multi-omic integration (dependency + phosphoproteomics/expression/MAF). Use when the user has DepMap data, asks to identify druggable dependencies, selective vulnerabilities, synthetic-lethal gene pairs, or integrate dependency screens with other omics.
 requiredTools: [run_python, bash, read, write]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, cancer, dependency, depmap, ccle, crispr, druggability, pharos, synthetic-lethality, normLRT]
 extends: omics-shared
 ---

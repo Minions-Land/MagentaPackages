@@ -2,9 +2,6 @@
 name: metabolomics
 description: Metabolomics & lipidomics analysis — plasma/clinical metabolite and lipid intensity matrices, covariate-adjusted association (OLS), paired/unpaired differential abundance, lipid-class nomenclature parsing (FA/PC/LPC/TAG/CE/acylcarnitine), HMDB/LIPID MAPS annotation, DE∩phenotype-correlation mediation heuristic + formal causal mediation, clinical metabolic phenotyping (Disposition Index, SSPG, HOMA-IR), two-way ANOVA with effect sizes. Use when the user has metabolite/lipid intensity tables, CGM/metabolic study data, or asks for metabolite association, lipid differential abundance, or metabolic-phenotype integration.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, metabolomics, lipidomics, hmdb, lipid-maps, mediation, insulin-resistance, clinical-phenotyping, differential-abundance]
 extends: omics-shared
 ---

@@ -2,9 +2,6 @@
 name: statistical-genetics
 description: Statistical genetics on GWAS / molecular-QTL summary statistics using gwaslab (Python) and coloc (R) — summary-statistics ingestion (60+ formats), QC, effect-allele/strand harmonization, statistic completion, genome-build liftover, fixed/random-effects inverse-variance meta-analysis across cohorts, lead-variant / locus extraction, and Bayesian colocalization (coloc.abf single-causal + coloc.susie multi-signal → posterior probabilities PP.H0–H4). Use when you have GWAS or eQTL/pQTL summary statistics (beta/SE or p-values, effect allele, allele frequency, sample size) and need to harmonize/QC them, meta-analyze cohorts, call loci, or test whether two traits (or a GWAS and a QTL) share a causal variant.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [statistical-genetics, gwas, eqtl, qtl, meta-analysis, colocalization, coloc, fine-mapping, summary-statistics, gwaslab]
 extends: omics-shared
 ---

@@ -2,9 +2,6 @@
 name: bioml
 description: Bioinformatics machine-learning engineering — reproduce published DL methods (single-cell foundation models, sequence models, spatial GNNs), fetch code/weights from GitHub & Hugging Face, run and adapt paper repos to exact output files, and apply ML-engineering discipline (bounded repair, honest error paths, reproducible snapshots, publication-grade figures). Use when a task requires training or reproducing a machine-learning model on omics data rather than a standard scanpy/tabular analysis.
 requiredTools: [run_python, bash, read, write, WebFetch, observe_figure, omics_preflight, omics_compute]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [bioml, machine-learning, deep-learning, reproduction, scvi-tools, huggingface, github, model-training]
 extends: omics-shared
 ---

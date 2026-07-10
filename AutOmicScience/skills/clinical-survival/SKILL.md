@@ -2,9 +2,6 @@
 name: clinical-survival
 description: Survival analysis — Kaplan-Meier curves, log-rank test, Cox proportional-hazards regression for time-to-event clinical outcomes (overall survival, progression-free survival, any censored endpoint). Use when the user has survival data (time, event) and asks to test survival differences, stratify by a biomarker, compute hazard ratios, or generate KM plots.
 requiredTools: [run_python, bash, read, write, observe_figure]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [clinical, survival, kaplan-meier, log-rank, cox-ph, hazard-ratio, censoring, time-to-event]
 extends: omics-shared
 ---

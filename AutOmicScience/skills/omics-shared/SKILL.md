@@ -2,9 +2,6 @@
 name: omics-shared
 description: Cross-modality scverse foundations — data containers, dataset summary, standard preprocessing, evidence grounding, figure inspection. Load first for any omics task.
 requiredTools: [run_python, create_notebook, add_cell, observe_figure, omics_preflight, omics_compute]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, scverse, shared, anndata, mudata, spatialdata]
 ---
 

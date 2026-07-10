@@ -2,9 +2,6 @@
 name: spatial
 description: Spatial transcriptomics (Visium / Xenium / MERFISH / …) — loading, spatial QC, spatial statistics + SVGs (squidpy), spatial domains (SpaGCN), deconvolution & mapping (cell2location / Tangram), spatial cell-cell communication (squidpy / COMMOT), gene imputation (Tangram), 2D/3D visualization.
 requiredTools: [run_python, create_notebook, add_cell, observe_figure, omics_preflight, omics_compute]
-evidencePolicy: required
-outputSchema: grounded_response
-minConfidence: medium
 tags: [omics, spatial, spatial-transcriptomics, squidpy, spatialdata, visium, xenium, merfish]
 extends: omics-shared
 ---
