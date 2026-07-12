@@ -1,32 +1,34 @@
-schema_version = "magenta.package.v1"
+schema_version = "magenta.package.v2"
 id = "Biomni"
 name = "Biomni"
+version = "0.1.0"
 kind = "domain"
 domain = "biomedical-ai"
 description = "Biomedical AI toolkit from Stanford SNAP Lab with knowledge guides and executable tools covering sgRNA design, single-cell annotation, and general biomedical research workflows."
+source = "Biomni"
 
-# Default: load all skills
+# HCP-isomorphic layout: each skill at <skill>/<source>/HcpMagnet.ts
 default_profiles = []
 
-# === Knowledge Guide Skills with Tools ===
+# === Components ===
 
 [[components]]
 kind = "skill"
 name = "sgrna-design"
-path = "skills/sgrna-design"
-description = "CRISPR sgRNA design guide with validated sequences and automated design tools"
+source = "Biomni"
+path = "skills/sgrna-design/Biomni"
 include_in_context = false
 
 [[components]]
 kind = "skill"
 name = "single-cell-annotation"
-path = "skills/single-cell-annotation"
-description = "Single-cell RNA-seq cell type annotation with automated tools"
+source = "Biomni"
+path = "skills/single-cell-annotation/Biomni"
 include_in_context = false
 
 [[components]]
 kind = "skill"
 name = "biomedical-tools"
-path = "skills/biomedical-tools"
-description = "General biomedical research tools covering database queries, drug discovery, genomics, imaging, and lab automation"
+source = "Biomni"
+path = "skills/biomedical-tools/Biomni"
 include_in_context = false
