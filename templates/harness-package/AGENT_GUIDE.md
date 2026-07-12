@@ -13,10 +13,13 @@ the how-to.
 1. [Create a new package from scratch](#create-a-new-package)
 2. [Add a skill to an existing package](#add-a-skill)
 3. [Add a tool to an existing package](#add-a-tool)
-4. [Add a source to a package (merge package)](#add-a-source)
-5. [Cut a versioned release](#cut-a-release)
-6. [Validate your changes](#validate)
-7. [Troubleshooting](#troubleshooting)
+4. [Tool descriptor variants (process / mcp / python-runtime)](#tool-descriptor-variants)
+5. [Tool naming: the three name layers](#tool-naming)
+6. [Package-local infrastructure (runtimes, envs, locks)](#package-infra)
+7. [Add a source to a package (merge package)](#add-a-source)
+8. [Cut a versioned release](#cut-a-release)
+9. [Validate your changes](#validate)
+10. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -320,6 +323,240 @@ put sub-skill directories **under the source dir** (e.g.
 
 **Reference**: See `AutOmicScience/tools/bio-api/` (MCP tool with Rust backend)
 or `AutOmicScience/tools/omics-compute/` (Python-runtime tool).
+
+---
+
+<a id="tool-descriptor-variants"></a>
+## Tool descriptor variants (process / mcp / python-runtime)
+
+The fictional `rosetta-dock.toml` above shows the *shape*. In practice a tool
+descriptor comes in one of **three real flavors**, distinguished by its
+`runtime` field. The magnet is identical in all three (it only hands over the
+descriptor path — see [Add a tool](#add-a-tool)); the descriptor `.toml` is what
+changes. All examples below are the live descriptors under
+`AutOmicScience/tools/`, so copy from them rather than the placeholder.
+
+### 1. `runtime = "process"` — run a shell command
+
+The host runs `command` + `args` in the sandbox. Use for CLI tools.
+
+```toml
+# AutOmicScience/tools/omics-environment/AutOmicScience/omics-environment.toml
+kind = "tool"
+name = "omics_environment"          # LLM-facing tool name (see Tool naming)
+description = "Describe the Pixi environments ... via `pixi info --json`."
+runtime = "process"
+command = "pixi"
+args = ["info", "--json"]
+operation = "read"                   # read | execute
+read_only = true
+destructive = false
+timeout_ms = 60000
+
+[metadata]
+package = "AutOmicScience"
+
+[parameters]                         # JSON Schema the LLM fills
+type = "object"
+```
+
+A **privileged** process tool (network + workspace write) additionally sets
+`tags = ["trusted"]` and a long `timeout_ms` — see
+`omics-install/AutOmicScience/omics-install.toml` (`pixi install --locked`,
+`timeout_ms = 600000`).
+
+### 2. `runtime = "mcp"` — spawn an MCP server, import its tools
+
+The host spawns `command` as an MCP server over stdio and discovers every tool
+it exposes. `name_prefix` namespaces those remote tool names into the local
+tool address space so they never collide with built-ins.
+
+```toml
+# AutOmicScience/tools/bio-api/AutOmicScience/bio-api.toml
+kind = "tool"
+name = "biofetch"                    # remote tools surface as biofetch_<db>_<op>
+description = "BioFetch: read-only access to bioinformatics databases over MCP."
+runtime = "mcp"
+command = "packages/AutOmicScience/tools/bio-api/rust/target/release/aose-bio-mcp"
+args = []
+name_prefix = "biofetch"             # ensembl_search -> biofetch_ensembl_search
+timeout_ms = 60000
+
+# Optional gated clients: set keys under [env] to unlock extra tools.
+# [env]
+# DRUGBANK_API_KEY = "..."
+
+[metadata]
+package = "AutOmicScience"
+```
+
+Notes:
+- `command` for a vendored binary is resolved from the **Magenta repo root**
+  when packages are mounted under `packages/`, so the path starts with
+  `packages/<Package>/...`. Build the binary in CI or vendor it (`rust/`).
+- With `name_prefix = "biofetch"`, a remote tool `ensembl_search` reaches the
+  LLM as `biofetch_ensembl_search`. The prefix stacks on top of the remote
+  name — factor it in when you document tool names.
+
+### 3. `runtime = "<python-runtime-name>"` — dispatch into a package-local Python module
+
+Set `runtime` to the **name of a `python-runtime` infra component** (not the
+literal string `python`), plus `module` (the importable package) and optionally
+`pixi_environment` (which pinned env to run in). See
+[Package-local infrastructure](#package-infra) for declaring the runtime.
+
+```toml
+# AutOmicScience/tools/omics-compute/AutOmicScience/omics-compute.toml
+kind = "tool"
+name = "omics_compute"
+description = "Run package-local omics compute subcommands ..."
+runtime = "aose_omics_runtime"       # = the python-runtime component name
+module = "aose_omics_runtime"        # importable module dispatched by subcommand
+pixi_environment = "default"
+operation = "execute"
+read_only = false
+destructive = false
+
+[metadata]
+package = "AutOmicScience"
+
+[metadata.pixi_environment_by_modality]  # optional: map modality -> pinned env
+scrna = "task1"
+spatial = "task2"
+
+[parameters]
+type = "object"
+required = ["subcommand"]
+
+[parameters.properties.subcommand]
+type = "string"
+enum = ["load_dataset", "summarize", "preprocess"]  # your dispatch table
+```
+
+### Which variant do I want?
+
+| You have... | Use | Extra fields | Backing infra needed |
+|---|---|---|---|
+| A shell command / CLI | `runtime = "process"` | `command`, `args`, `read_only`, `timeout_ms` | none |
+| An MCP server (any language) | `runtime = "mcp"` | `command`, `name_prefix`, optional `[env]` | the server binary (vendor / build) |
+| A Python module you ship | `runtime = "<runtime-name>"` | `module`, `pixi_environment` | a `python-runtime` + `env`/`env-lock` (next section) |
+
+**Frozen contract (aligned with the main session):** in all three cases the
+tool magnet is only a *descriptor provider* — it emits
+`descriptor() => { kind, name, source, descriptorPath }` and never `toTool()`.
+The host reads the `.toml` at `descriptorPath` and runs its own
+`createPackageToolProduct` chain to build the `AgentTool` with sandbox/runtime
+wiring. Do not try to construct an `AgentTool` inside a package.
+
+---
+
+<a id="tool-naming"></a>
+## Tool naming: the three name layers
+
+A tool carries **three names that are allowed to differ**, each with a distinct
+job. This trips up agents who assume they must match — they must not. Live
+evidence from `AutOmicScience`:
+
+| Tool dir (`tools/<dir>/`) | magnet `descriptor().name` | `<tool>.toml` `name` | `package.toml` component `name` |
+|---|---|---|---|
+| `bio-api` | `bio-api` | `biofetch` | `bio_api` |
+| `omics-compute` | `omics-compute` | `omics_compute` | `omics_compute` |
+| `omics-environment` | `omics-environment` | `omics_environment` | `omics_environment` |
+| `omics-install` | `omics-install` | `omics_install_env` | `omics_install` |
+| `omics-preflight` | `omics-preflight` | `omics_preflight` | `omics_preflight` |
+
+Note `bio-api`: all three names differ, and none of them is what the LLM calls.
+
+The three layers:
+
+1. **Locator name** = the `tools/<dir>/` directory name = the magnet's
+   `descriptor().name`. Hyphen-style by convention. The loader uses it to find
+   the magnet and its descriptor on disk. Keep the magnet name equal to its
+   directory.
+2. **Manifest name** = `package.toml` component `name`. Underscore-style by
+   convention. How the manifest and profiles refer to the component. Also what
+   the validator reports in errors.
+3. **Tool name** = the `name` inside `<tool>.toml`. **This is the only name the
+   LLM sees** and calls. Choose it for the model, independent of directory or
+   manifest naming.
+
+For `runtime = "mcp"`, the tool name is a **prefix**, not the final name: with
+`name_prefix = "biofetch"` the MCP server's `ensembl_search` reaches the LLM as
+`biofetch_ensembl_search`. So an MCP descriptor contributes a *family* of tools
+all sharing the prefix, not a single tool.
+
+**Practical rule:** keep dir = magnet name (locator), pick a clear manifest
+name, and set the `.toml` `name` to whatever reads best to the model. Don't
+rename one layer expecting the others to follow — they're independent.
+
+---
+
+<a id="package-infra"></a>
+## Package-local infrastructure (runtimes, envs, locks)
+
+Some assets **back** tools but are **not** module/source/magnet components:
+a Python runtime, its tests, a pinned Pixi env, and its lockfile. They ship
+inside the package and are referenced by tool descriptors — but they have **no
+`HcpMagnet.ts`** and the loader does not build a component for them. The
+validator only checks that their `path` exists (these kinds are outside
+`MODULE_SOURCE_KINDS`, so the HcpMagnet.ts / descriptor rules do not apply).
+
+The four infra kinds (from `AutOmicScience/package.toml`):
+
+| kind | `path` points at | Referenced by |
+|---|---|---|
+| `python-runtime` | a directory (the importable module) | tool `.toml` `runtime = "<name>"` + `module = "<name>"` |
+| `runtime-tests` | a directory (pytest suite for the runtime) | CI / `cargo`/`pytest` runs, not loaded at session time |
+| `env` | a file (`pixi.toml`) | tool `.toml` `metadata.env_manifest` |
+| `env-lock` | a file (`pixi.lock`) | tool `.toml` `metadata.env_lock` |
+
+Declare them alongside the tools they serve:
+
+```toml
+# python module the python-runtime tool dispatches into
+[[components]]
+kind = "python-runtime"
+name = "aose_omics_runtime"
+source = "AutOmicScience"
+path = "tools/omics-compute/python/aose_omics_runtime"
+
+# its test suite (kept in-tree, run in CI)
+[[components]]
+kind = "runtime-tests"
+name = "aose_omics_runtime_tests"
+source = "AutOmicScience"
+path = "tools/omics-compute/python/tests"
+
+# pinned environment manifest + lock
+[[components]]
+kind = "env"
+name = "pixi"
+source = "AutOmicScience"
+path = "tools/omics-environment/pixi.toml"
+
+[[components]]
+kind = "env-lock"
+name = "pixi"
+source = "AutOmicScience"
+path = "tools/omics-environment/pixi.lock"
+```
+
+How they wire together (frozen alignment with the main session):
+- A `runtime = "aose_omics_runtime"` tool descriptor names a `python-runtime`
+  component. The host resolves the runtime, imports its `module`, and dispatches
+  the tool call — the package ships no `AgentTool`, only the module + descriptor.
+- `metadata.env_manifest = "pixi.toml"` / `env_lock = "pixi.lock"` tie the tool
+  to the pinned `env` / `env-lock`, so the host provisions the right
+  environment before running.
+- Keep these assets **beside the tool item** (`tools/omics-compute/python/`,
+  `tools/omics-environment/pixi.toml`), not at package root.
+
+**Do not** give infra components an `HcpMagnet.ts` or a `<source>/` directory —
+they are plain paths, not magnets. Adding one will not break the validator but
+misrepresents them as HCP components.
+
+**Reference**: `AutOmicScience/` is the only package that ships infra; mirror
+its `tools/omics-compute/python/` + `tools/omics-environment/` layout.
 
 ---
 
