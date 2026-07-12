@@ -12,6 +12,35 @@ prompts, brand, runtime). Selection names packages — it never loads arbitrary
 external paths. Packages that carry many skills expose optional **profiles** so
 a session can pull in a focused subset.
 
+## Package layout (schema v2: HCP-isomorphic)
+
+A package is an externalized slice of the Magenta HarnessComponentProtocol
+tree. Its on-disk shape mirrors the host exactly: every contributed component
+lives at `<module>/<source>/` with a real `HcpMagnet.ts` beside its descriptor
+or content, just like the host's `tools/write/magenta/HcpMagnet.ts`.
+
+```text
+<package-root>/
+  package.toml                 # schema_version = magenta.package.v2, version, source
+  skills/<skill>/<source>/     # source = package name (single-source package)
+    HcpMagnet.ts               # bare class: static build + module/kind/source + toResource
+    SKILL.md
+  tools/<tool>/<source>/
+    HcpMagnet.ts               # bare class + descriptor(); one tool per item
+    <tool>.toml
+  brand/<source>/ , system-prompt/<source>/   # same shape, resource magnets
+```
+
+The `source` segment is the package name. A **merge package** aggregating
+multiple upstreams would add sibling `<module>/<other-source>/` directories,
+each with its own `HcpMagnet`. Each magnet is a bare class (HCP spec §2, no
+imported interface) that resolves its own content path relative to itself via
+`import.meta.url`, so the package is relocatable when downloaded into the local
+cache. The runtime magnet loader imports each `HcpMagnet.ts`, validates the
+shape (static `build`, `module`/`kind`/`source`, one of
+`toTool`/`toCapability`/`toResource`/`descriptor`), and registers it into the
+same `HcpClient` as built-in magnets.
+
 ## Loading a package
 
 ```bash
@@ -28,6 +57,23 @@ magenta --harness-package AutOmicScience --harness-package PantheonOS
 The selector grammar is `PackageName[:profile1,profile2,...]`. Parsing and
 loading live in the Magenta harness; this repository only owns package content,
 manifests, tools, skills, prompts, and package-local runtimes.
+
+## Publishing (monorepo + per-package tags)
+
+This is a monorepo of independently versioned packages. Each package has its
+own `version` in `package.toml` and is released on its own cadence via a
+prefixed git tag `<PackageName>-v<version>`:
+
+```bash
+git tag AutOmicScience-v1.0.0
+git push origin AutOmicScience-v1.0.0
+```
+
+The [`release`](./.github/workflows/release.yml) workflow parses the package
+and version from the tag, validates the manifest, verifies the tag matches the
+manifest `version`, builds a relocatable source `tar.gz` + SHA256, and
+publishes a GitHub Release. The acquisition layer resolves
+`github:Minions-Land/MagentaPackages/<Package>@<version>` to that release.
 
 ## Repository maintenance
 
@@ -79,9 +125,14 @@ Follow [`templates/harness-package/README.md`](./templates/harness-package/READM
 The template is README-only on purpose — copy the current, executable rules
 rather than a stale scaffold:
 
-- Keep skills under package-root `skills/<capability>/SKILL.md`.
-- Put system prompts under `system-prompt/` with a `system-prompt.toml` descriptor.
-- Put tool descriptors and their implementation assets under `tools/<tool>/`.
+- Keep skills under `skills/<capability>/<source>/SKILL.md` with a sibling
+  `HcpMagnet.ts` (source = package name).
+- Put system prompts under `system-prompt/<source>/` with a `system-prompt.toml`
+  descriptor and an `HcpMagnet.ts`.
+- Put tool descriptors under `tools/<tool>/<source>/` (one tool per item) with
+  their `<tool>.toml` and an `HcpMagnet.ts`; keep shared implementation assets
+  (Rust/Python runtimes, pixi env) at the tool-item or package-infra level.
+- Give the package a `version` and mark `schema_version = "magenta.package.v2"`.
 - Keep the package root itself limited to `package.toml`, `README.md`, and the
   convention directories — no scratch notes or migration reports.
 
