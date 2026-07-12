@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
  * Tool Source magnet for the AutOmicScience package (source = "AutOmicScience").
  *
  * Isomorphic to the host's tools/<tool>/<source>/HcpMagnet.ts. Bare class,
- * static build, toTool (HCP spec §2 — no imported interface). This is a
+ * static build, descriptor (HCP spec §2 — no imported interface). This is a
  * descriptor-backed tool: the magnet resolves its own tool descriptor
  * (omics-compute.toml) relative to this file and hands it to the host tool runtime at
  * assembly time. The package ships standalone, so the descriptor path is
