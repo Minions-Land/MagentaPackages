@@ -4,47 +4,39 @@ name = "PantheonOS"
 version = "0.1.0"
 kind = "domain"
 domain = "bioinformatics"
-description = "Bioinformatics and scientific workflow skills from PantheonOS covering single-cell/spatial omics, foundation models, bio-imaging, and scientific communication."
+description = "Bioinformatics and scientific workflow skills from PantheonOS covering single-cell/spatial omics, image analysis, and scientific publishing."
 source = "PantheonOS"
 
 # HCP-isomorphic layout: each skill at <skill>/<source>/HcpMagnet.ts
+# Empty = no default narrowing: `--harness-package PantheonOS` loads every skill.
+# Narrow with a selector, e.g. `--harness-package PantheonOS:omics,publishing`.
 default_profiles = []
+
+# === Profiles for selective loading ===
 
 [[profiles]]
 name = "omics"
-description = "Single-cell and spatial omics analysis skills"
-extends = []
-
-[[profiles]]
-name = "imaging"
-description = "Bio-image processing and cell segmentation"
-extends = []
-
-[[profiles]]
-name = "communication"
-description = "Scientific paper writing, figures, and presentations"
+description = "Single-cell, spatial, and image-based omics analysis"
 extends = []
 
 [[profiles]]
 name = "infrastructure"
-description = "Data analysis infrastructure and pipelines"
+description = "Data access, workflow pipelines, and compute environment"
 extends = []
 
-# === Components ===
+[[profiles]]
+name = "publishing"
+description = "Scientific paper writing, figures, and presentations"
+extends = []
 
-[[components]]
-kind = "skill"
-name = "omics"
-source = "PantheonOS"
-path = "skills/omics/PantheonOS"
-include_in_context = false
-profiles = ['omics']
+# === Omics Analysis Skills ===
 
 [[components]]
 kind = "skill"
 name = "single-cell"
 source = "PantheonOS"
 path = "skills/single-cell/PantheonOS"
+description = "Core scRNA-seq analysis: QC, annotation, trajectory"
 include_in_context = false
 profiles = ['omics']
 
@@ -53,22 +45,7 @@ kind = "skill"
 name = "spatial"
 source = "PantheonOS"
 path = "skills/spatial/PantheonOS"
-include_in_context = false
-profiles = ['omics']
-
-[[components]]
-kind = "skill"
-name = "scfm"
-source = "PantheonOS"
-path = "skills/scfm/PantheonOS"
-include_in_context = false
-profiles = ['omics']
-
-[[components]]
-kind = "skill"
-name = "database-access"
-source = "PantheonOS"
-path = "skills/database-access/PantheonOS"
+description = "Spatial transcriptomics analysis and visualization"
 include_in_context = false
 profiles = ['omics']
 
@@ -77,6 +54,7 @@ kind = "skill"
 name = "gene-panel"
 source = "PantheonOS"
 path = "skills/gene-panel/PantheonOS"
+description = "Gene panel design for spatial transcriptomics"
 include_in_context = false
 profiles = ['omics']
 
@@ -85,77 +63,76 @@ kind = "skill"
 name = "sc-best-practices"
 source = "PantheonOS"
 path = "skills/sc-best-practices/PantheonOS"
+description = "Reference from sc-best-practices.org book"
 include_in_context = false
 profiles = ['omics']
-
-[[components]]
-kind = "skill"
-name = "upstream"
-source = "PantheonOS"
-path = "skills/upstream/PantheonOS"
-include_in_context = false
-profiles = ['omics']
-
-[[components]]
-kind = "skill"
-name = "nfcore"
-source = "PantheonOS"
-path = "skills/nfcore/PantheonOS"
-include_in_context = false
-profiles = ['infrastructure']
-
-[[components]]
-kind = "skill"
-name = "openst"
-source = "PantheonOS"
-path = "skills/openst/PantheonOS"
-include_in_context = false
-profiles = ['omics']
-
-[[components]]
-kind = "skill"
-name = "bio-imaging"
-source = "PantheonOS"
-path = "skills/bio-imaging/PantheonOS"
-include_in_context = false
-profiles = ['imaging']
 
 [[components]]
 kind = "skill"
 name = "cell-segmentation"
 source = "PantheonOS"
 path = "skills/cell-segmentation/PantheonOS"
+description = "Cell/nucleus segmentation (Cellpose, SAM, StarDist)"
 include_in_context = false
-profiles = ['imaging']
+profiles = ['omics']
+
+# database-access is shared: single-cell data acquisition (omics) AND general
+# genomic data access (infrastructure). gene-panel depends on it, so it must
+# co-load under `:omics`.
+[[components]]
+kind = "skill"
+name = "database-access"
+source = "PantheonOS"
+path = "skills/database-access/PantheonOS"
+description = "Query genomic databases (gget, CELLxGENE Census)"
+include_in_context = false
+profiles = ['omics', 'infrastructure']
+
+# === Infrastructure Skills (pipelines, compute) ===
 
 [[components]]
 kind = "skill"
-name = "paper-writing"
+name = "nf-core"
 source = "PantheonOS"
-path = "skills/paper-writing/PantheonOS"
+path = "skills/nf-core/PantheonOS"
+description = "nf-core community pipelines (143+ workflows)"
 include_in_context = false
-profiles = ['communication']
-
-[[components]]
-kind = "skill"
-name = "figure-styling"
-source = "PantheonOS"
-path = "skills/figure-styling/PantheonOS"
-include_in_context = false
-profiles = ['communication']
-
-[[components]]
-kind = "skill"
-name = "presentation"
-source = "PantheonOS"
-path = "skills/presentation/PantheonOS"
-include_in_context = false
-profiles = ['communication']
+profiles = ['infrastructure']
 
 [[components]]
 kind = "skill"
 name = "data-analysis"
 source = "PantheonOS"
 path = "skills/data-analysis/PantheonOS"
+description = "Environment setup, parallel computing, HPC"
 include_in_context = false
 profiles = ['infrastructure']
+
+# === Publishing Skills ===
+
+[[components]]
+kind = "skill"
+name = "paper-writing"
+source = "PantheonOS"
+path = "skills/paper-writing/PantheonOS"
+description = "Academic and report templates (HTML/LaTeX)"
+include_in_context = false
+profiles = ['publishing']
+
+[[components]]
+kind = "skill"
+name = "figure-styling"
+source = "PantheonOS"
+path = "skills/figure-styling/PantheonOS"
+description = "Aesthetic guidelines for scientific figures"
+include_in_context = false
+profiles = ['publishing']
+
+[[components]]
+kind = "skill"
+name = "presentation"
+source = "PantheonOS"
+path = "skills/presentation/PantheonOS"
+description = "Marp slides and presentation templates"
+include_in_context = false
+profiles = ['publishing']

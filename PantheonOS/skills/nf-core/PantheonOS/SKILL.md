@@ -1,9 +1,10 @@
 ---
-id: nfcore_skills_index
-name: nf-core Pipelines Skills Index
-description: |
-  Skills for using nf-core community pipelines to process omics data,
-  from installation and configuration to running specific analysis pipelines.
+name: nf-core
+description: Skills for using nf-core community pipelines to process omics data, from
+  installation and configuration to running specific analysis pipelines.
+tags: []
+source: PantheonOS
+license: BSD-2-Clause
 ---
 
 # nf-core Pipelines Skills
@@ -20,7 +21,7 @@ automated dependency management via Docker, Singularity, or Conda.
 Installation, configuration, and common usage patterns for running any
 nf-core pipeline on local machines, HPC clusters, or cloud environments.
 
-**Skill file**: [nfcore_usage.md](./nfcore_usage.md)
+**Skill file**: [nfcore_usage.md](assets/references/nfcore_usage.md)
 
 **When to use**:
 - First time setting up Nextflow and nf-core
@@ -35,7 +36,7 @@ nf-core pipeline on local machines, HPC clusters, or cloud environments.
 Pipelines for processing single-cell RNA-seq (10x, Drop-seq, Smart-seq)
 and bulk RNA-seq data from raw FASTQs to count matrices.
 
-**Skill file**: [nfcore_transcriptomics.md](./nfcore_transcriptomics.md)
+**Skill file**: [nfcore_transcriptomics.md](assets/references/nfcore_transcriptomics.md)
 
 **When to use**:
 - Processing 10x Chromium, Drop-seq, or Smart-seq scRNA-seq data
@@ -50,7 +51,7 @@ and bulk RNA-seq data from raw FASTQs to count matrices.
 Pipelines for spatial transcriptomics platforms including Visium, Xenium,
 MERSCOPE, CosMX, and molecular cartography.
 
-**Skill file**: [nfcore_spatial.md](./nfcore_spatial.md)
+**Skill file**: [nfcore_spatial.md](assets/references/nfcore_spatial.md)
 
 **When to use**:
 - Processing 10x Visium or Visium HD data
@@ -65,7 +66,7 @@ MERSCOPE, CosMX, and molecular cartography.
 Pipelines for chromatin accessibility, histone modification, protein-DNA
 interaction, and DNA methylation profiling.
 
-**Skill file**: [nfcore_epigenomics.md](./nfcore_epigenomics.md)
+**Skill file**: [nfcore_epigenomics.md](assets/references/nfcore_epigenomics.md)
 
 **When to use**:
 - Processing ATAC-seq data (bulk)
@@ -80,7 +81,7 @@ interaction, and DNA methylation profiling.
 Germline and somatic variant detection from WGS, WES, or targeted
 sequencing data with 16+ variant callers.
 
-**Skill file**: [nfcore_variant_calling.md](./nfcore_variant_calling.md)
+**Skill file**: [nfcore_variant_calling.md](assets/references/nfcore_variant_calling.md)
 
 **When to use**:
 - Detecting germline or somatic SNVs, indels, SVs, and CNVs
@@ -95,7 +96,7 @@ sequencing data with 16+ variant callers.
 Pipeline for processing Hi-C chromosome conformation capture data to study
 3D genome organization: contact maps, TADs, and A/B compartments.
 
-**Skill file**: [nfcore_hic.md](./nfcore_hic.md)
+**Skill file**: [nfcore_hic.md](assets/references/nfcore_hic.md)
 
 **When to use**:
 - Processing Hi-C data (digestion or DNase protocol)
@@ -112,7 +113,7 @@ including those not covered by the skill files above. Teaches the agent
 how to fetch pipeline documentation, parameters, and samplesheet formats
 on-the-fly from standardized nf-core URLs and schemas.
 
-**Skill file**: [nfcore_dynamic_discovery.md](./nfcore_dynamic_discovery.md)
+**Skill file**: [nfcore_dynamic_discovery.md](assets/references/nfcore_dynamic_discovery.md)
 
 **When to use**:
 - User asks about a pipeline not covered in the detailed skill files above

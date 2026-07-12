@@ -1,81 +1,59 @@
 # PantheonOS Package
 
-Bioinformatics and scientific workflow skills migrated from [PantheonOS](https://github.com/standardgalactic/pantheon) covering single-cell/spatial omics, foundation models, bio-imaging, and scientific communication.
+Bioinformatics and scientific workflow skills migrated from PantheonOS covering single-cell/spatial omics, image analysis, and scientific publishing.
 
 ## Package Structure
 
-PantheonOS is organized into **4 domain profiles** for selective loading:
+PantheonOS is organized into **3 domain profiles** for selective loading:
 
 ### Available Profiles
 
 | Profile | Description | Skills |
 |---------|-------------|--------|
-| `omics` | Single-cell & spatial omics analysis | 9 skills |
-| `imaging` | Bio-image processing & segmentation | 2 skills |
-| `communication` | Paper writing, figures, presentations | 3 skills |
-| `infrastructure` | Data pipelines & HPC | 2 skills |
+| `omics` | Single-cell, spatial, and image-based omics analysis | 6 |
+| `infrastructure` | Data access, workflow pipelines, and compute environment | 3 |
+| `publishing` | Scientific paper writing, figures, and presentations | 3 |
+
+> `database-access` belongs to **both** `omics` and `infrastructure` (data acquisition serves both), so the distinct skill count is **11**.
 
 ## Usage
 
 ### Load All Skills (Default)
 
 ```bash
-# Load all 16 PantheonOS skills
+# Load all 11 PantheonOS skills
 magenta --harness-package PantheonOS
 ```
 
-### Profile Selection
+### Load Specific Profiles
 
 ```bash
-# Load only omics analysis skills
-magenta --harness-package PantheonOS:omics
-
-# Load multiple profiles
-magenta --harness-package PantheonOS:omics,communication
-
-# Load all explicitly
-magenta --harness-package PantheonOS:all
-```
-
-Each skill is tagged with the profile(s) it belongs to, so a profile selector
-loads exactly that subset. To load everything, use the built-in `:all` (or `:*`)
-selector — no `all` profile needs to be declared.
-
-### Multi-Package Loading
-
-```bash
-# Combine with other packages
-magenta --harness-package AutOmicScience --harness-package PantheonOS
-
-# Full bioinformatics stack
-magenta --harness-package AutOmicScience --harness-package ClaudeScience --harness-package PantheonOS
-# → 59 skills (11 + 32 + 16) plus AutOmicScience tools and system prompt
+# Load only selected profiles (comma-separated)
+magenta --harness-package PantheonOS:omics,publishing
 ```
 
 ## Skills Inventory
 
-### Omics Analysis (9 skills)
+### Omics Analysis (6 skills)
 
 | Skill | Description |
 |-------|-------------|
-| **omics** | Index skill for all omics workflows |
 | **single-cell** | scRNA-seq QC, annotation, trajectory inference |
 | **spatial** | Spatial transcriptomics, 3D visualization, mapping |
-| **scfm** | Single-cell foundation models (scGPT, Geneformer, UCE) |
-| **database-access** | Query genomic databases (gget, CELLxGENE Census) |
 | **gene-panel** | Gene panel design for spatial transcriptomics |
 | **sc-best-practices** | Reference from sc-best-practices.org |
-| **upstream** | Raw data processing pipelines |
-| **openst** | Open-ST spatial transcriptomics |
+| **cell-segmentation** | Cellpose, SAM, StarDist cell/nucleus segmentation |
+| **database-access** | Query genomic databases (gget, CELLxGENE Census) — *shared with infrastructure* |
 
-### Bio-Imaging (2 skills)
+### Infrastructure (3 skills)
 
 | Skill | Description |
 |-------|-------------|
-| **bio-imaging** | Bio-image processing index |
-| **cell-segmentation** | Cellpose, SAM, StarDist segmentation |
+| **nf-core** | 143+ nf-core community pipelines |
+| **data-analysis** | Environment setup, parallel computing, HPC |
+| **database-access** | Query genomic databases (gget, CELLxGENE Census) — *shared with omics* |
 
-### Scientific Communication (3 skills)
+### Publishing (3 skills)
 
 | Skill | Description |
 |-------|-------------|
@@ -83,72 +61,24 @@ magenta --harness-package AutOmicScience --harness-package ClaudeScience --harne
 | **figure-styling** | Aesthetic guidelines for scientific figures |
 | **presentation** | Marp slides and presentation templates |
 
-### Infrastructure (2 skills)
-
-| Skill | Description |
-|-------|-------------|
-| **nfcore** | 143+ nf-core community pipelines |
-| **data-analysis** | Environment setup, parallel computing, HPC |
-
 ## Key Technologies Covered
 
 ### Single-Cell & Spatial
 - **Python ecosystem**: scanpy, squidpy, spatialdata, muon
-- **Foundation models**: scGPT, Geneformer, UCE
-- **Pipelines**: nf-core/scrnaseq, nf-core/spatialvi, Open-ST
+- **Pipelines**: nf-core/scrnaseq, nf-core/spatialvi
 
-### Bio-Imaging
+### Image Analysis
 - **Segmentation**: Cellpose, Segment Anything Model (SAM), StarDist
 - **Frameworks**: napari, scikit-image
 
 ### Databases
 - **gget**: 23 modules for Ensembl, NCBI, UniProt, ARCHS4, etc.
-- **CELLxGENE Census**: 50M+ single-cell profiles
+- **CELLxGENE Census**: 217M+ single-cell profiles
 
-### Scientific Writing
+### Scientific Publishing
 - **Templates**: HTML reports, LaTeX academic papers
 - **Figure styles**: Publication-ready matplotlib themes
 - **Presentations**: Marp markdown slides
-
-## Comparison with Other Packages
-
-| Package | Focus | Skills | Tools | System Prompt |
-|---------|-------|--------|-------|---------------|
-| **AutOmicScience** | Production-grade omics analysis | 11 | 5 | Yes |
-| **Biomni** | Biomedical AI toolkit | 3 | executable (20+ modules) | No |
-| **ClaudeScience** | Computational biology research | 32 | 0 | No |
-| **PantheonOS** | Workflow best practices | 16 | 0 | No |
-
-**Recommended combinations**:
-- **Research workflow**: `ClaudeScience + PantheonOS`
-- **Production analysis**: `AutOmicScience + PantheonOS`
-- **Wet-lab + analysis**: `Biomni + AutOmicScience`
-
-## Self-Evo Compliance
-
-✅ **符合 Magenta Self-evo skill-creator 标准**:
-- Standard `package.toml` with schema_version
-- All skills have proper SKILL.md with frontmatter
-- Organized with profiles for selective loading
-- Clear component naming (no conflicts)
-- BSD-2-Clause license preserved
-
-## Testing
-
-```bash
-# Verify package structure
-cd harness
-npm test -- test/package-overlay.test.ts
-
-# Check discovered packages
-node -e "
-const { discoverHarnessPackages } = require('./dist/hcp-client/overlay/package-overlay.js');
-discoverHarnessPackages().then(r => {
-  const p = r.packages.find(pkg => pkg.id === 'PantheonOS');
-  console.log('Skills:', p.manifest.components.map(c => c.name));
-});
-"
-```
 
 ## Migration Notes
 
@@ -167,10 +97,7 @@ All skills retain their original BSD-2-Clause license from PantheonOS.
 ## See Also
 
 - [Packages overview](../README.md) — how packages load and how to combine them
-- [`AutOmicScience`](../AutOmicScience/) — grounded, tool-backed omics analysis (the reference package)
-- [`ClaudeScience`](../ClaudeScience/) — computational biology research skills by profile
-- [`Biomni`](../Biomni/) — biomedical AI toolkit with executable tools
-- [PantheonOS Repository](https://github.com/standardgalactic/pantheon)
+- [PantheonOS Repository](https://github.com/aristoteleo/PantheonOS)
 - [Single-cell Best Practices](https://www.sc-best-practices.org)
 - [scverse Documentation](https://scverse.org)
 - [nf-core Pipelines](https://nf-co.re)

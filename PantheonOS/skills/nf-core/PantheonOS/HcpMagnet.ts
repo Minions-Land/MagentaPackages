@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
  * downloaded into the local package cache.
  */
 export class HcpMagnet {
-	static readonly module = "skills/openst";
+	static readonly module = "skills/nf-core";
 	static readonly kind = "skill";
 	static readonly source = "PantheonOS";
 	static build(_context: unknown) {
@@ -24,7 +24,7 @@ export class HcpMagnet {
 	toResource() {
 		return {
 			kind: "skill",
-			name: "openst",
+			name: "nf-core",
 			source: "PantheonOS",
 			mergeMode: "replace" as const,
 			contentPath: join(dirname(fileURLToPath(import.meta.url)), "SKILL.md"),

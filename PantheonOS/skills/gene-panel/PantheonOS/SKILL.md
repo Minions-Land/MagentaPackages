@@ -23,7 +23,7 @@ license: BSD-2-Clause
 
 # Gene Panel Selection Workflow
 
-This skill is used when you need to construct **biologically meaningful** and **algorithmically robust** gene panels. You will receive context from the `leader`agent , use this context and **STRICLTY** follow this **Gene Panel Selection Workflow** 
+This skill is used when you need to construct **biologically meaningful** and **algorithmically robust** gene panels. You will receive context from the `leader` agent , use this context and **STRICLTY** follow this **Gene Panel Selection Workflow**
 
 ## Workflow Enforcement (MANDATORY)
 
@@ -75,11 +75,11 @@ If the dataset is large, perform **smart downsampling** while preserving **all c
 
 ## Gene Panel Selection Hyperparameters
 <!-- Defaults live as module-level constants at the top of
-`scripts/gene_panel_helpers.py`. To override for a specific call, pass
+`assets/references/scripts/gene_panel_helpers.py`. To override for a specific call, pass
 the value as a kwarg (e.g., `select_spapros(..., n_hvg=5000)`). No
 global config file to edit. -->
 
-| Constant (in `scripts/gene_panel_helpers.py`) | Default | Description |
+| Constant (in `assets/references/scripts/gene_panel_helpers.py`) | Default | Description |
 |---|---|---|
 | `SCGENEFIT_MAX_CONSTRAINTS` | 1000 | Max LP constraints for scGeneFit |
 | `SPAPROS_N_HVG` | 3000 | HVG pre-filter size for SpaPROS |
@@ -105,10 +105,8 @@ If no dataset was provided, you **must** search and retrieve a relevant dataset
 before proceeding. Follow the sub-steps below **in order**.
 
 > [!IMPORTANT]
-> Before starting, read the database access skill index:
-> `.pantheon/skills/omics/database-access/SKILL.md`
-> (or use `glob` with `pattern="**/database-access/SKILL.md"`)
-> and the relevant skill files it references (especially `cellxgene_census.md` and `gget.md`).
+> Before starting, load the **`database-access`** skill (listed in the skills catalog)
+> and follow the reference guides it points to (especially its CELLxGENE Census and gget guides).
 
 ### 0.1 Parse the user query
 Extract search parameters from the leader-provided context:
@@ -137,7 +135,7 @@ Extract search parameters from the leader-provided context:
 CELLxGENE Census is the largest curated single-cell collection (217M+ cells)
 and returns AnnData objects directly — **always try this first**.
 
-Read the full skill: `.pantheon/skills/omics/database-access/cellxgene_census.md`
+See the **`database-access`** skill for the CELLxGENE Census access guide.
 
 Strategy:
 
@@ -219,7 +217,7 @@ If CELLxGENE Census does not have suitable data (e.g., rare tissue, specific org
 spatial data needed), try these alternatives **in order of preference**:
 
 1. **gget.cellxgene** — query CZ CELLxGENE Discover for specific datasets:
-   Read: `.pantheon/skills/omics/database-access/gget.md`
+   See the **`database-access`** skill for the gget access guide.
    ```python
    import gget
    gget.setup("cellxgene")
@@ -268,7 +266,7 @@ Checklist:
 ### 1.2 Downsampling (CRITICAL)
 
 Thresholds come from the module-level constants in
-`scripts/gene_panel_helpers.py` (see the Hyperparameters table at the top).
+`assets/references/scripts/gene_panel_helpers.py` (see the Hyperparameters table at the top).
 
 Rules:
 - If `adata.n_obs > DOWNSAMPLE_MAX_CELLS` (default 500000): downsample to below that limit, **preserving all cell types**.
@@ -353,31 +351,26 @@ Algorithmic Methods = `{HVG, DE, Random Forest, scGeneFit, SpaPROS}`
 - Implement **HVG / DE** via Scanpy directly (`sc.pp.highly_variable_genes`,
   `sc.tl.rank_genes_groups`).
 - For **Random Forest / scGeneFit / SpaPROS** use the helper script shipped
-  with this skill: `scripts/gene_panel_helpers.py`. It is a plain Python
+  with this skill: `assets/references/scripts/gene_panel_helpers.py`. It is a plain Python
   module (no registered toolset) with four functions:
   `select_spapros`, `select_random_forest`, `select_scgenefit`,
   `estimate_spapros_runtime`.
 
 #### Load the helper script
 
-Open the helper from this skill's directory (`.pantheon/skills/omics/gene-panel/scripts/`).
-In a notebook cell:
+The helper lives at `assets/references/scripts/gene_panel_helpers.py`, resolved
+relative to **this skill's directory** (the directory containing this SKILL.md).
+You already know that directory's absolute path from the skills catalog (the skill's
+`<location>`). In a notebook cell, put that directory on `sys.path`, then import:
 
 ```python
-# Locate the helpers relative to this skill's install path.
 import sys
 from pathlib import Path
 
-# .pantheon/skills/omics/gene-panel/scripts/
-skill_scripts = Path.cwd()
-for candidate in (
-    Path.home() / ".pantheon/skills/omics/gene-panel/scripts",
-    Path.cwd() / ".pantheon/skills/omics/gene-panel/scripts",
-):
-    if candidate.exists():
-        skill_scripts = candidate
-        break
-sys.path.insert(0, str(skill_scripts))
+# Substitute the absolute path of THIS skill's directory (the one holding SKILL.md),
+# e.g. <...>/packages/PantheonOS/skills/gene-panel
+skill_dir = Path("<ABSOLUTE PATH OF THIS SKILL'S DIRECTORY>")
+sys.path.insert(0, str(skill_dir / "assets/references/scripts"))
 
 from gene_panel_helpers import (
     estimate_spapros_runtime,
@@ -393,9 +386,9 @@ from gene_panel_helpers import (
 )
 ```
 
-If the above lookup fails (non-default install), read the file via
-`skill_view(name='omics/gene-panel', file_path='scripts/gene_panel_helpers.py')`
-to discover its location, then adjust the `sys.path` insertion accordingly.
+If you are unsure of the skill's directory, `read` the file
+`assets/references/scripts/gene_panel_helpers.py` (relative paths resolve against
+this skill's directory) to confirm its location, then set `skill_dir` accordingly.
 
 > [!CAUTION]
 > **SpaPROS runtime gate (MANDATORY).** SpaPROS can run for tens of minutes

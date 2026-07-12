@@ -29,14 +29,14 @@ backgroundColor: "#0a0e17"
 color: "#e2e8f0"
 html: true   # required for raw <div class="mermaid"> blocks
 style: |
-  ... # see [template.md](template.md) for a complete starter
+  ... # see [marp_template.md](marp_template.md) for a complete starter
 ---
 ```
 
 `html: true` is mandatory if you use mermaid or any inline HTML — Marp
 strips it otherwise.
 
-## Use [template.md](template.md) as the starting point
+## Use [marp_template.md](marp_template.md) as the starting point
 
 Copy the full frontmatter (including the `style:` block) and the example
 slides verbatim, then replace content. The CSS in the template already
