@@ -8,10 +8,9 @@ extraction over that material — see SKILL.md. This is what makes the skill
 work identically on Claude Code, Codex, OpenCode, or any other agent, with no
 API key and no configuration.
 
-Load once per session by exec-ing this file in a Python cell (nothing
-auto-injects it outside Claude Science):
+Load the file explicitly in every Python process that uses it:
 
-    exec(open("<this-skill-dir>/kernel.py").read())
+    helpers = runpy.run_path(str(skill_dir / "kernel.py"))
 
 then call the helpers directly. All names are ``pdf_``-prefixed. Non-stdlib
 imports are inside function bodies so the module loads in a bare environment.
@@ -45,22 +44,13 @@ text-layer PDFs are typically 1000+ even on sparse pages."""
 def pdf_resolve(path_or_vid):
     """Expand/validate a filesystem path (``~`` is expanded).
 
-    Artifact/version ids are a Claude Science concept with no local store
-    here — pass a real path to the PDF instead of an id.
+    Pass a real filesystem path to the PDF.
     """
     if not isinstance(path_or_vid, str) or not path_or_vid:
         raise TypeError("pdf_resolve: path must be a non-empty str")
     p = os.path.expanduser(path_or_vid)
     if os.path.exists(p):
         return p
-    # An 8-4-4-4-12 hex id looks like an artifact/version id — there is no
-    # artifact store outside Claude Science.
-    if re.fullmatch(r"[0-9a-fA-F-]{32,36}", path_or_vid.strip()):
-        raise FileNotFoundError(
-            f"pdf_resolve: {path_or_vid!r} looks like an artifact/version id, "
-            f"which has no local store outside Claude Science. Pass a "
-            f"filesystem path to the PDF instead."
-        )
     return p
 
 

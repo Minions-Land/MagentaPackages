@@ -55,38 +55,11 @@ centred on the variant and compare per-track output.
 biosample) is in `borzoi_pytorch.pytorch_borzoi_model.TRACKS_DF` (or `model.tracks_df` when using the `AnnotatedBorzoi` subclass) — the base `Borzoi` model has no `targets` attribute.
 
 
-## Remote compute
+## GPU and weight cache
 
-Needs ≥24 GB VRAM and either pre-cached HF weights or egress to
-`huggingface.co`. Read `compute_details({provider, mode:'read'})` for an
-environment with `borzoi-pytorch`, then:
-
-```python
-c = host.compute.create(provider)
-job = c.submit_job(
-    intent="Borzoi track prediction for 1 locus — 1×GPU, ~2 min",
-    inputs=[{"src": "borzoi_run.py", "dst_filename": "borzoi_run.py"}],
-    command="python3 borzoi_run.py",   # env selection is host-specific — see compute_details for your provider
-    outputs=["tracks.npz"],
-    timeout_seconds=1800,
-)
-print(job.job_id)   # cell ends here — kernel never blocks on compute
-```
-
-Then call the `wait_for_notification` brain-tool. When the
-`compute_done` notification arrives, act on its payload:
-
-```python
-save_artifacts(payload["featured_files"])   # paths under hpc/<job_id>/
-```
-
-For the full result dict (`output_files`, `remote_workdir`, …), re-enter the
-kernel: `c.attach_job(job_id).result()` then `c.close()`. See the
-`remote-compute-ssh` / `remote-compute-modal` skill for the orchestration
-details.
-
-If the provider exposes a weight-cache mount, point `HF_HOME` at it inside
-`borzoi_run.py` (path is in `compute_details`).
+Run the same Python code on any CUDA host with at least 24 GB VRAM. The first
+load downloads weights from Hugging Face; set `HF_HOME` to a writable,
+persistent cache when runs must survive machine or container restarts.
 
 
 ## Troubleshooting

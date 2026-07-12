@@ -29,18 +29,24 @@ that drops into the scanpy neighbors → leiden → umap pipeline.
 This is a **pure skill** — `kernel.py` is deterministic Python and *you* (the
 base model) do all the reasoning. There is no `host` runtime and no LLM API.
 The only helper here is `h5ad_safe_obs`, which coerces an obs/var frame so
-`anndata.write_h5ad()` succeeds. Load it once per session in a Python cell:
+`anndata.write_h5ad()` succeeds. In the Python script that trains the model,
+resolve `skill_dir` to the actual directory containing this `SKILL.md`, then
+load the helper explicitly:
 
 ```python
-exec(open("scvi-tools/kernel.py").read())   # path to this skill's kernel.py
+from pathlib import Path
+import runpy
+
+skill_dir = Path("<actual directory containing this SKILL.md>")
+helpers = runpy.run_path(str(skill_dir / "kernel.py"))
+h5ad_safe_obs = helpers["h5ad_safe_obs"]
 ```
 
-Nothing auto-loads it outside Claude Science. Then call `h5ad_safe_obs(...)`
-directly. If it raises `NameError`, you haven't exec'd kernel.py.
+Keep the load and `h5ad_safe_obs(...)` call in the same Python process.
 
-Dependencies: `pip install scvi-tools scanpy anndata`. Training needs a
-CUDA-capable GPU — see [Remote compute](#remote-compute-rent-a-gpu) to fall out
-to a rented GPU when you don't have one locally.
+Dependencies: `pip install "scvi-tools==1.4.2" "scanpy==1.11.5"
+"anndata==0.11.4"`. Training needs a CUDA-capable GPU — see
+[GPU execution](#gpu-execution).
 
 ## How to run
 
@@ -117,55 +123,27 @@ mode).
 | `adata.layers["scvi_normalized"]` | decoded expression, library-size normalized         |
 | DE dataframe                   | per-gene `lfc_*` / `proba_de` (with `mode="change"`)   |
 
-## Remote compute (rent a GPU)
+## GPU execution
 
 An A100-class GPU is recommended for >50k cells. Training is a plain Python
 script (`pipeline.py`) that reads counts, trains scVI/scANVI, and writes the
-output `.h5ad` — run it on whatever GPU you have (a local/cluster CUDA box, or a
-serverless GPU host such as Modal). There is no Claude-Science compute broker
-here; drive the GPU host directly.
+output `.h5ad`. Put the complete workflow in that file, including the explicit
+`h5ad_safe_obs` load from **Setup**, and execute it in the active environment:
 
-**Modal** (serverless GPU) — wrap `pipeline.py` in a Modal app and run it with
-the Modal CLI (`modal run pipeline.py`), which blocks until the job finishes, so
-you read the result synchronously (no notification tool needed):
-
-```python
-# pipeline.py — run with:  modal run pipeline.py
-import modal
-image = (modal.Image.debian_slim()
-         .pip_install("scvi-tools==1.4.2", "scanpy==1.11.5", "anndata==0.11.4"))
-app = modal.App("scvi-run", image=image)
-vol = modal.Volume.from_name("scvi-data", create_if_missing=True)  # holds dataset.h5ad / out.h5ad
-
-@app.function(gpu="A100", timeout=3600, volumes={"/data": vol})
-def train():
-    import scanpy as sc, scvi   # noqa
-    adata = sc.read_h5ad("/data/dataset.h5ad")
-    # ... setup_anndata / scVI / scANVI / DE — see the recipe above ...
-    adata.obs = h5ad_safe_obs(adata.obs)   # paste the helper into THIS script (below)
-    adata.write_h5ad("/data/out.h5ad")
-    vol.commit()
-
-@app.local_entrypoint()
-def main():
-    train.remote()   # blocks until done; then read /data/out.h5ad from the volume
+```bash
+python pipeline.py
 ```
 
-`h5ad_safe_obs` is loaded via `exec` in your **local** session (see **Setup**);
-inside `pipeline.py` running remotely it is not defined, so paste the helper at
-the top of that script (or inline the `pd.Index(np.asarray(..., dtype=object))`
-coercion) before `.write_h5ad()`.
-
-For a local/cluster GPU, just run `pipeline.py` directly where CUDA is visible —
-no wrapper needed. (For a fuller Modal workflow see the `remote-compute-modal`
-skill.)
+Use workspace-relative or user-supplied filesystem paths for inputs, outputs,
+and checkpoints. Execution placement is the host's responsibility; the
+scientific workflow and command stay the same.
 
 ## Gotchas
 
 | Gotcha | What happens / fix |
 |---|---|
 | `differential_expression()` defaults to `mode="vanilla"` (scvi-tools ≥1.4) | `KeyError: 'lfc_mean'` / `'proba_de'` when sorting — pass `mode="change"` to get `lfc_*`/`proba_de`/`is_de_fdr_*`; in vanilla mode sort on `bayes_factor`. |
-| `adata.obs` index/columns are `string[pyarrow]` (`ArrowStringArray`) | `.write_h5ad()` dies with `IORegistryError: No method registered for writing <class 'pandas.arrays.ArrowStringArray'>` (anndata #2377). Coerce before writing: `adata.obs = h5ad_safe_obs(adata.obs)` (kernel helper — load it via `exec` locally, see Setup; inline the coercion in a remote `pipeline.py`). **`.astype(str)` alone is not enough** — on a pyarrow-backed Index/Series it returns another Arrow-backed array; round-trip through `np.asarray(..., dtype=object)`. `anndata.settings.allow_write_nullable_strings = True` does **not** cover Arrow-backed strings. |
+| `adata.obs` index/columns are `string[pyarrow]` (`ArrowStringArray`) | `.write_h5ad()` dies with `IORegistryError: No method registered for writing <class 'pandas.arrays.ArrowStringArray'>` (anndata #2377). Coerce before writing: `adata.obs = h5ad_safe_obs(adata.obs)` (load the helper in the same `pipeline.py`; see Setup). **`.astype(str)` alone is not enough** — on a pyarrow-backed Index/Series it returns another Arrow-backed array; round-trip through `np.asarray(..., dtype=object)`. `anndata.settings.allow_write_nullable_strings = True` does **not** cover Arrow-backed strings. |
 | `use_gpu=` kwarg | Removed in 1.x → `TypeError: train() got an unexpected keyword argument 'use_gpu'`. Use `accelerator="gpu", devices=1`. |
 | Log-normalized data fed to `setup_anndata` | Silent garbage — scVI's NB likelihood needs raw integer counts. Stash counts in `adata.layers["counts"]` *before* normalize/log1p and pass `layer="counts"`. |
 
@@ -177,8 +155,8 @@ skill.)
 | `IORegistryError: No method registered for writing <class 'pandas.arrays.ArrowStringArray'>` on `.write_h5ad()` | `adata.obs = h5ad_safe_obs(adata.obs)` (and `adata.var` if needed) before writing. The `allow_write_nullable_strings` flag does not help here. |
 | `TypeError: ... unexpected keyword argument 'use_gpu'` | Replace with `accelerator="gpu", devices=1`. |
 | `ValueError: ... non-negative integers` / NB loss explodes | `layer="counts"` points at log/float data — restore raw counts. |
-| `MisconfigurationException: No supported gpu backend found` | No CUDA visible — drop `accelerator`/`devices` to fall back to CPU, or dispatch via Remote compute. |
-| `UnicodeEncodeError: 'ascii' codec can't encode character ...` writing a summary / printing | Container has no `LANG` so Python defaults to ASCII. Open files with `encoding="utf-8"` and/or `sys.stdout.reconfigure(encoding="utf-8")` at script top, or set `PYTHONIOENCODING=utf-8` in the image. |
+| `MisconfigurationException: No supported gpu backend found` | No CUDA visible — drop `accelerator`/`devices` to fall back to CPU, or run on a CUDA-capable host as described above. |
+| `UnicodeEncodeError: 'ascii' codec can't encode character ...` writing a summary / printing | The execution environment lacks a UTF-8 locale. Open files with `encoding="utf-8"`, call `sys.stdout.reconfigure(encoding="utf-8")`, or set `PYTHONIOENCODING=utf-8`. |
 
 ---
 

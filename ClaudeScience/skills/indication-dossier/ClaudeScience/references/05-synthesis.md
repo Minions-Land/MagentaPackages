@@ -117,7 +117,7 @@ guidance from SKILL.md.
 
 *Figures*: Only generate a chart when it shows a relationship or
 distribution that prose cannot. Give each a one-line caption that names the
-data source. After rendering, `Read` the image and answer: does this tell
+data source. After rendering, inspect the image with `read` and answer: does this tell
 the reader something the surrounding prose does not? Are title, axes with
 units, and legend all present and legible? Do axis ticks and chart type
 match the data (no fractional ticks on years, counts, or categories; no

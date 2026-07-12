@@ -1,227 +1,137 @@
 # ClaudeScience Package
 
-Computational biology and bioinformatics harness package for Magenta, covering protein structure prediction, genomics, single-cell analysis, literature review, and scientific workflows.
+Computational biology package for Magenta with **20 skills across 6 profiles**.
+It covers biomolecular structure and design, biological sequence models,
+single-cell analysis, scientific research, and publication workflows.
 
-## Package Structure
+## Profiles
 
-ClaudeScience is organized into **domain-specific profiles** for selective loading:
+| Profile | Purpose | Skills |
+|---|---|---|
+| `structure` | Structure prediction and molecular docking | alphafold2, esmfold2, chai1, boltz, openfold3, diffdock |
+| `design` | Protein sequence design | proteinmpnn, ligandmpnn, solublempnn |
+| `sequence-models` | DNA and protein sequence models | borzoi, evo2, fair-esm2 |
+| `single-cell` | Single-cell probabilistic and foundation models | scvi-tools, scgpt |
+| `research` | Literature, PDF, and indication research | literature-review, pdf-explore, indication-dossier |
+| `publishing` | Paper narrative and scientific figures | paper-narrative, figure-composer, figure-style |
 
-### Available Profiles
-
-| Profile | Description | Skills |
-|---------|-------------|--------|
-| `structure` | Protein structure prediction | AlphaFold2, ESMFold2, Chai-1, Boltz, OpenFold3 |
-| `design` | Protein design | ProteinMPNN, LigandMPNN, SolubleMPNN |
-| `genomics` | Genomics & molecular biology | DiffDock, Borzoi, Evo2, ESM-2 |
-| `singlecell` | Single-cell analysis | scvi-tools, scGPT |
-| `research` | Literature & research workflows | Literature review, PDF explore, Paper narrative, Indication dossier |
-| `visualization` | Figure composition | Figure composer, Figure style, Algorithmic art, Web artifacts |
-| `compute` | Infrastructure & compute | Remote SSH, Modal, Env setup, Model endpoints |
-| `meta` | Self-improvement | Skill creator, Learn, Self-awareness, Customize |
+`design` extends `structure`, so selecting `design` loads its three design
+skills plus the six structure/docking skills needed to validate designs.
 
 ## Usage
 
-### Load Specific Profiles
-
 ```bash
-# Load only structure prediction skills
-magenta --harness-package ClaudeScience:structure
-
-# Load multiple profiles
-magenta --harness-package ClaudeScience:structure,design,research
-
-# Load all skills
-magenta --harness-package ClaudeScience:all
-```
-
-### Profile Inheritance
-
-Profiles can extend other profiles via `extends`, composing larger profiles from
-smaller ones (see [Creating Sub-Categories](#creating-sub-categories)). To load
-everything, use the built-in `:all` (or `:*`) selector — it pulls in every
-declared profile, so no `all` profile needs to be declared.
-
-### Default Behavior
-
-By default, **all skills load** (`default_profiles = []` — an empty default means
-"no narrowing"), so `--harness-package ClaudeScience` with no selector pulls in the
-full set. When you only need a slice, name the profiles explicitly to keep context
-focused (profile tags now functionally narrow the loaded set):
-
-```bash
-# Full set (default)
+# Load every ClaudeScience skill (default_profiles = [])
 magenta --harness-package ClaudeScience
 
-# Focused slice
-magenta --harness-package ClaudeScience:structure,design
-```
+# Load a focused profile
+magenta --harness-package ClaudeScience:sequence-models
 
-### Component Naming Convention
+# Protein design plus its inherited structure-validation skills
+magenta --harness-package ClaudeScience:design
 
-Components follow a namespace pattern: `<profile>-<skill-name>`
+# Combine independent profiles
+magenta --harness-package ClaudeScience:single-cell,research
 
-Examples:
-- `structure-alphafold2` - AlphaFold2 in structure profile
-- `design-proteinmpnn` - ProteinMPNN in design profile
-- `research-literature-review` - Literature review in research profile
-
-This allows:
-- Clear organization by domain
-- No naming conflicts
-- Easy filtering and selection
-
-## Multi-Layer Loading
-
-ClaudeScience supports **multi-layer selective loading** through profiles:
-
-### Example 1: Research Workflow
-
-```bash
-# Load only research and visualization skills
-magenta --harness-package ClaudeScience:research,visualization
-
-# This loads:
-# - research-literature-review
-# - research-pdf-explore
-# - research-paper-narrative
-# - research-indication-dossier
-# - viz-figure-composer
-# - viz-figure-style
-# - viz-algorithmic-art
-# - viz-web-artifacts
-```
-
-### Example 2: Protein Engineering
-
-```bash
-# Load structure prediction and design skills
-magenta --harness-package ClaudeScience:structure,design
-
-# This loads:
-# - structure-alphafold2
-# - structure-esmfold2
-# - structure-chai1
-# - structure-boltz
-# - structure-openfold3
-# - design-proteinmpnn
-# - design-ligandmpnn
-# - design-solublempnn
-```
-
-### Example 3: Computational Biology Full Stack
-
-```bash
-# Load comprehensive set
-magenta --harness-package ClaudeScience:structure,design,genomics,singlecell,compute
-
-# Or use the built-in :all selector (loads every profile)
+# Explicitly load all declared profiles
 magenta --harness-package ClaudeScience:all
 ```
 
-## Extending ClaudeScience
+Selectors narrow the model-visible skill catalog. Skill bodies still load on
+demand through the `read` tool.
 
-### Adding New Skills
+## Skill identity
 
-1. Create skill directory under `skills/`
-2. Add `SKILL.md` with proper frontmatter
-3. Add component entry to `package.toml`:
+Every skill has one canonical capability name. These three values must match:
+
+1. component `name` in `package.toml`;
+2. skill directory basename under `skills/`;
+3. `name` in the `SKILL.md` frontmatter.
+
+Profiles are expressed only through the component's `profiles` list; do not
+prefix component names with profile names. For example, the canonical name is
+`alphafold2`, not `structure-alphafold2`.
+
+## Cross-skill references
+
+- Reference a same-profile or inherited skill by canonical name.
+- Use a relative `../<skill>/SKILL.md` link for an optional cross-profile jump.
+- Put a hard dependency in the same loading closure by sharing a profile,
+  dual-tagging it, or using profile inheritance.
+- Resolve bundled files relative to the directory containing the current
+  `SKILL.md`.
+
+The current dependency chain is intentional:
+
+```text
+design ──extends──> structure
+
+paper-narrative ──> figure-composer ──> figure-style
+      (all three are in publishing)
+```
+
+## Execution model
+
+Each skill documents one direct command or Python workflow for the active
+workspace. The host owns execution placement: the same skill instructions work
+when Magenta's filesystem and shell are local or transparently backed by SSH.
+Skills do not embed provider-specific scheduling, volumes, job submission, or
+notification protocols. Model-specific dependency, cache, and GPU requirements
+remain beside the workflow that needs them.
+
+## Adding a skill
+
+1. Create `skills/<skill-name>/SKILL.md` with matching `name` frontmatter.
+2. Reuse an existing profile unless the new category clearly earns a loading
+   unit of its own.
+3. Register it in `package.toml`:
 
 ```toml
 [[components]]
 kind = "skill"
-name = "profile-skillname"
-path = "skills/skillname"
-description = "Brief description"
-include_in_context = false
-profiles = ["profile"]
+name = "skill-name"
+path = "skills/skill-name"
+description = "Brief capability description"
+profiles = ["research"]
 ```
 
-### Creating Sub-Categories
+4. Check same-profile and cross-profile references.
+5. Run repository validation.
 
-You can create sub-profiles that extend other profiles:
+## Reshape notes
 
-```toml
-[[profiles]]
-name = "af-suite"
-description = "AlphaFold family models"
-extends = ["structure"]
-harness = "profiles/af-suite.toml"
-```
+The 2026 reshape intentionally made these breaking selector changes:
 
-Then create `profiles/af-suite.toml` to filter specific components.
+| Previous | Current |
+|---|---|
+| `genomics` | `sequence-models`; DiffDock moved to `structure` |
+| `singlecell` | `single-cell` |
+| `visualization` | `publishing` |
+| `compute` | removed; the old Claude Science compute broker is not a Magenta capability |
+| `meta` | removed; general platform skills do not belong in this domain package |
 
-### Best Practices
+Algorithmic art and generic web-artifact building were also removed from the
+scientific visualization surface. The package keeps `default_profiles = []`,
+so its bare selector still loads every remaining domain skill.
 
-1. **Granular Profiles**: Keep profiles focused on specific domains
-2. **Clear Naming**: Use `<profile>-<skill>` naming for components
-3. **Sparse Defaults**: Keep `default_profiles` empty or minimal
-4. **Profile Composition**: Use `extends` to compose larger profiles from smaller ones
-5. **Documentation**: Document each profile's purpose and included skills
+## Validation
 
-## Architecture Notes
-
-### Why Not Nested Packages?
-
-ClaudeScience uses **flat structure with profiles** instead of nested sub-packages because:
-
-1. **Compatibility**: Works with existing Magenta harness architecture
-2. **Simplicity**: No need to modify core package discovery logic
-3. **Flexibility**: Profiles provide more granular control than nested packages
-4. **Performance**: Single-pass loading, no recursive traversal
-5. **Composability**: Easy to combine profiles from same or different packages
-
-### Profile vs Sub-Package
-
-| Feature | Profile (Current) | Sub-Package (Alternative) |
-|---------|-------------------|---------------------------|
-| Selection | `:profile1,profile2` | Separate package entries |
-| Inheritance | `extends = [...]` | Not supported |
-| Loading | Single pass | Recursive |
-| Discovery | Built-in | Requires modification |
-| Composition | Flexible | Rigid |
-
-## Migration from Legacy Structure
-
-If you have an old ClaudeScience structure, migrate as follows:
+From the MagentaPackages repository root:
 
 ```bash
-# Old: Direct skill loading
---skill ~/.claude/skills/alphafold2
-
-# New: Profile-based loading
---package ClaudeScience:structure
+python3 scripts/validate_packages.py
 ```
 
-Benefits:
-- Centralized management
-- Version control
-- Profile-based organization
-- Consistent naming
-
-## Testing
-
-```bash
-# Verify package structure
-cd harness
-npm test -- test/package-overlay.test.ts
-
-# Check discovered packages
-node -e "
-const { discoverHarnessPackages } = require('./dist/hcp-client/overlay/package-overlay.js');
-discoverHarnessPackages().then(r => {
-  const cs = r.packages.find(p => p.id === 'ClaudeScience');
-  console.log('Profiles:', cs.manifest.profiles.map(p => p.name));
-});
-"
-```
+After structural changes, also check relative links and grep for deleted skill
+or profile names.
 
 ## License
 
-See individual skill licenses in their respective SKILL.md files.
+See each skill's frontmatter and bundled license files for its terms and
+third-party model/service disclosures.
 
-## See Also
+## Related packages
 
-- [Packages overview](../README.md) — how packages load and how to combine them
-- [`AutOmicScience`](../AutOmicScience/) — grounded, tool-backed omics analysis (the reference package)
+- [`AutOmicScience`](../AutOmicScience/) — tool-backed production omics
 - [`PantheonOS`](../PantheonOS/) — bioinformatics workflow best practices
-- [`Biomni`](../Biomni/) — biomedical AI toolkit with executable tools
+- [`Biomni`](../Biomni/) — biomedical AI toolkit with bundled executable tools

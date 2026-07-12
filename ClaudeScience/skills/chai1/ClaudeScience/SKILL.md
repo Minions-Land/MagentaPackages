@@ -40,6 +40,19 @@ the two to embed in a loop. Code and weights are Apache-2.0 — commercial use
 including drug discovery is explicitly permitted
 (github.com/chaidiscovery/chai-lab).
 
+## Setup
+
+Use Python 3.11 with a CUDA 12-compatible PyTorch build. Install the validated
+model stack and direct Chai's lazy downloads to a writable persistent cache:
+
+```bash
+python -m pip install \
+  "torch==2.5.1" "chai_lab==0.6.1" "transformers==4.46.3" \
+  "biopython==1.84" "numpy==1.26.4"
+export CHAI_DOWNLOADS_DIR="${CHAI_DOWNLOADS_DIR:-$HOME/.cache/chai}"
+mkdir -p "$CHAI_DOWNLOADS_DIR"
+```
+
 ## Running it
 
 ```python
@@ -87,8 +100,9 @@ Chai downloads ~5 GB on the first inference call (not at install time),
 including its own traced ESM2-3B for the embedding path. If
 `CHAI_DOWNLOADS_DIR` is unset, the default is inside `site-packages`: on a
 read-only image that fails with a confusing `PermissionError` mid-run, and on
-a writable one it silently re-downloads ~5 GB into the container on every cold
-start. Export the variable to a persisted volume so the download happens once.
+a writable one it may re-download ~5 GB when the environment is recreated.
+Export the variable to a writable persistent cache so the download happens
+once.
 
 ## No-MSA mode still loads a 3 B-parameter ESM — same VRAM, not less
 
@@ -102,10 +116,10 @@ card.
 
 | You see | It means / do this |
 |---|---|
-| `PermissionError` under `site-packages/chai_lab/...` | `CHAI_DOWNLOADS_DIR` not set on a read-only image — export it to a writable path or the pre-populated mount. |
+| `PermissionError` under `site-packages/chai_lab/...` | `CHAI_DOWNLOADS_DIR` is not writable — export it to a writable persistent cache path. |
 | `RuntimeError: CUDA out of memory` during ESM embedding | The traced ESM2-3B is loading alongside the trunk — use an 80 GB tier or split chains across calls. |
 
 ---
 
 **Next:** filter survivors on confidence/clash metrics or feed them back to
-`proteinmpnn` for the next design round.
+[`proteinmpnn`](../proteinmpnn/SKILL.md) for the next design round.

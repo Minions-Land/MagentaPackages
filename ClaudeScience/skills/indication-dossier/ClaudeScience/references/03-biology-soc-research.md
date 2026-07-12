@@ -10,7 +10,8 @@ currently treated. This covers Sections 2 (Disease Biology) and 3 (Standard of C
 ## Actions
 
 **Step 1: Pathophysiology**
-- Search pubmed MCP for recent review articles on the disease mechanism
+- Search an available PubMed/literature MCP for recent review articles on the
+  disease mechanism; otherwise use `WebSearch` against pubmed.ncbi.nlm.nih.gov
 - Identify key biological pathways involved
 - Note which pathways are validated drug targets vs. emerging hypotheses
 - For complex multi-pathway conditions, focus on the pathways most relevant
@@ -51,5 +52,5 @@ Follow the schema from `references/waypoint-schemas.md`.
   why they matter for therapy, not textbook depth
 - For biomarkers: explicitly connect to clinical trial utility
 - For approved therapies: focus on limitations — this is what creates the opportunity
-- Use parallel subagents: pubmed MCP for biology, WebSearch for guidelines,
-  WebSearch site:fda.gov for approvals
+- When configured and useful, use `sub_agent` for an independent biology
+  thread; otherwise run biology, guideline, and approval searches sequentially

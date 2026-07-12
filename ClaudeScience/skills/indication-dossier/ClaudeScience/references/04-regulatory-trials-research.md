@@ -26,8 +26,8 @@ This covers Sections 4 (Regulatory Path) and 5 (Key Trials).
 - Relevant advisory committee discussions or Complete Response Letters
 
 **Step 3: Trial design parameters**
-- Use clinical-trials MCP to search for Phase 3 trials in this indication to identify patterns:
-  `search_trials(condition="[indication]", phase="Phase 3")`
+- If a ClinicalTrials.gov MCP is connected, use its advertised schema to search
+  Phase 3 trials; otherwise use `WebSearch` against clinicaltrials.gov
 - Typical trial sizes (enrollment targets)
 - Typical trial durations (primary endpoint assessment timepoints)
 - Common comparator arms (placebo, active comparator, SOC)
@@ -36,16 +36,19 @@ This covers Sections 4 (Regulatory Path) and 5 (Key Trials).
 **Step 4: Landmark trials**
 - Identify the 3-5 most important trials that shaped current SOC
 - For each: NCT ID, drug, sponsor, phase, key results, impact on practice
-- Search clinical-trials MCP and pubmed MCP for these trials
+- Search available ClinicalTrials.gov and PubMed/literature MCPs for these
+  trials; use the corresponding public sites through `WebSearch` when absent
 - For active sponsors in this indication, WebFetch their `/investors/presentations`
-  or `/pipeline` page and pull recent conference decks; download and `Read`
-  for figures (slide decks are figure-first)
+  or `/pipeline` page and pull recent conference decks; download them, render
+  relevant pages to PNG, and inspect the PNGs with `read` (slide decks are
+  figure-first)
 
 **Step 5: Notable failures**
 - Identify significant clinical trial failures in this indication
 - What mechanism/approach was tested? Why did it fail?
 - Lessons learned that inform future trial design
-- Search pubmed MCP for review articles on failed approaches
+- Search an available PubMed/literature MCP for reviews of failed approaches;
+  otherwise use `WebSearch` against pubmed.ncbi.nlm.nih.gov
 
 **Step 6: Write `waypoints/regulatory_trials.json`**
 Follow the schema from `references/waypoint-schemas.md`. Include `trial_landscape` counts.
@@ -60,5 +63,5 @@ Follow the schema from `references/waypoint-schemas.md`. Include `trial_landscap
 - For landmark trials: prioritize trials that changed practice, not just
   the most recent ones
 - For failures: focus on mechanism-level lessons, not just "this drug didn't work"
-- Use parallel subagents: WebSearch site:fda.gov for guidance/approvals,
-  clinical-trials MCP for trial patterns, pubmed MCP for reviews of trial history
+- When configured and useful, use `sub_agent` for independent regulatory,
+  trial-pattern, and literature threads; otherwise run them sequentially

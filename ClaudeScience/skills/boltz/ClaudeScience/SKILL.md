@@ -37,6 +37,16 @@ you want a second independent model for consensus, `openfold3` when AF3-faithful
 settings matter, and `esmfold2` when you can live without an MSA. Code and
 weights are MIT (PyPI `boltz`, github.com/jwohlwend/boltz).
 
+## Setup
+
+Use Python 3.11 and install Boltz with its CUDA kernels. Keep `~/.boltz`
+writable and persistent because the CLI downloads the model and CCD there on
+first use:
+
+```bash
+python -m pip install "numpy==1.26.4" "boltz[cuda]==2.2.1"
+```
+
 ## Running it
 
 ```yaml
@@ -119,4 +129,4 @@ campaign.
 ---
 
 **Next:** compute clash and interface metrics on passing complexes, or feed
-them back to `proteinmpnn` for another design round.
+them back to [`proteinmpnn`](../proteinmpnn/SKILL.md) for another design round.

@@ -11,6 +11,24 @@ license: Apache-2.0
 skill does not impose a visual house style — frame, font, and palette are
 parameters. Load it and call `apply_figure_style()` before any plot.*
 
+## Setup
+
+Resolve `skill_dir` to the actual directory containing this `SKILL.md`, then
+load the deterministic plotting helpers explicitly in every Python script that
+uses them:
+
+```python
+from pathlib import Path
+import runpy
+
+skill_dir = Path("<actual directory containing this SKILL.md>")
+helpers = runpy.run_path(str(skill_dir / "kernel.py"))
+apply_figure_style = helpers["apply_figure_style"]
+```
+
+Bind any additional helper you use from the returned `helpers` mapping. Keep
+the load, plotting calls, and save operation in the same Python process.
+
 ## §0 Scope
 
 §1–§3, §8, and §9 are **correctness** — they apply to every plot, in every
@@ -319,7 +337,7 @@ from PIL import Image
 fig.savefig("figure.png")
 img = Image.open("figure.png")
 for letter, box in panel_crops(fig).items():
-    img.crop(box).save(f"panel_{letter}.png")   # then open panel_<letter>.png (e.g. Read it)
+    img.crop(box).save(f"panel_{letter}.png")   # then inspect panel_<letter>.png with read
 ```
 For each crop: Is every glyph and mark legible against its background? Does the
 smallest plotted element have a stroke or stub? Do any leaders cross? Could any

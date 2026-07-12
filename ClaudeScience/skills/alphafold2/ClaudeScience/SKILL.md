@@ -42,6 +42,21 @@ The ColabFold code is MIT (github.com/sokrypton/ColabFold) and the AlphaFold2
 code is Apache-2.0 (github.com/google-deepmind/alphafold); the AF2 model
 parameters are CC-BY-4.0 with DeepMind's terms of use.
 
+## Setup
+
+Use Python 3.11 with a CUDA 12-compatible driver. Install the ColabFold runner
+and its JAX CUDA plugin explicitly, and keep both parameter and compilation
+caches on writable persistent storage:
+
+```bash
+python -m pip install \
+  "colabfold[alphafold-minus-jax]==1.6.1" \
+  "jax==0.5.3" \
+  "jax-cuda12-plugin[with-cuda]==0.5.3"
+export JAX_COMPILATION_CACHE_DIR="${JAX_COMPILATION_CACHE_DIR:-$HOME/.cache/jax}"
+python -m colabfold.download
+```
+
 ## Running it
 
 ```bash
@@ -65,16 +80,6 @@ and a matching `<name>_scores_rank_00{N}_*.json` with `plddt`, `ptm`, and — fo
 multimer — `iptm` and the `pae` matrix. Rank-1 is the model to read first;
 ipTM > 0.5 is the usual soft pass for an interface.
 
-## Unified-memory defaults loop forever under gVisor — the env patches them out
-
-`colabfold/batch.py` hard-sets `TF_FORCE_UNIFIED_MEMORY=1` and
-`XLA_PYTHON_CLIENT_MEM_FRACTION=4.0` on import. Under a gVisor sandbox unified
-memory is unsupported, so JAX's `device_put` loops indefinitely allocating
-host RAM during AF2 parameter load — the job appears hung, never errors.
-Override both before the import (`TF_FORCE_UNIFIED_MEMORY=0`, fraction
-`0.95`), or `sed`-patch the two assignments out of `batch.py` in the image
-build, or the first fold never starts.
-
 ## The MSA server is the wall-clock bottleneck, and it is shared
 
 `colabfold_batch` defaults to `--msa-mode mmseqs2_uniref_env`, which posts your
@@ -88,8 +93,7 @@ GPU stage then starts immediately and the server is not hit again.
 
 | You see | It means / do this |
 |---|---|
-| Job hangs silently during "Running model_1" with host RAM climbing | Unified-memory loop under gVisor — see the gotcha above; override or patch `batch.py`. |
-| `RESOURCE_EXHAUSTED` / OOM during XLA compile | `XLA_PYTHON_CLIENT_MEM_FRACTION` too high for the GPU — drop below the `0.95` default to `0.9` or so. |
+| `RESOURCE_EXHAUSTED` / OOM during XLA compile | The model/input exceeds available VRAM — reduce input size or use a larger-memory GPU. |
 | MSA stage hangs at `Submitting job` | Public MMseqs2 server is rate-limiting — wait, or pre-compute with `--msa-only` and re-run from the cached `.a3m`. |
 
 ---

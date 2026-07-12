@@ -68,10 +68,12 @@ the YAML, edit the copy, and point `--config` at it.
 ## The first run is silent for ~11 minutes and needs ≥32 GB host RAM
 
 Before the first complex, DiffDock precomputes SO(3) and torus lookup tables.
-That step is silent on stderr, takes ~11 minutes, and on the default Modal
-tier runs out of host memory and SIGKILLs mid-precompute. Set
-`provider_params.modal.memory: 65536` (or your provider's equivalent), and do
-not assume a hang means a crash.
+That step is silent on stderr, takes ~11 minutes, and needs more than 32 GB of
+host RAM. Allocate at least 64 GB for the run, and do not assume a hang means a
+crash.
+
+For the validated Python/CUDA dependency matrix, read
+[`references/environment.md`](references/environment.md).
 
 ## The README's `--ligand` works on the CLI by accident — use `--ligand_description`
 
@@ -87,7 +89,6 @@ header out in full.
 |---|---|
 | `ValueError: not allowed to raise maximum limit` at startup | `setrlimit(NOFILE, 64000)` exceeds the sandbox hard limit — `sed` the constant in `inference.py` to `min(64000, rlimit[1])`. |
 | Silent SIGKILL a few minutes into the SO(3) precompute | Host RAM exhausted — see the gotcha above. |
-| `python3: not found` | You are on the upstream `rbgcsail/diffdock` image — that one runs from `/home/appuser/DiffDock` under `micromamba`. |
 
 ---
 

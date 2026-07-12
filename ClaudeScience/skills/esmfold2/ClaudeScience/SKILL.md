@@ -46,7 +46,7 @@ egress to HF Hub, GitHub, PyPI:
 
 ```bash
 pip install --no-cache-dir uv
-uv venv --python 3.12 /work/venv && source /work/venv/bin/activate
+uv venv --python 3.12 .venv && source .venv/bin/activate
 uv pip install \
   "torch>=2.5,<2.8" einops "biotite>=1.0" rdkit msgpack-numpy biopython \
   scikit-learn brotli attrs pandas cloudpathlib httpx tenacity zstd pydssp \
@@ -61,13 +61,12 @@ MAX_JOBS=8 uv pip install --no-deps --no-build-isolation "flash-attn<3"
 # slips ESMC's guard and kills ESMFold2Model import.
 ```
 
-The bundled `esmfold2_gpu` Modal env (remote-compute-modal skill) is the
-canonical, version-pinned recipe.
-
 **Gotchas:**
 - **Default kernel backend is `None`** (reference PyTorch, ~12x slower than paper). Call `model.set_kernel_backend('fused')` after `from_pretrained()`. See section below.
 - Match torch CUDA build to your driver; the pin `<2.8` targets CUDA 12.2.
-- Weights via Xet bridge ~300 MB/s: ESMFold2 1.36 GB, ESMFold2-Fast 0.76 GB. Set `HF_HOME=/work/hf_cache`.
+- Set `HF_HOME` to a writable persistent cache such as
+  `$HOME/.cache/huggingface`. ESMFold2 also loads ESMC-6B, so allow roughly
+  30 GB of cache space even when using ESMFold2-Fast.
 
 ## Usage — local model
 

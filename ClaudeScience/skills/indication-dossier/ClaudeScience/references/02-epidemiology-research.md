@@ -17,7 +17,8 @@ and what happens to them over time.
   clinical trial enrollment criteria, expert consensus)
 
 **Step 2: Prevalence and incidence**
-- Search pubmed MCP for recent systematic reviews and meta-analyses on prevalence
+- Search an available PubMed/literature MCP for recent systematic reviews and
+  meta-analyses; otherwise use `WebSearch` against pubmed.ncbi.nlm.nih.gov
 - WebSearch for CDC, WHO, or national registry data
 - Capture: global prevalence, US prevalence, incidence rates, trends over time
 - Distinguish between community-dwelling and clinical populations where relevant
@@ -43,4 +44,5 @@ Follow the schema from `references/waypoint-schemas.md`. For each subsection, no
 - For rare diseases, smaller studies are acceptable — note the evidence quality
 - If the indication is novel or non-standard, explicitly state that epidemiology
   data is limited and explain what proxy data exists
-- Use parallel subagents to search pubmed MCP and WebSearch simultaneously
+- When configured and useful, use `sub_agent` for an independent literature
+  thread; otherwise run the literature and web searches sequentially

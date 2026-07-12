@@ -1,6 +1,6 @@
 """
-scvi-tools kernel helpers. Auto-loaded into the python kernel by the host
-when the skill loads:
+scvi-tools kernel helpers. Load this file explicitly in the Python process
+that needs:
 
     h5ad_safe_obs
 

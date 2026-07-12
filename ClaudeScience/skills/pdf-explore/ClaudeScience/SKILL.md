@@ -21,16 +21,26 @@ text and ordinary files.
 
 This is a **pure skill** — `kernel.py` is deterministic Python and *you*
 (the base model) do all the reasoning. There is no `host` runtime and no
-LLM API. Load the helpers once per session in a Python cell:
+LLM API. In each Python script that uses the helpers, resolve `skill_dir` to
+the actual directory containing this `SKILL.md`, then load `kernel.py`
+explicitly:
 
 ```python
-exec(open("skills/claude-science/pdf-explore/kernel.py").read())
-# adjust the path to wherever this skill is installed
+from pathlib import Path
+import runpy
+
+skill_dir = Path("<actual directory containing this SKILL.md>")
+helpers = runpy.run_path(str(skill_dir / "kernel.py"))
+pdf_pages = helpers["pdf_pages"]
+pdf_outline = helpers["pdf_outline"]
+pdf_scan = helpers["pdf_scan"]
+pdf_grep = helpers["pdf_grep"]
 ```
 
-Nothing auto-loads it outside Claude Science. Then call the helpers
-directly (no import). If a helper is "not defined", you haven't `exec`'d
-`kernel.py` yet — go back and run the line above.
+Keep loading and all related helper calls in one complete Python process so
+the in-memory parse cache can be reused. A later `bash` invocation starts a
+fresh process and must load the helper again; text and PNG files already
+written to the workspace remain available.
 
 Dependencies: `pip install pypdfium2 pillow` (pillow does the PNG encoding
 for `mode="image"`; it is not pulled in by the pypdfium2 wheel).
@@ -45,7 +55,7 @@ for `mode="image"`; it is not pulled in by the pypdfium2 wheel).
 | **`pdf_grep(path, pattern)`** | **exhaustive** regex sweep (DOIs, accession ids, every "Table N", emails) | `[{page, matches, lines?}, ...]` — every match with its page |
 | **`pdf_pages(mode="image", dpi=200)`** | read a small value, axis label, or legend off a **figure** | `[{page, image_path}, ...]` — open the PNG with your agent's image tool |
 
-These come from `kernel.py` — load it via `exec` once per session (see
+These come from `kernel.py` — load it in the current Python process (see
 **Setup**), then call directly. `pdf_resolve(path)` normalizes a path
 (a workspace path or a `~/`-expanded path); the helpers call it
 internally, so `path` can be either form.
@@ -211,8 +221,9 @@ one-page-at-a-time reads.
 
 ## When NOT to use this skill
 
-- **A single lookup of 1–4 pages you'll quote immediately**: your agent's
-  own PDF/page read tool is fine.
+- **A single lookup of 1–4 pages you'll quote immediately**: use an available
+  local PDF parser or renderer directly; Magenta's `read` tool does not parse
+  PDF files.
 - **Literal keyword / pattern search**: use `pdf_grep`, or filter the
   extracted text directly —
   `[p for p in pdf_pages(path) if "Harmony" in p["text"]]`. `pdf_scan`

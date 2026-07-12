@@ -4,306 +4,234 @@ name = "ClaudeScience"
 version = "0.1.0"
 kind = "domain"
 domain = "computational-biology"
-description = "Computational biology and bioinformatics harness package covering protein structure prediction, genomics, single-cell analysis, literature review, and scientific workflows."
+description = "Computational biology package covering protein structure and design, biological sequence models, single-cell analysis, literature research, and scientific publishing."
 source = "ClaudeScience"
 
 # HCP-isomorphic layout: each skill at <skill>/<source>/HcpMagnet.ts
+# Empty = no default narrowing: `--harness-package ClaudeScience` loads every skill.
+# Narrow with a selector, e.g. `--harness-package ClaudeScience:design`.
 default_profiles = []
+
+# === Profiles for selective loading ===
 
 [[profiles]]
 name = "structure"
-description = "Protein structure prediction skills (AlphaFold2, ESMFold, etc.)"
+description = "Protein structure prediction and molecular docking skills"
 extends = []
 
 [[profiles]]
 name = "design"
-description = "Protein design skills (ProteinMPNN, LigandMPNN, etc.)"
+description = "Protein sequence design skills"
+extends = ["structure"]
+
+[[profiles]]
+name = "sequence-models"
+description = "DNA and protein sequence foundation models"
 extends = []
 
 [[profiles]]
-name = "genomics"
-description = "Genomics and molecular biology skills"
-extends = []
-
-[[profiles]]
-name = "singlecell"
-description = "Single-cell analysis skills"
+name = "single-cell"
+description = "Single-cell analysis and foundation-model skills"
 extends = []
 
 [[profiles]]
 name = "research"
-description = "Literature review and research workflow skills"
+description = "Scientific literature and therapeutic research workflows"
 extends = []
 
 [[profiles]]
-name = "visualization"
-description = "Figure composition and visualization skills"
+name = "publishing"
+description = "Scientific figure composition and paper narrative skills"
 extends = []
 
-[[profiles]]
-name = "compute"
-description = "Remote compute and infrastructure skills"
-extends = []
-
-[[profiles]]
-name = "meta"
-description = "Self-improvement and meta-learning skills"
-extends = []
-
-# === Components ===
+# === Structure Prediction and Docking ===
 
 [[components]]
 kind = "skill"
-name = "structure-alphafold2"
+name = "alphafold2"
 source = "ClaudeScience"
 path = "skills/alphafold2/ClaudeScience"
+description = "Predict protein structure with AlphaFold2"
 include_in_context = false
 profiles = ['structure']
 
 [[components]]
 kind = "skill"
-name = "structure-esmfold2"
+name = "esmfold2"
 source = "ClaudeScience"
 path = "skills/esmfold2/ClaudeScience"
+description = "Predict biomolecular structures with ESMFold2"
 include_in_context = false
 profiles = ['structure']
 
 [[components]]
 kind = "skill"
-name = "structure-chai1"
+name = "chai1"
 source = "ClaudeScience"
 path = "skills/chai1/ClaudeScience"
+description = "Predict biomolecular structures with Chai-1"
 include_in_context = false
 profiles = ['structure']
 
 [[components]]
 kind = "skill"
-name = "structure-boltz"
+name = "boltz"
 source = "ClaudeScience"
 path = "skills/boltz/ClaudeScience"
+description = "Predict biomolecular structures with Boltz"
 include_in_context = false
 profiles = ['structure']
 
 [[components]]
 kind = "skill"
-name = "structure-openfold3"
+name = "openfold3"
 source = "ClaudeScience"
 path = "skills/openfold3/ClaudeScience"
+description = "Predict biomolecular structures with OpenFold3"
 include_in_context = false
 profiles = ['structure']
 
 [[components]]
 kind = "skill"
-name = "design-proteinmpnn"
-source = "ClaudeScience"
-path = "skills/proteinmpnn/ClaudeScience"
-include_in_context = false
-profiles = ['design']
-
-[[components]]
-kind = "skill"
-name = "design-ligandmpnn"
-source = "ClaudeScience"
-path = "skills/ligandmpnn/ClaudeScience"
-include_in_context = false
-profiles = ['design']
-
-[[components]]
-kind = "skill"
-name = "design-solublempnn"
-source = "ClaudeScience"
-path = "skills/solublempnn/ClaudeScience"
-include_in_context = false
-profiles = ['design']
-
-[[components]]
-kind = "skill"
-name = "genomics-diffdock"
+name = "diffdock"
 source = "ClaudeScience"
 path = "skills/diffdock/ClaudeScience"
+description = "Predict small-molecule binding poses with DiffDock"
 include_in_context = false
-profiles = ['genomics']
+profiles = ['structure']
+
+# === Protein Design ===
 
 [[components]]
 kind = "skill"
-name = "genomics-borzoi"
+name = "proteinmpnn"
+source = "ClaudeScience"
+path = "skills/proteinmpnn/ClaudeScience"
+description = "Design protein sequences with ProteinMPNN"
+include_in_context = false
+profiles = ['design']
+
+[[components]]
+kind = "skill"
+name = "ligandmpnn"
+source = "ClaudeScience"
+path = "skills/ligandmpnn/ClaudeScience"
+description = "Design protein-ligand interfaces with LigandMPNN"
+include_in_context = false
+profiles = ['design']
+
+[[components]]
+kind = "skill"
+name = "solublempnn"
+source = "ClaudeScience"
+path = "skills/solublempnn/ClaudeScience"
+description = "Design soluble proteins with SolubleMPNN"
+include_in_context = false
+profiles = ['design']
+
+# === Biological Sequence Models ===
+
+[[components]]
+kind = "skill"
+name = "borzoi"
 source = "ClaudeScience"
 path = "skills/borzoi/ClaudeScience"
+description = "Predict genomic functional tracks with Borzoi"
 include_in_context = false
-profiles = ['genomics']
+profiles = ['sequence-models']
 
 [[components]]
 kind = "skill"
-name = "genomics-evo2"
+name = "evo2"
 source = "ClaudeScience"
 path = "skills/evo2/ClaudeScience"
+description = "Model long-range genomic sequences with Evo 2"
 include_in_context = false
-profiles = ['genomics']
+profiles = ['sequence-models']
 
 [[components]]
 kind = "skill"
-name = "genomics-fair-esm2"
+name = "fair-esm2"
 source = "ClaudeScience"
 path = "skills/fair-esm2/ClaudeScience"
+description = "Embed and score protein sequences with ESM-2"
 include_in_context = false
-profiles = ['genomics']
+profiles = ['sequence-models']
+
+# === Single-Cell Analysis ===
 
 [[components]]
 kind = "skill"
-name = "singlecell-scvi-tools"
+name = "scvi-tools"
 source = "ClaudeScience"
 path = "skills/scvi-tools/ClaudeScience"
+description = "Analyze single-cell data with scvi-tools"
 include_in_context = false
-profiles = ['singlecell']
+profiles = ['single-cell']
 
 [[components]]
 kind = "skill"
-name = "singlecell-scgpt"
+name = "scgpt"
 source = "ClaudeScience"
 path = "skills/scgpt/ClaudeScience"
+description = "Analyze single-cell data with scGPT"
 include_in_context = false
-profiles = ['singlecell']
+profiles = ['single-cell']
+
+# === Research ===
 
 [[components]]
 kind = "skill"
-name = "research-literature-review"
+name = "literature-review"
 source = "ClaudeScience"
 path = "skills/literature-review/ClaudeScience"
+description = "Conduct evidence-grounded scientific literature reviews"
 include_in_context = false
 profiles = ['research']
 
 [[components]]
 kind = "skill"
-name = "research-pdf-explore"
+name = "pdf-explore"
 source = "ClaudeScience"
 path = "skills/pdf-explore/ClaudeScience"
+description = "Extract and analyze scientific PDFs"
 include_in_context = false
 profiles = ['research']
 
 [[components]]
 kind = "skill"
-name = "research-paper-narrative"
-source = "ClaudeScience"
-path = "skills/paper-narrative/ClaudeScience"
-include_in_context = false
-profiles = ['research']
-
-[[components]]
-kind = "skill"
-name = "research-indication-dossier"
+name = "indication-dossier"
 source = "ClaudeScience"
 path = "skills/indication-dossier/ClaudeScience"
+description = "Create therapeutic indication dossiers"
 include_in_context = false
 profiles = ['research']
 
+# === Scientific Publishing ===
+
 [[components]]
 kind = "skill"
-name = "viz-figure-composer"
+name = "paper-narrative"
+source = "ClaudeScience"
+path = "skills/paper-narrative/ClaudeScience"
+description = "Review and reshape scientific paper narratives"
+include_in_context = false
+profiles = ['publishing']
+
+[[components]]
+kind = "skill"
+name = "figure-composer"
 source = "ClaudeScience"
 path = "skills/figure-composer/ClaudeScience"
+description = "Compose multi-panel scientific figures"
 include_in_context = false
-profiles = ['visualization']
+profiles = ['publishing']
 
 [[components]]
 kind = "skill"
-name = "viz-figure-style"
+name = "figure-style"
 source = "ClaudeScience"
 path = "skills/figure-style/ClaudeScience"
+description = "Apply publication-grade scientific figure styling"
 include_in_context = false
-profiles = ['visualization']
-
-[[components]]
-kind = "skill"
-name = "viz-algorithmic-art"
-source = "ClaudeScience"
-path = "skills/algorithmic-art/ClaudeScience"
-include_in_context = false
-profiles = ['visualization']
-
-[[components]]
-kind = "skill"
-name = "viz-web-artifacts"
-source = "ClaudeScience"
-path = "skills/web-artifacts-builder/ClaudeScience"
-include_in_context = false
-profiles = ['visualization']
-
-[[components]]
-kind = "skill"
-name = "compute-ssh"
-source = "ClaudeScience"
-path = "skills/remote-compute-ssh/ClaudeScience"
-include_in_context = false
-profiles = ['compute']
-
-[[components]]
-kind = "skill"
-name = "compute-modal"
-source = "ClaudeScience"
-path = "skills/remote-compute-modal/ClaudeScience"
-include_in_context = false
-profiles = ['compute']
-
-[[components]]
-kind = "skill"
-name = "compute-env-setup"
-source = "ClaudeScience"
-path = "skills/compute-env-setup/ClaudeScience"
-include_in_context = false
-profiles = ['compute']
-
-[[components]]
-kind = "skill"
-name = "compute-managed-endpoints"
-source = "ClaudeScience"
-path = "skills/managed-model-endpoints/ClaudeScience"
-include_in_context = false
-profiles = ['compute']
-
-[[components]]
-kind = "skill"
-name = "compute-model-endpoint"
-source = "ClaudeScience"
-path = "skills/using-model-endpoint/ClaudeScience"
-include_in_context = false
-profiles = ['compute']
-
-[[components]]
-kind = "skill"
-name = "meta-skill-creator"
-source = "ClaudeScience"
-path = "skills/skill-creator/ClaudeScience"
-include_in_context = false
-profiles = ['meta']
-
-[[components]]
-kind = "skill"
-name = "meta-learn"
-source = "ClaudeScience"
-path = "skills/learn/ClaudeScience"
-include_in_context = false
-profiles = ['meta']
-
-[[components]]
-kind = "skill"
-name = "meta-self-awareness"
-source = "ClaudeScience"
-path = "skills/self-awareness/ClaudeScience"
-include_in_context = false
-profiles = ['meta']
-
-[[components]]
-kind = "skill"
-name = "meta-product-knowledge"
-source = "ClaudeScience"
-path = "skills/product-self-knowledge/ClaudeScience"
-include_in_context = false
-profiles = ['meta']
-
-[[components]]
-kind = "skill"
-name = "meta-customize"
-source = "ClaudeScience"
-path = "skills/customize/ClaudeScience"
-include_in_context = false
-profiles = ['meta']
+profiles = ['publishing']

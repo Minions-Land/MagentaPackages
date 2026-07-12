@@ -27,11 +27,21 @@ metadata:
 A literature question has two halves: finding the papers a domain expert would point to, and turning them into something more useful than a reading list — a synthesis that says what's established, what's contested, what's new, and where the holes are. Both halves can fail quietly and look like competent output until someone checks.
 
 ## Setup (any agent, no API key)
-This is a **pure skill** — `kernel.py` is deterministic Python (plain HTTP/stdlib calls to CrossRef and OpenAlex) and *you* (the base model) do all the reasoning: the finding, the synthesis, the prose. There is no `host` runtime and no LLM API. Load the helpers once per session in a Python cell:
+This is a **pure skill** — `kernel.py` is deterministic Python (plain HTTP/stdlib calls to CrossRef and OpenAlex) and *you* (the base model) do all the reasoning: the finding, the synthesis, the prose. There is no `host` runtime and no LLM API. In each Python script that uses the helpers, resolve `skill_dir` to the actual directory containing this `SKILL.md`, then load `kernel.py` explicitly:
 ```python
-exec(open("<this skill's directory>/kernel.py").read())
+from pathlib import Path
+import runpy
+
+skill_dir = Path("<actual directory containing this SKILL.md>")
+helpers = runpy.run_path(str(skill_dir / "kernel.py"))
+verify_dois = helpers["verify_dois"]
+crossref_lookup = helpers["crossref_lookup"]
+search_openalex = helpers["search_openalex"]
+expand_citations = helpers["expand_citations"]
+extract_dois = helpers["extract_dois"]
+style_pass = helpers["style_pass"]
 ```
-Nothing auto-loads it outside Claude Science. Then call the helpers directly — `verify_dois`, `crossref_lookup`, `search_openalex`, `expand_citations`, `extract_dois`, `style_pass`. If a helper name is not defined, you haven't exec'd `kernel.py`.
+Keep loading and all related helper calls in the same Python process. A later `bash` invocation starts a fresh process and must load the helper again.
 
 Configuration is via environment variables, not a host — no LLM key is involved:
 - `OPENALEX_API_KEY` — required for the OpenAlex-backed steps (`search_openalex`, `expand_citations`); free at https://openalex.org/settings/api.
@@ -79,4 +89,4 @@ Cite inline as a markdown link — `[Author Year](https://doi.org/10.xxxx/xxxxxx
 
 ## Style pass before saving
 
-Before saving the artifact, run `style_pass(draft)` once on the full markdown. Fix the issues it lists in a single editing pass, then save; do not call it a second time and do not loop until it returns ok. It is a lint, not a gate, and a clean draft on the first pass is normal. It lives in this skill's `kernel.py` — load it via `exec` (see **Setup**); if `style_pass` is not defined, you haven't exec'd `kernel.py` yet.
+Before saving the artifact, run `style_pass(draft)` once on the full markdown. Fix the issues it lists in a single editing pass, then save; do not call it a second time and do not loop until it returns ok. It is a lint, not a gate, and a clean draft on the first pass is normal. It lives in this skill's `kernel.py`; load it in the same Python process as shown in **Setup**.

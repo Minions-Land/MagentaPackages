@@ -29,10 +29,10 @@ those atoms to the graph with a near-identical CLI, and `solublempnn` swaps in
 weights trained on soluble structures for an expression-biased prior. Code and
 weights are MIT (github.com/dauparas/ProteinMPNN). The model is small enough
 to run on CPU — for a handful of sequences on one backbone that is seconds and
-usually faster than dispatching a remote job; a GPU helps for batched
-campaigns (hundreds of backbones or large `--num_seq_per_target`). Either way
-the repo is cloned in-job — there is no PyPI dist and the checkpoints are
-bundled in the repo.
+appropriate for small runs; a GPU helps for batched campaigns (hundreds of
+backbones or large `--num_seq_per_target`). Clone the repository before
+execution — there is no PyPI distribution and the checkpoints are bundled in
+the repository.
 
 ## Running it
 

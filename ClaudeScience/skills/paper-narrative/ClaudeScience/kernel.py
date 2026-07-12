@@ -3,10 +3,10 @@ Kernel helpers for the paper-narrative skill — pure-skill, provider-agnostic.
 
 No ``host`` runtime and no LLM API: these are pure schema/prompt builders.
 YOUR base model does the editorial judgment (writing the brief, playing the
-handling editor) using the schemas below — see SKILL.md. Load once per
-session by exec-ing this file in a Python cell:
+handling editor) using the schemas below — see SKILL.md. Load the file
+explicitly in every Python process that uses it:
 
-    exec(open("<this-skill-dir>/kernel.py").read())
+    helpers = runpy.run_path(str(skill_dir / "kernel.py"))
 """
 
 
@@ -95,14 +95,14 @@ def narrative_review_task(brief, deck_path, rules_path=None):
     matching :func:`narrative_review_schema`.
 
     ``deck_path`` / ``rules_path`` are filesystem paths to the combined
-    figures PDF and (optionally) the design-rules reference — open/attach them
-    before judging."""
+    figures PDF and (optionally) the design-rules reference. Render the PDF
+    pages to PNG and inspect them with ``read`` before judging."""
     fig_tbl = "\n".join(
         f"  {f.get('key','?')}: {f.get('claim') or f.get('caption','')}"
         for f in brief.get("figures", [])
     )
     rules_line = (f"\n## Design rules (reference only; do NOT grade craft)\n"
-                  f"Open: {rules_path}\n") if rules_path else ""
+                  f"Read from: {rules_path}\n") if rules_path else ""
     return f"""You are the HANDLING EDITOR for this submission. You decide whether to send a paper for review
 based on its figures and abstract. Judge STORY, not craft.
 
@@ -113,7 +113,8 @@ based on its figures and abstract. Judge STORY, not craft.
 **Most arresting asset:** {brief.get('most_arresting_asset','—')}
 
 ## All figures (one PDF)
-Open/attach: {deck_path}
+Source deck: {deck_path}
+Inspect the page PNGs rendered from this PDF before answering.
 
 ## Per-figure claims
 {fig_tbl}

@@ -5,10 +5,9 @@ Literature-review helpers — pure-skill, provider-agnostic.
     extract_dois, style_pass
 
 There is no ``host`` runtime here: these are plain HTTP/stdlib helpers. Load
-once per session by exec-ing this file in a Python cell (nothing auto-injects
-it outside Claude Science):
+the file explicitly in every Python process that uses it:
 
-    exec(open("<this-skill-dir>/kernel.py").read())
+    helpers = runpy.run_path(str(skill_dir / "kernel.py"))
 
 Configuration is via the environment, not a host:
     OPENALEX_API_KEY   required for the OpenAlex-backed steps (search_openalex

@@ -36,6 +36,20 @@ metadata:
 | CUDA        | 12.1+   | 12.4+       |
 | GPU VRAM    | 16 GB   | 24 GB+      |
 
+## Setup
+
+The PyPI `scgpt` release depends on archived `torchtext`; use the maintained
+source revision and install its skipped import-time dependencies explicitly:
+
+```bash
+python -m pip install \
+  "torch==2.5.1" "scanpy==1.11.5" "anndata==0.11.4" \
+  "scvi-tools==1.4.2" "numpy~=2.0" "leidenalg~=0.10" \
+  "igraph~=0.11" "ipython~=9.0" "datasets~=2.20"
+python -m pip install --no-deps \
+  "scgpt @ git+https://github.com/bowang-lab/scGPT@cebd6fae655b9c585a4807daa3ac31bb764f06b4"
+```
+
 ## How to run
 
 ### Loading the vocabulary and checkpoint
@@ -73,53 +87,12 @@ embedding (`n_cells × emb_dim`, 512 by default). Downstream: feed to
 `scanpy.pp.neighbors` / `scanpy.tl.umap`.
 
 
-## Remote compute
+## GPU execution
 
-Needs ≥24 GB VRAM and the released human checkpoint (~200 MB:
-`args.json`, `best_model.pt`, `vocab.json`). Read
-`compute_details({provider, mode:'read'})` for an environment with `scgpt`
-and a pre-cached checkpoint directory, then:
-
-```python
-c = host.compute.create(provider)
-job = c.submit_job(
-    intent="scGPT embed 50k cells — 1×GPU, ~5 min",
-    inputs=[
-        {"src": "dataset.h5ad", "dst_filename": "dataset.h5ad"},
-        {"src": "embed.py", "dst_filename": "embed.py"},
-    ],
-    command="python3 embed.py",
-    environment=...,   # env name from compute_details
-    outputs=["embedded.h5ad"],
-    timeout_seconds=1800,
-)
-print(job.job_id)   # cell ends here — kernel never blocks on compute
-```
-
-Then call the `wait_for_notification` brain-tool. When the
-`compute_done` notification arrives, act on its payload:
-
-```python
-save_artifacts(payload["featured_files"])   # paths under hpc/<job_id>/
-```
-
-For the full result dict (`output_files`, `remote_workdir`, …), re-enter the
-kernel and bind the compute handle separately — `.close()` lives on the
-handle, not on the job object:
-
-```python
-h = host.compute.create(provider)
-res = h.attach_job(job_id).result()
-h.close()
-```
-
-See the `remote-compute-ssh` / `remote-compute-modal` skill for the
-orchestration details.
-
-In `embed.py`, pass `model_dir=` the checkpoint path from `compute_details`.
-If `flash-attn` is unavailable in that environment, set
-`use_fast_transformer=False`.
-
+For large datasets, run the same script on a CUDA host with at least 24 GB
+VRAM. Stage the released checkpoint directory (`args.json`, `best_model.pt`,
+`vocab.json`) with the input data and pass its local path as `model_dir`. If
+`flash-attn` is unavailable, keep `use_fast_transformer=False`.
 
 ## Gotchas
 
@@ -140,7 +113,6 @@ If `flash-attn` is unavailable in that environment, set
 | `flash_attn is not installed` warning at import   | Harmless; pass `use_fast_transformer=False`      |
 | `'Vocab' object has no attribute 'vocab'`         | Env has an old torchtext shim — update the env   |
 | Nearly all genes dropped                          | Wrong `gene_col`; check `adata.var.columns`      |
-| "scgpt not in manifest" / env-detection misses scGPT | The baked env manifest lists the distribution as `scGPT` (and `flash_attn`), pip's canonical casing — normalize manifest keys before lookup: `name.lower().replace('-', '_')` |
 
 ---
 

@@ -90,45 +90,19 @@ Need a DNA model?
 │
 ├─ Per-base/per-sequence likelihood, generation → Evo 2 ✓
 ├─ Predict experimental tracks (expression, accessibility) → borzoi
-└─ Protein, not DNA → fair-esm2 / esmfold2
+└─ Protein likelihood / embeddings → fair-esm2
 ```
 
+For protein structure prediction rather than sequence scoring, read the
+[`esmfold2`](../esmfold2/SKILL.md) skill directly.
 
-## Remote compute
+## GPU and weight cache
 
-7B/40B inference is GPU-bound (≥24 GB / 80 GB VRAM). Read
-`compute_details({provider, mode:'read'})` for an environment with `evo2` +
-`flash-attn` and a pre-cached HF weight mount, then submit:
-
-```python
-c = host.compute.create(provider)
-job = c.submit_job(
-    intent="Evo2-7B score 200bp variant window — 1×GPU, ~2 min",
-    inputs=[{"src": "score_evo2.py", "dst_filename": "score_evo2.py"}],
-    command="python3 score_evo2.py",   # env selection is host-specific — see compute_details for your provider
-    outputs=["scores.json"],
-    timeout_seconds=1800,
-)
-print(job.job_id)   # cell ends here — kernel never blocks on compute
-```
-
-Then call the `wait_for_notification` brain-tool. When the
-`compute_done` notification arrives, act on its payload:
-
-```python
-save_artifacts(payload["featured_files"])   # paths under hpc/<job_id>/
-```
-
-For the full result dict (`output_files`, `remote_workdir`, …), re-enter the
-kernel: `c.attach_job(job_id).result()` then `c.close()`. See the
-`remote-compute-ssh` / `remote-compute-modal` skill for the orchestration
-details.
-
-Inside `score_evo2.py`, point `HF_HOME` at the provider's weight-cache mount
-(path is in `compute_details`) and set `HF_HUB_OFFLINE=1` so the loader
-doesn't try to write `refs/` into a read-only mount. Weight footprint:
-~15 GB (7B), ~80 GB (40B).
-
+The 7B and 40B models need approximately 24 GB and 80 GB VRAM respectively.
+Point `HF_HOME` at a writable, persistent cache; the approximate weight
+footprints are 15 GB and 80 GB. After a cache has been fully populated and
+verified, `HF_HUB_OFFLINE=1` prevents loaders from trying to update `refs/` on
+a read-only mount.
 
 ## Typical performance
 

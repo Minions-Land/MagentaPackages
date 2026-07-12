@@ -33,8 +33,9 @@ the soluble prior trades a few points of recovery for the surface bias. Code
 and weights are MIT (github.com/dauparas/ProteinMPNN, `soluble_model_weights`;
 also exposed via github.com/dauparas/LigandMPNN). The model is small enough to
 run on CPU — for a handful of sequences on one backbone that is seconds and
-usually faster than dispatching; a GPU helps for batched campaigns. Either way
-the repo is cloned in-job (no PyPI dist; checkpoints bundled).
+appropriate for small runs; a GPU helps for batched campaigns. Clone the
+repository before execution (there is no PyPI distribution; checkpoints are
+bundled).
 
 ## Running it
 

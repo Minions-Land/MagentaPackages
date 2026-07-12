@@ -29,7 +29,8 @@ mkdir -p "<workdir>/waypoints"
 - Note cross-cutting classifications if applicable
 
 **Step 4: Quick trial landscape scan**
-- Use clinical-trials MCP to search for trials: `search_trials(condition="[indication name]")`
+- If a ClinicalTrials.gov MCP is connected, use its advertised search operation
+  and schema. Otherwise use `WebSearch` against clinicaltrials.gov.
 - Record total count, phase distribution, and status distribution
 - This gives a rough sense of how mature the indication is clinically
 

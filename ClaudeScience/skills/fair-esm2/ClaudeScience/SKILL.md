@@ -27,7 +27,7 @@ ESM-2 code and weights are MIT (Meta AI, github.com/facebookresearch/esm).
 > **Package disambiguation.** `pip install fair-esm` gives you `import esm`
 > with `esm.pretrained.*` (ESM-1/2). Biohub's github.com/Biohub/esm fork
 > (MIT) gives you `from esm.models.esmfold2 import ESMFold2InputBuilder` —
-> see the **`esmfold2`** skill. Both share the `esm` namespace but are
+> see [`esmfold2`](../esmfold2/SKILL.md). Both share the `esm` namespace but are
 > different libraries. This skill covers **fair-esm** (the Meta package).
 
 ## Prerequisites
@@ -88,53 +88,20 @@ contacts = out["contacts"][0]         # (L, L)
 drop BOS/EOS. `out["contacts"]` (when `return_contacts=True`) is `(B, L, L)`.
 
 
-## Remote compute
+## GPU and weight cache
 
-Needs ≥16 GB VRAM (650M model) and either pre-cached `.pt` checkpoints or
-egress to `dl.fbaipublicfiles.com`. Read
-`compute_details({provider, mode:'read'})` for an environment with `fair-esm`
-and a torch-hub weight cache, then:
-
-```python
-c = host.compute.create(provider)
-job = c.submit_job(
-    intent="ESM-2 650M embeddings for 200 sequences — 1×GPU, ~2 min",
-    inputs=[
-        {"src": "seqs.fasta", "dst_filename": "seqs.fasta"},
-        {"src": "embed_esm2.py", "dst_filename": "embed_esm2.py"},
-    ],
-    command="python3 embed_esm2.py",
-    environment=...,   # env name from compute_details
-    outputs=["embeddings.pt"],
-    timeout_seconds=1800,
-)
-print(job.job_id)   # cell ends here — kernel never blocks on compute
-```
-
-Then call the `wait_for_notification` brain-tool. When the
-`compute_done` notification arrives, act on its payload:
-
-```python
-save_artifacts(payload["featured_files"])   # paths under hpc/<job_id>/
-```
-
-For the full result dict (`output_files`, `remote_workdir`, …), re-enter the
-kernel: `c.attach_job(job_id).result()` then `c.close()`. See the
-`remote-compute-ssh` / `remote-compute-modal` skill for the orchestration
-details.
-
-Inside `embed_esm2.py`, set `TORCH_HOME` to the provider's torch-hub cache
-mount (path is in `compute_details`) so `esm.pretrained.*` resolves locally.
-
+The 650M model needs roughly 16 GB VRAM. Its first load downloads checkpoints
+from `dl.fbaipublicfiles.com`; set `TORCH_HOME` to a writable, persistent cache
+so later runs resolve locally.
 
 ## Troubleshooting
 
 | Symptom                                       | Cause                              | Fix                                   |
 | --------------------------------------------- | ---------------------------------- | ------------------------------------- |
-| `ModuleNotFoundError: No module named 'esm.models'` | You want Biohub's `esm` fork, not `fair-esm` | See `esmfold2` skill; this skill uses `esm.pretrained.*` |
+| `ModuleNotFoundError: No module named 'esm.models'` | You want Biohub's `esm` fork, not `fair-esm` | See [`esmfold2`](../esmfold2/SKILL.md); this skill uses `esm.pretrained.*` |
 | Slow first call                               | Downloading weights via torch.hub  | Set `TORCH_HOME` to a cached location |
 
 ---
 
 **Next**: feed embeddings to a classifier. For structure prediction, use
-`esmfold2`.
+[`esmfold2`](../esmfold2/SKILL.md).

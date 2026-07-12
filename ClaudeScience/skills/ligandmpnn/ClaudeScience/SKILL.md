@@ -30,10 +30,9 @@ the most convenient runner for the other MPNN families because, unlike the
 original ProteinMPNN script, it threads designs back onto the input structure
 and writes PDBs alongside the FASTA. Code and weights are MIT
 (github.com/dauparas/LigandMPNN). The model is small enough to run on CPU —
-for a handful of designs on one structure that is seconds and usually faster
-than dispatching, so the normal path is local with
-`pip install torch numpy biopython ProDy ml_collections dm-tree`; a GPU helps
-for batched campaigns.
+for a handful of designs on one structure that is seconds; a GPU helps for
+batched campaigns. Install `torch numpy biopython ProDy ml_collections
+dm-tree` in the active execution environment.
 
 ## Running it
 
@@ -84,10 +83,9 @@ so run from inside the clone or pass the absolute path.
 
 `run.py` imports ProDy unconditionally for ligand atom parsing. On py3.11 the
 prebuilt wheel is missing on PyPI, so `pip install ProDy` compiles from source
-and needs a working C/C++ compiler. On Modal's `add_python` bases the default
-`CXX=clang++` points at a missing binary — `apt_install("build-essential")`
-and export `CC=gcc CXX=g++` before the install. On most CPU-local Python
-distributions the sdist builds in ~10 s if no wheel matches your Python.
+and needs a working C/C++ compiler. Install the platform's standard build
+toolchain and export `CC=gcc CXX=g++` before installing when no wheel matches
+your Python.
 
 ## Turning ligand context off changes the answer, not the model
 
@@ -114,7 +112,7 @@ not trust the sequences.
 |---|---|
 | `ModuleNotFoundError: No module named 'tree'` | `pip install dm-tree` — the vendored openfold imports it unconditionally. |
 | `module 'numpy' has no attribute 'int'` | Run the `sed` patch on `openfold/np/residue_constants.py`, or pin `numpy<1.24` (py≤3.11 only). |
-| `error: command 'clang' failed` while `pip install ProDy` | See the ProDy gotcha above — `apt_install("build-essential")` and `env({"CC":"gcc","CXX":"g++"})`. |
+| `error: command 'clang' failed` while `pip install ProDy` | See the ProDy gotcha above — install a C/C++ build toolchain and export `CC=gcc CXX=g++`. |
 | `FileNotFoundError` for `model_params/...` | Checkpoints not fetched — run `bash get_model_params.sh ./model_params` from inside the clone. |
 
 ---

@@ -1,3 +1,9 @@
+"""Deterministic plotting helpers for the figure-style skill.
+
+Load this file explicitly with ``runpy.run_path`` in every Python process that
+uses the helpers; see SKILL.md.
+"""
+
 META_GREY = "#888888"
 
 

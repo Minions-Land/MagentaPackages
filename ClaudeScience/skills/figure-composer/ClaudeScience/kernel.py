@@ -5,10 +5,10 @@ Kernel helpers for the figure-composer skill — pure-skill, provider-agnostic.
 No ``host`` runtime and no LLM API: these are deterministic PIL/geometry
 helpers plus schema/prompt builders. YOUR base model does the visual
 judgment (reverse-engineering an outline from a figure, generating panels,
-adversarial review) using the schemas/tasks below — see SKILL.md. Load once
-per session by exec-ing this file in a Python cell:
+adversarial review) using the schemas/tasks below — see SKILL.md. Load the
+file explicitly in every Python process that uses it:
 
-    exec(open("<this-skill-dir>/kernel.py").read())
+    helpers = runpy.run_path(str(skill_dir / "kernel.py"))
 """
 
 import json  # noqa: F401 — kept for callers that json-dump outlines
@@ -182,7 +182,8 @@ def review_schema(per_panel=True):
 def composite_review_task(composite_path, outline, rules_path=None, prev_path=None, round_no=1, min_floor=5):
     """Build the adversarial reviewer's task string for the WHOLE composed
     figure. ``composite_path`` / ``rules_path`` / ``prev_path`` are filesystem
-    paths — open/attach them to review."""
+    paths; inspect image paths with ``read`` and textual rules with the file
+    reader before reviewing."""
     panel_tbl = "\n".join(
         f"  {p['letter']}: {p['role']:<10} row{p['row']}+{p.get('rowspan',1)} col{p['col']}+{p['colspan']} "
         f"— {p['chart_family']} — \"{p['message']}\""
@@ -243,6 +244,6 @@ def derive_outline_prompt(claim=None, data_hints=None):
                "panel a.\n")
             + (f"Data hints: {data_hints}\n" if data_hints else ""))
 
-# Convention: save composites as ONE artifact `{fig_key}.png`
-# with version_of, and write `{fig_key}_review_r{n}.json` per round — never re-version
-# a file literally named `_r0` across rounds.
+# Convention: save the current composite as `{fig_key}.png` and write
+# `{fig_key}_review_r{n}.json` per round. Keep prior composites under explicit
+# round-specific filenames when comparison is needed.

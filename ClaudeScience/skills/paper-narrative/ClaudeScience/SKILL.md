@@ -15,14 +15,20 @@ No hand-written brief required.
 This is a **pure skill** — `kernel.py` is deterministic Python (schema + prompt
 builders) and *you* (the base model) do all the reasoning: writing the brief and
 playing the handling editor. There is no `host` runtime and no LLM API. Load the
-helpers once per session in a Python cell:
+helpers explicitly in each Python script that uses them, resolving `skill_dir`
+to the actual directory containing this `SKILL.md`:
 ```python
-exec(open("paper-narrative/kernel.py").read())   # path to this skill's kernel.py
+from pathlib import Path
+import runpy
+
+skill_dir = Path("<actual directory containing this SKILL.md>")
+helpers = runpy.run_path(str(skill_dir / "kernel.py"))
+paper_brief_prompt = helpers["paper_brief_prompt"]
+paper_brief_schema = helpers["paper_brief_schema"]
+narrative_review_task = helpers["narrative_review_task"]
+narrative_review_schema = helpers["narrative_review_schema"]
 ```
-Nothing auto-loads it outside Claude Science. Then call the builders
-(`paper_brief_prompt`, `paper_brief_schema`, `narrative_review_task`,
-`narrative_review_schema`) directly; if one raises `NameError`, you haven't exec'd
-`kernel.py`.
+Keep loading and all related builder calls in the same Python process.
 
 ## When to load
 Paper writing or revision. You have a draft and a set of figures and you want to
@@ -41,10 +47,12 @@ which figures to compose.
    then **re-read the whole brief** (not just the pitch) and edit before step 2.
 2. **Play the handling editor.** Build the review prompt with
    `narrative_review_task(brief, deck_path, rules_path)` (file paths to the
-   combined figures PDF and, optionally, the design rules), open/attach the
-   figures, and answer it yourself — one editorial pass over the FULL deck —
+   combined figures PDF and, optionally, the design rules). Render every deck
+   page to PNG with a local PDF library or CLI, inspect the PNGs with `read`,
+   and answer the prompt yourself — one editorial pass over the FULL deck —
    emitting JSON that matches `narrative_review_schema()`. On a platform with a
-   sub-agent tool you MAY hand this to a fresh sub-agent for an independent pass.
+   configured `sub_agent`, a sub-agent may perform an independent pass if it
+   receives the prompt, rendered page images, and required skill context.
 3. **Act on the output, don't just report it:**
    - `arc[]` → the main-figure order. Anything not on it → supplement.
    - `figure_moves[]` → move panels between figures.
