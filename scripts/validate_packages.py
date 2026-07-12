@@ -98,11 +98,13 @@ def validate_component(
     package_id: str,
     component: dict[str, Any],
     profile_names: set[str],
+    schema_version: str,
     errors: list[str],
 ) -> None:
     kind = component.get("kind")
     name = component.get("name")
     path_value = component.get("path")
+    is_v2 = schema_version == "magenta.package.v2"
 
     if not isinstance(kind, str) or not kind:
         errors.append(f"{package_id}: component missing kind")
@@ -121,6 +123,33 @@ def validate_component(
         if profile not in profile_names:
             errors.append(f"{package_id}:{name}: unknown profile {profile}")
 
+    # v2 (HCP-isomorphic) module/source components: <module>/<source>/ dir must
+    # carry a real HcpMagnet.ts beside its descriptor/content, and the component
+    # must declare its source.
+    MODULE_SOURCE_KINDS = {"skill", "tool", "brand", "system-prompt", "append-system-prompt", "theme", "prompt"}
+    if is_v2 and kind in MODULE_SOURCE_KINDS:
+        source = component.get("source")
+        if not isinstance(source, str) or not source:
+            errors.append(f"{package_id}:{name}: v2 component missing source")
+        if not component_path.is_dir():
+            errors.append(f"{package_id}:{name}: v2 component path must be a <module>/<source> directory")
+            return
+        if not (component_path / "HcpMagnet.ts").is_file():
+            errors.append(f"{package_id}:{name}: v2 component lacks HcpMagnet.ts")
+        if kind == "skill" and not (component_path / "SKILL.md").is_file():
+            errors.append(f"{package_id}:{name}: skill source lacks SKILL.md")
+        if kind == "brand" and not (component_path / "brand.toml").is_file():
+            errors.append(f"{package_id}:{name}: brand source lacks brand.toml")
+        if kind == "tool":
+            tomls = [p for p in component_path.glob("*.toml")]
+            if not tomls:
+                errors.append(f"{package_id}:{name}: tool source lacks a descriptor .toml")
+        if kind in {"system-prompt", "append-system-prompt"}:
+            if not (component_path / "system-prompt.toml").is_file():
+                errors.append(f"{package_id}:{name}: system-prompt source lacks system-prompt.toml")
+        return
+
+    # v1 (flat) legacy validation, kept while other packages migrate.
     if kind == "skill" and not (component_path / "SKILL.md").is_file():
         errors.append(f"{package_id}:{name}: skill path lacks SKILL.md")
 
@@ -152,10 +181,15 @@ def validate_component(
             errors.append(f"{package_id}:{name}: brand path lacks brand.toml")
 
 
-def check_packages(errors: list[str]) -> None:
+def check_packages(errors: list[str], only_package: str | None = None) -> None:
     package_files = sorted(
         path for path in ROOT.glob("*/package.toml") if path.parent.is_dir()
     )
+    if only_package is not None:
+        package_files = [p for p in package_files if p.parent.name == only_package]
+        if not package_files:
+            errors.append(f"package {only_package} not found")
+            return
     if not package_files:
         errors.append("no package.toml files found")
         return
@@ -179,8 +213,16 @@ def check_packages(errors: list[str]) -> None:
         else:
             package_id = package_root.name
 
-        if manifest.get("schema_version") != "magenta.package.v1":
+        schema_version = manifest.get("schema_version")
+        if schema_version not in {"magenta.package.v1", "magenta.package.v2"}:
             errors.append(f"{package_id}: unsupported schema_version")
+        schema_version = schema_version if isinstance(schema_version, str) else ""
+
+        # v2 packages must declare a version (release tags derive from it).
+        if schema_version == "magenta.package.v2":
+            version = manifest.get("version")
+            if not isinstance(version, str) or not version:
+                errors.append(f"{package_id}: v2 package must declare a version")
 
         profiles = manifest.get("profiles", [])
         profile_names = {
@@ -209,22 +251,34 @@ def check_packages(errors: list[str]) -> None:
             if key in seen_components:
                 errors.append(f"{package_id}: duplicate component {key[0]}:{key[1]}")
             seen_components.add(key)
-            validate_component(package_root, str(package_id), component, profile_names, errors)
+            validate_component(package_root, str(package_id), component, profile_names, schema_version, errors)
 
 
 def main() -> int:
+    only_package: str | None = None
+    args = sys.argv[1:]
+    if args and args[0] == "--package":
+        if len(args) < 2:
+            print("--package requires a package name", file=sys.stderr)
+            return 2
+        only_package = args[1]
+
     errors: list[str] = []
     files = git_visible_files()
     check_repo_hygiene(files, errors)
     check_toml(files, errors)
     check_python_syntax(files, errors)
-    check_packages(errors)
+    check_packages(errors, only_package)
 
     if errors:
         print("Package validation failed:", file=sys.stderr)
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
         return 1
+
+    if only_package is not None:
+        print(f"Validated package {only_package}.")
+        return 0
 
     package_count = len(list(ROOT.glob("*/package.toml")))
     skill_count = len(list(ROOT.glob("*/skills/**/SKILL.md")))

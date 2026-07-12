@@ -1,0 +1,100 @@
+name: Release Package
+
+# Monorepo + per-package release. Push a tag shaped `<PackageName>-v<version>`
+# (e.g. AutOmicScience-v1.0.0) to build and publish only that package.
+#
+#   git tag AutOmicScience-v1.0.0
+#   git push origin AutOmicScience-v1.0.0
+#
+# The acquisition layer resolves `github:Minions-Land/MagentaPackages/<Package>@<version>`
+# to the release tagged `<Package>-v<version>` and downloads its artifact.
+
+on:
+  push:
+    tags:
+      - "*-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse package name and version from tag
+        id: parse
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          # Split on the last occurrence of "-v": everything before is the
+          # package name, everything after is the semantic version.
+          pkg="${tag%-v*}"
+          ver="${tag##*-v}"
+          if [ -z "$pkg" ] || [ -z "$ver" ] || [ "$pkg" = "$tag" ]; then
+            echo "::error::Tag '$tag' is not of the form <PackageName>-v<version>"
+            exit 1
+          fi
+          if [ ! -f "$pkg/package.toml" ]; then
+            echo "::error::No package.toml found for package '$pkg' (expected $pkg/package.toml)"
+            exit 1
+          fi
+          echo "package=$pkg" >> "$GITHUB_OUTPUT"
+          echo "version=$ver" >> "$GITHUB_OUTPUT"
+          echo "Releasing package '$pkg' version '$ver'"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate the package manifest
+        run: python scripts/validate_packages.py --package "${{ steps.parse.outputs.package }}"
+
+      - name: Verify manifest version matches tag
+        run: |
+          pkg="${{ steps.parse.outputs.package }}"
+          ver="${{ steps.parse.outputs.version }}"
+          manifest_ver="$(python scripts/package_version.py "$pkg")"
+          if [ "$manifest_ver" != "$ver" ]; then
+            echo "::error::Tag version ($ver) does not match $pkg/package.toml version ($manifest_ver)"
+            exit 1
+          fi
+
+      - name: Build package artifact
+        id: build
+        run: |
+          pkg="${{ steps.parse.outputs.package }}"
+          ver="${{ steps.parse.outputs.version }}"
+          out="${pkg}-v${ver}.tar.gz"
+          # Package the package directory as a relocatable source bundle. Build
+          # outputs and caches are excluded; the acquisition layer unpacks this
+          # under ~/.magenta/harness-packages/<pkg>@<ver>/ and the runtime magnet
+          # loader imports each <module>/<source>/HcpMagnet.ts from there.
+          tar --exclude='*/target' \
+              --exclude='*/__pycache__' \
+              --exclude='*/.pytest_cache' \
+              --exclude='*/.pixi' \
+              --exclude='*/node_modules' \
+              -czf "$out" "$pkg"
+          sha256sum "$out" > "${out}.sha256"
+          echo "artifact=$out" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ steps.parse.outputs.package }} v${{ steps.parse.outputs.version }}
+          files: |
+            ${{ steps.build.outputs.artifact }}
+            ${{ steps.build.outputs.artifact }}.sha256
+          body: |
+            Automated release of the `${{ steps.parse.outputs.package }}` harness package,
+            version `${{ steps.parse.outputs.version }}`.
+
+            Load it with:
+            ```
+            magenta --harness-package github:Minions-Land/MagentaPackages/${{ steps.parse.outputs.package }}@${{ steps.parse.outputs.version }}
+            ```
+
+            The artifact is a relocatable source bundle (`tar.gz`). Verify it against
+            the published `.sha256` before use.
