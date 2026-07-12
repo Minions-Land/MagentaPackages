@@ -223,7 +223,13 @@ def load_toml(path: Path) -> dict[str, Any]:
 
 
 def git_visible_files() -> list[Path]:
-    """Return tracked and unignored untracked files, relative to repo policy."""
+    """Return existing tracked and unignored untracked files.
+
+    The content checks below read each file's bytes, so index entries whose
+    working-tree file was deleted but not yet staged are filtered out here
+    rather than crashing every downstream reader. Deleting a file a package
+    still declares is caught separately by check_packages' component-path check.
+    """
     try:
         result = subprocess.run(
             ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
@@ -239,7 +245,11 @@ def git_visible_files() -> list[Path]:
             if path.is_file() and ".git" not in path.relative_to(ROOT).parts
         ]
 
-    return [ROOT / line for line in result.stdout.splitlines() if line]
+    return [
+        path
+        for line in result.stdout.splitlines()
+        if line and (path := ROOT / line).exists()
+    ]
 
 
 def check_repo_hygiene(files: list[Path], errors: list[str]) -> None:

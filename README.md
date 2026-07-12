@@ -130,8 +130,8 @@ rebuild declared native tools and embed only their final executable.
 |---|---|---|---|
 | [`AutOmicScience`](./AutOmicScience/) | Single-cell / spatial / bulk omics, cancer & clinical genomics | 14 skills · 5 tools · system prompt · brand · Python/Pixi runtime | Production omics analysis grounded in a real compute tool (`omics_compute`) |
 | [`Biomni`](./Biomni/) | Biomedical AI (Stanford SNAP Lab) | 3 skills bundling executable tools | CRISPR sgRNA design, single-cell annotation, and a broad biomedical toolkit copied in-tree |
-| [`ClaudeScience`](./ClaudeScience/) | Computational biology research | 32 skills · 9 profiles | Structure prediction, protein design, genomics, literature, viz, compute — selected by profile |
-| [`PantheonOS`](./PantheonOS/) | Bioinformatics workflow best practices | 16 skills · 5 profiles | scverse/nf-core workflow guidance, foundation models, bio-imaging, scientific communication |
+| [`ClaudeScience`](./ClaudeScience/) | Computational biology research | 20 skills · 6 profiles | Structure/docking, protein design, sequence models, single-cell, research, and publishing — selected by profile |
+| [`PantheonOS`](./PantheonOS/) | Bioinformatics workflow best practices | 11 skills · 3 profiles | scverse/nf-core workflow guidance, image analysis, scientific publishing |
 
 AutOmicScience is the **canonical reference package**: it is the only one that
 ships tools, a system prompt, a brand, and a pinned runtime, so use its layout
@@ -142,7 +142,7 @@ packages.
 
 - **Production omics analysis** → `AutOmicScience` (grounded, tool-backed).
 - **Wet-lab / biomedical breadth** → `Biomni` (executable tools across 20+ domains).
-- **Model-heavy research** (folding, design, genomics FMs) → `ClaudeScience`, by profile.
+- **Model-heavy research** (folding, design, biological sequence models) → `ClaudeScience`, by profile.
 - **Workflow / best-practice guidance** → `PantheonOS`.
 
 They compose. A common research stack is `AutOmicScience` for grounded
