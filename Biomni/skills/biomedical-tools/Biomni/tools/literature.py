@@ -242,16 +242,9 @@ def advanced_web_search_claude(
 
     import anthropic
 
-    try:
-        from biomni.config import default_config
-
-        model = default_config.llm
-        api_key = default_config.api_key
-        if not api_key:
-            api_key = os.getenv("ANTHROPIC_API_KEY")
-    except ImportError:
-        model = "claude-4-sonnet-latest"
-        api_key = os.getenv("ANTHROPIC_API_KEY")
+    # Resolve model and API key (self-contained; no biomni dependency)
+    model = "claude-sonnet-5"
+    api_key = os.getenv("ANTHROPIC_API_KEY")
 
     if "claude" not in model:
         raise ValueError("Model must be a Claude model.")

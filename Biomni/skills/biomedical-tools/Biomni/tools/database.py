@@ -9,12 +9,69 @@ from Bio.Blast import NCBIWWW, NCBIXML
 from Bio.Seq import Seq
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from biomni.llm import get_llm
-from biomni.utils import parse_hpo_obo
+
+def get_llm(model: str | None = None, temperature: float | None = None, api_key: str | None = None):
+    """Return a LangChain Anthropic chat model (self-contained, no biomni dependency).
+
+    Defaults to Claude Sonnet 5 and omits sampling parameters, which Sonnet 5
+    rejects when set to non-default values. ``api_key`` falls back to the
+    ``ANTHROPIC_API_KEY`` environment variable.
+    """
+    from langchain_anthropic import ChatAnthropic
+
+    resolved_model = model or "claude-sonnet-5"
+    kwargs = {
+        "model": resolved_model,
+        "max_tokens": 8192,
+        "api_key": api_key or os.getenv("ANTHROPIC_API_KEY"),
+    }
+    if temperature is not None:
+        if resolved_model == "claude-sonnet-5":
+            raise ValueError("Claude Sonnet 5 does not accept a non-default temperature; pass temperature=None")
+        kwargs["temperature"] = temperature
+    return ChatAnthropic(**kwargs)
+
+
+def parse_hpo_obo(file_path: str) -> dict:
+    """Parse an HPO OBO file into a dict mapping HP IDs to phenotype names (self-contained)."""
+    hp_dict: dict = {}
+    current_id = None
+    current_name = None
+    with open(file_path) as file:
+        for line in file:
+            line = line.strip()
+            if line.startswith("[Term]"):
+                if current_id and current_name:
+                    hp_dict[current_id] = current_name
+                current_id = None
+                current_name = None
+            elif line.startswith("id: HP:"):
+                current_id = line.split(": ")[1]
+            elif line.startswith("name:"):
+                current_name = line.split(": ", 1)[1]
+        if current_id and current_name:
+            hp_dict[current_id] = current_name
+    return hp_dict
 
 
 # Function to map HPO terms to names
-def get_hpo_names(hpo_terms: list[str], data_lake_path: str) -> list[str]:
+def _resolve_data_lake(data_lake_path=None):
+    """Resolve the Biomni data lake directory.
+
+    Uses the explicit ``data_lake_path`` if given, else the ``BIOMNI_DATA_LAKE``
+    environment variable. Raises loudly (no silent default) if neither is set.
+    """
+    path = data_lake_path or os.environ.get("BIOMNI_DATA_LAKE")
+    if not path:
+        raise RuntimeError(
+            "Biomni data lake not configured: pass data_lake_path=... or set the "
+            "BIOMNI_DATA_LAKE environment variable. Download the files these tools "
+            "need with: python Biomni/scripts/fetch_biomni_data.py --dest <dir>"
+        )
+    return path
+
+
+def get_hpo_names(hpo_terms: list[str], data_lake_path: str = None) -> list[str]:
     """Retrieve the names of given HPO terms.
 
     Args:
@@ -24,6 +81,7 @@ def get_hpo_names(hpo_terms: list[str], data_lake_path: str) -> list[str]:
         List[str]: A list of corresponding HPO term names.
 
     """
+    data_lake_path = _resolve_data_lake(data_lake_path)
     hp_dict = parse_hpo_obo(data_lake_path + "/hp.obo")
 
     hpo_names = []
@@ -36,7 +94,7 @@ def get_hpo_names(hpo_terms: list[str], data_lake_path: str) -> list[str]:
 def _query_llm_for_api(prompt, schema, system_template):
     """Helper function to query LLMs for generating API calls based on natural language prompts.
 
-    Supports multiple model providers including Claude, Gemini, GPT, and others via the unified get_llm interface.
+    Uses Anthropic Claude to generate an API call from a natural-language request.
 
     Parameters
     ----------
@@ -49,15 +107,9 @@ def _query_llm_for_api(prompt, schema, system_template):
     dict: Dictionary with 'success', 'data' (if successful), 'error' (if failed), and optional 'raw_response'
 
     """
-    # Use global config for model and api_key
-    try:
-        from biomni.config import default_config
-
-        model = default_config.llm
-        api_key = default_config.api_key
-    except ImportError:
-        model = "claude-3-5-haiku-20241022"
-        api_key = None
+    # Resolve model and API key (self-contained; no biomni dependency)
+    model = "claude-sonnet-5"
+    api_key = os.getenv("ANTHROPIC_API_KEY")
 
     try:
         # Format the system prompt with schema if provided
@@ -67,13 +119,8 @@ def _query_llm_for_api(prompt, schema, system_template):
         else:
             system_prompt = system_template
 
-        # Get LLM instance using the unified interface with config
-        try:
-            from biomni.config import default_config
-
-            llm = get_llm(model=model, temperature=0.0, api_key=api_key, config=default_config)
-        except ImportError:
-            llm = get_llm(model=model, temperature=0.0, api_key=api_key or "EMPTY")
+        # Get an LLM instance (Anthropic via the local get_llm helper)
+        llm = get_llm(model=model, api_key=api_key)
 
         # Compose messages
         messages = [
@@ -1174,7 +1221,7 @@ def query_stringdb(
         - Common species IDs: 9606 (human), 10090 (mouse), 7227 (fruit fly), 4932 (yeast)
         - For protein identifiers, use either gene names (e.g., "BRCA1") or UniProt IDs (e.g., "P38398")
         - The "required_score" parameter accepts values from 0 to 1000 (higher means more stringent)
-        - Add "caller_identity=bioagentos_api" as a parameter
+        - Add "caller_identity=biomni_api" as a parameter
 
         Return ONLY the JSON object with no additional text.
         """
@@ -1423,7 +1470,7 @@ def query_paleobiology(
     # If using prompt, parse with Claude
     if prompt:
         # Load PBDB schema
-        schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "pbdb.pkl")
+        schema_path = os.path.join(os.path.dirname(__file__), "schema_db", "paleobiology.pkl")
         with open(schema_path, "rb") as f:
             pbdb_schema = pickle.load(f)
 

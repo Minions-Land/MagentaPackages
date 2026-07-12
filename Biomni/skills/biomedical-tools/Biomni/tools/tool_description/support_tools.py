@@ -19,9 +19,8 @@ description = [
         "required_parameters": [
             {
                 "default": None,
-                "description": "Fully qualified function name "
-                "(e.g., "
-                "'bioagentos.tool.support_tools.write_python_code')",
+                "description": "Fully qualified 'module.function' name (e.g., 'database.query_uniprot'); "
+                "the module must be importable (add the skill's tools/ to sys.path)",
                 "name": "function_name",
                 "type": "str",
             }

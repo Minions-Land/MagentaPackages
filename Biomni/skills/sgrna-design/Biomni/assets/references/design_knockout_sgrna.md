@@ -1,12 +1,13 @@
 # Tool: design_knockout_sgrna
 
-Design sgRNAs for CRISPR knockout by searching pre-computed sgRNA libraries from Addgene validated sequences.
+Design sgRNAs for CRISPR knockout by searching pre-computed, ranked human or mouse libraries distributed by Biomni.
 
 ## Description
 
-Searches pre-computed sgRNA libraries containing 300+ experimentally validated knockout guide sequences. Returns optimized guide RNAs ranked by combined efficacy scores for targeting a specific gene. This is the fastest method for finding validated sgRNAs when experimental data exists.
-
-The tool queries curated libraries from the Addgene CRISPR database, which aggregates published sgRNA sequences with experimental validation data.
+Searches pre-computed sgRNA knockout libraries and returns guide candidates ordered by
+their `Combined Rank` for a target gene. The library files contain on-target scores,
+off-target ranks, PAMs, strands, and target positions. Returned candidates still require
+independent off-target review and experimental validation.
 
 ## Parameters
 
@@ -17,11 +18,12 @@ The tool queries curated libraries from the Addgene CRISPR database, which aggre
   - Case-insensitive (converted to uppercase)
   - Supports partial matching if exact match fails
 
-- **data_lake_path** (str): Path to the data lake containing sgRNA libraries
+### Optional
+
+- **data_lake_path** (str): Directory containing the sgRNA libraries. When omitted,
+  the tool uses `BIOMNI_DATA_LAKE`.
   - Must contain `sgRNA_KO_SP_human.txt` for human
   - Must contain `sgRNA_KO_SP_mouse.txt` for mouse
-
-### Optional
 
 - **species** (str): Target organism species
   - Default: "human"
@@ -32,6 +34,21 @@ The tool queries curated libraries from the Addgene CRISPR database, which aggre
   - Default: 1
   - Returns top-ranked guides by Combined Rank score
   - Recommend requesting 3-4 for experimental validation
+
+## Data Setup
+
+The library files are not bundled with this skill and are not downloaded from
+Addgene at runtime. From the MagentaPackages repository root, fetch the files
+distributed by Biomni:
+
+```bash
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --skill sgrna-design
+export BIOMNI_DATA_LAKE=/absolute/path/to/biomni-data
+```
+
+You can then omit `data_lake_path`, or pass the directory explicitly on each call.
 
 ## Returns
 
@@ -46,12 +63,13 @@ Returns empty guides list if gene not found in library.
 ## Usage Example
 
 ```python
-from biomni.tool.molecular_biology import design_knockout_sgrna
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")   # <SKILL_DIR> = this skill's directory (where SKILL.md lives)
+from design_knockout_sgrna import design_knockout_sgrna
 
 # Single guide for human gene
 result = design_knockout_sgrna(
     gene_name="TP53",
-    data_lake_path="./data",
     species="human",
     num_guides=1
 )
@@ -95,11 +113,9 @@ The sgRNA libraries are tab-delimited files with columns:
 4. Returns top N guides
 
 ### Ranking
-Guides are pre-ranked by Combined Rank, which aggregates:
-- On-target activity scores
-- Off-target specificity
-- GC content optimization
-- Experimental validation status
+Guides are ordered by the library's `Combined Rank`. The distributed files also
+provide on-target efficacy scores and off-target ranks; this package does not
+recompute or independently validate those values.
 
 ### Error Handling
 - Raises `FileNotFoundError` if library file doesn't exist
@@ -113,22 +129,22 @@ Guides are pre-ranked by Combined Rank, which aggregates:
 
 ## Data Source
 
-**Library**: Addgene CRISPR Reference Database
-- URL: https://www.addgene.org/crispr/reference/grna-sequence/
-- Content: 300+ experimentally validated sgRNA sequences
-- Species: Human, Mouse
-- Update frequency: Periodic (check Addgene for latest)
+**Distribution**: Biomni release data lake
 
-**Quality**: All sequences have:
-- Published experimental validation
-- PubMed ID citations
-- Efficacy data from original studies
+- Files: `sgRNA_KO_SP_human.txt`, `sgRNA_KO_SP_mouse.txt`
+- Species: Human, Mouse
+- Upstream metadata describes them as sgRNA knockout data. It does not establish
+  that every entry comes from Addgene or has experimental validation.
+
+Addgene remains a useful independent resource for CRISPR plasmids, protocols,
+and published guide information, but it is not the download location for these
+two Biomni files.
 
 ## Limitations
 
 ### Coverage
-- Limited to genes with published sgRNA data
-- Not all genes have validated sequences
+- Limited to genes represented in the downloaded libraries
+- A returned guide is a ranked candidate, not proof of experimental efficacy
 - For novel genes, use Tier 2 (CRISPick) or Tier 3 (de novo) tools
 
 ### PAM Compatibility
@@ -142,7 +158,7 @@ Guides are pre-ranked by Combined Rank, which aggregates:
 ## Best Practices
 
 ### Experimental Validation
-Even with validated sequences:
+For every returned candidate:
 1. Test 3-4 guides per target
 2. Include non-targeting control
 3. Verify by T7E1 or Sanger sequencing
@@ -150,9 +166,8 @@ Even with validated sequences:
 
 ### Citation Requirements
 When using results from this tool:
-1. Cite original publication (find PubMed ID in Addgene database)
-2. Acknowledge Addgene as data source
-3. Cite Biomni tool: bioRxiv 2025.05.30.656746v1
+1. Cite the Biomni tool: bioRxiv 2025.05.30.656746v1
+2. Cite any external guide database or experimental publication actually used
 
 ### When to Use Other Tools
 Use computational design (CRISPick, CHOPCHOP) if:
@@ -163,7 +178,6 @@ Use computational design (CRISPick, CHOPCHOP) if:
 
 ## Dependencies
 
-- **biomni** package
 - **pandas**: For library data loading
 - **os**: For file path handling
 
@@ -177,8 +191,9 @@ Use computational design (CRISPick, CHOPCHOP) if:
 
 **FileNotFoundError**: Library file not found
 - Check `data_lake_path` is correct
+- If no explicit path is passed, check `BIOMNI_DATA_LAKE`
 - Verify sgRNA library files exist
-- Download from Addgene if missing
+- Download them with `Biomni/scripts/fetch_biomni_data.py --skill sgrna-design`
 
 **Empty guides list**: Gene not in library
 - Try computational design (CRISPick)
@@ -192,6 +207,6 @@ Use computational design (CRISPick, CHOPCHOP) if:
 ## Source Attribution
 
 - **Tool Source**: Biomni (Stanford SNAP Lab)
-- **Data Source**: Addgene CRISPR Reference Database
-- **License**: MIT (tool), CC BY 4.0 (data)
+- **Library Distribution**: Biomni release data lake
+- **License**: MIT (tool); CC BY 4.0 (this guide)
 - **Paper**: bioRxiv 2025.05.30.656746v1

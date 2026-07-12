@@ -128,7 +128,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to the data lake",
+                "description": "Path to the Biomni data lake dir; optional, defaults to $BIOMNI_DATA_LAKE if omitted",
                 "name": "data_lake_path",
                 "type": "str",
             },
@@ -565,7 +565,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to data lake directory containing DDInter data",
+                "description": "Path to Biomni data lake dir with DDInter CSVs; optional, defaults to $BIOMNI_DATA_LAKE",
                 "name": "data_lake_path",
                 "type": "str",
             },
@@ -597,7 +597,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to data lake directory containing DDInter data",
+                "description": "Path to Biomni data lake dir with DDInter CSVs; optional, defaults to $BIOMNI_DATA_LAKE",
                 "name": "data_lake_path",
                 "type": "str",
             },
@@ -623,7 +623,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to data lake directory containing DDInter data",
+                "description": "Path to Biomni data lake dir with DDInter CSVs; optional, defaults to $BIOMNI_DATA_LAKE",
                 "name": "data_lake_path",
                 "type": "str",
             },
@@ -655,7 +655,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to data lake directory containing DDInter data",
+                "description": "Path to Biomni data lake dir with DDInter CSVs; optional, defaults to $BIOMNI_DATA_LAKE",
                 "name": "data_lake_path",
                 "type": "str",
             },

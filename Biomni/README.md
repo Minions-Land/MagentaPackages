@@ -1,285 +1,204 @@
 # Biomni Package for Magenta
 
-Biomni is a general-purpose biomedical AI toolkit from Stanford SNAP Lab,
-integrated into Magenta as **3 skills** that bundle their executable Python
-tools in-tree (20+ modules, ~248 functions copied locally, no external Biomni
-install required).
+Biomni integrates selected resources from the Stanford SNAP Lab
+[Biomni project](https://github.com/snap-stanford/Biomni) into Magenta. The
+package contains three skills, including focused workflow guides and more than
+200 biomedical Python functions across 22 modules. It does not require the
+upstream `biomni` Python package.
 
-## Package Overview
+## Skills
 
-**Source**: Stanford SNAP Lab - Biomni Project  
-**Original Repo**: https://github.com/snap-stanford/Biomni  
-**Paper**: bioRxiv 2025.05.30.656746v1  
-**License**: MIT (tools), CC BY 4.0 (knowledge guides)  
-**Integration**: Full code copy (1.8 MB), no external dependencies
+### `sgrna-design`
 
-## Contents
+CRISPR sgRNA design guidance with two executable functions:
 
-### Skills (3 Knowledge Guides + 5 Tools)
+- `design_knockout_sgrna` searches pre-computed human or mouse knockout
+  libraries.
+- `perform_crispr_cas9_genome_editing` simulates an editing workflow.
 
-**1. sgrna-design** - CRISPR sgRNA design workflow
-- Location: `skills/sgrna-design/`
-- Tools: 2 executable tools
-  - `design_knockout_sgrna`: Search validated sgRNA libraries (300+ sequences from Addgene)
-  - `perform_crispr_cas9_genome_editing`: Simulate CRISPR editing process
-- Knowledge: Three-tier design strategy, experimental validation guidelines
-- References: `assets/references/design_knockout_sgrna.md`, `assets/references/crispr_editing.md`
+The sgRNA libraries are large external data-lake files and are not stored in
+this repository.
 
-**2. single-cell-annotation** - scRNA-seq cell type annotation
-- Location: `skills/single-cell-annotation/`
-- Tools: 3 executable tools
-  - `annotate_celltype_scRNA`: LLM-assisted automated annotation from marker genes
-  - `annotate_celltype_with_panhumanpy`: Panhuman Azimuth neural network annotation
-  - `unsupervised_celltype_transfer_between_scRNA_datasets`: Multi-method consensus (popV)
-- Knowledge: Three approaches (marker-based, automated, reference-based), decision tree
-- References: `assets/references/` (3 tool reference files)
-- Source: Biomni + sc-best-practices.org
+### `single-cell-annotation`
 
-**3. biomedical-tools** - General biomedical toolkit
-- Location: `skills/biomedical-tools/`
-- Tools: 200+ functions across 20 modules
-- Coverage: Database queries, drug discovery, genomics, imaging, lab automation
-- Quick reference guide with module descriptions and usage examples
+Single-cell RNA-seq annotation guidance with three executable functions:
 
-### Python Tool Modules (23 Modules, 248 Functions)
+- `annotate_celltype_scRNA` performs LLM-assisted marker-based annotation.
+- `annotate_celltype_with_panhumanpy` runs Panhuman Azimuth annotation.
+- `unsupervised_celltype_transfer_between_scRNA_datasets` performs
+  multi-method reference transfer with popV.
 
-All Python code **copied locally** from Biomni source:
+### `biomedical-tools`
 
-| Module | Functions | Size | Description |
-|--------|-----------|------|-------------|
-| **database** | 45 | 194 KB | PubMed, UniProt, KEGG, STRING, cBioPortal, Ensembl, NCBI, PDB |
-| **pharmacology** | 42 | 164 KB | Drug design, ADME prediction, toxicity, interactions |
-| **genomics** | 20 | 110 KB | NGS analysis, variant annotation, alignment |
-| **molecular_biology** | 18 | 89 KB | PCR design, cloning, protein expression |
-| **immunology** | 9 | 79 KB | Antibody design, immune repertoire analysis |
-| **genetics** | 8 | 65 KB | GWAS, linkage analysis |
-| **microbiology** | 11 | 57 KB | Microbiome, metagenomics |
-| **bioimaging** | 10 | 52 KB | Cell segmentation, image quantification |
-| **synthetic_biology** | 7 | 51 KB | Synthetic biology design |
-| **physiology** | 10 | 50 KB | Physiological modeling |
-| **cancer_biology** | 5 | 51 KB | Cancer biology analysis |
-| **pathology** | 6 | 40 KB | Pathology image analysis |
-| **biochemistry** | 5 | 41 KB | Protein analysis, enzyme kinetics |
-| **cell_biology** | 4 | 29 KB | Cell biology functions |
-| **lab_automation** | 11 | 24 KB | Robot control, workflow automation |
-| **bioengineering** | 6 | 51 KB | Bioengineering tools |
-| **biophysics** | 2 | 19 KB | Biophysics calculations |
-| **literature** | 8 | 14 KB | Literature search and analysis |
-| **support_tools** | 7 | 14 KB | Support utilities |
-| **protocols** | 5 | 11 KB | Protocol execution |
-| **glycoengineering** | 3 | 6 KB | Glycoengineering design |
-| **systems_biology** | 6 | 34 KB | Network analysis, pathway simulation |
-| **tool_registry** | - | 3 KB | Tool discovery system |
+A general toolkit containing more than 200 functions across these 22 modules:
 
-**Total**: 1.8 MB of Python code
+`biochemistry`, `bioengineering`, `bioimaging`, `biophysics`,
+`cancer_biology`, `cell_biology`, `database`, `genetics`, `genomics`,
+`glycoengineering`, `immunology`, `lab_automation`, `literature`,
+`microbiology`, `molecular_biology`, `pathology`, `pharmacology`, `physiology`,
+`protocols`, `support_tools`, `synthetic_biology`, and `systems_biology`.
 
-### Supporting Data
+Coverage includes biomedical database access, pharmacology, genomics,
+bio-imaging, molecular biology, literature analysis, PyLabRobot documentation
+and script validation, Protocols.io access, and local protocol reading.
 
-- **schema_db**: 25+ pre-integrated database schemas
-- **tool_description**: Tool metadata and JSON schemas
+Both focused sgRNA functions (`design_knockout_sgrna` and
+`perform_crispr_cas9_genome_editing`) and all three single-cell annotation
+functions are also included in the relevant general modules. This duplication
+is intentional: each skill can be used independently. Keep both copies
+synchronized when modifying one of these functions.
+
+## Package Layout
+
+```text
+Biomni/
+├── package.toml
+├── README.md
+├── scripts/
+│   └── fetch_biomni_data.py
+└── skills/
+    ├── sgrna-design/
+    │   ├── SKILL.md
+    │   ├── assets/references/
+    │   └── tools/
+    ├── single-cell-annotation/
+    │   ├── SKILL.md
+    │   ├── assets/references/
+    │   └── tools/
+    └── biomedical-tools/
+        ├── SKILL.md
+        └── tools/
+            ├── *.py
+            ├── schema_db/
+            └── tool_description/
+```
+
+All three manifest components have `kind = "skill"`. Biomni has no profiles;
+loading the package selects all three skills.
+
+## Bundled and External Data
+
+The package bundles:
+
+- Python implementations for all included tools;
+- knowledge guides and reference documentation;
+- 33 database API schema caches under `schema_db/`;
+- Python tool-parameter descriptors under `tool_description/`.
+
+Large scientific datasets are not bundled. They include the sgRNA knockout
+libraries, CZI Census metadata, HPO ontology, TxGNN predictions, and DDInter
+tables required by specific functions.
+
+Download the files used by all three skills into a directory outside this
+package:
+
+```bash
+python Biomni/scripts/fetch_biomni_data.py --dest /absolute/path/to/biomni-data
+export BIOMNI_DATA_LAKE=/absolute/path/to/biomni-data
+```
+
+The default download contains the 14 files used by this package. To download
+only one skill's files or the full upstream data lake:
+
+```bash
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --skill sgrna-design
+
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --all
+```
+
+Functions that accept `data_lake_path` use that explicit path first and fall
+back to `BIOMNI_DATA_LAKE`. DDInter functions generate their pickle caches next
+to the downloaded CSV files on first use.
 
 ## Usage
 
-### Load All Resources (整包加载)
+Load all three skills through Magenta:
 
 ```bash
 magenta --harness-package Biomni
 ```
 
-Loads all **3 skills**. Each skill bundles its executable tools and reference
-data inside its own directory, so loading the skills brings the full toolkit
-with them:
-- `sgrna-design` — 2 tools + validated sgRNA library
-- `single-cell-annotation` — 3 tools + reference docs
-- `biomedical-tools` — 20+ Python modules (~248 functions) + database schemas
+Magenta loads each `SKILL.md` together with its bundled tools and references.
+The skill instructions describe which module and function to use for a task.
 
-**Package manifest**: 3 skill components (tools and data ship inside each skill).
-
-### Integration with Other Packages
-
-```bash
-# Full biomedical stack
-magenta --harness-package AutOmicScience --harness-package ClaudeScience --harness-package PantheonOS --harness-package Biomni
-
-# Genomics focus
-magenta --harness-package AutOmicScience --harness-package Biomni
-
-# Drug discovery
-magenta --harness-package Biomni  # pharmacology module included
-```
-
-## Unique Features
-
-### vs. Other Magenta Packages
-
-| Feature | Biomni | AutOmicScience | ClaudeScience | PantheonOS |
-|---------|--------|----------------|---------------|------------|
-| **Code Copy** | ✅ 1.8 MB | ✗ | ✗ | ✗ |
-| **Database APIs** | ✅ 45 functions | ✗ | ✗ | ✗ |
-| **Lab Automation** | ✅ 11 functions | ✗ | ✗ | ✗ |
-| **Drug Design** | ✅ 42 functions | ✗ | ✗ | ✗ |
-| **sgRNA Database** | ✅ 300+ sequences | ✗ | ✗ | ✗ |
-| **Python Functions** | ✅ ~248 | ✗ | ✗ | ✗ |
-| **Skills** | 3 | 11 | 32 | 16 |
-
-### Biomni's Strengths
-
-1. **Self-Contained** - All code copied locally, no external Biomni install needed
-2. **Database Coverage** - 45 functions for 25+ databases
-3. **Lab Automation** - Only package with robot control (Opentrons, Hamilton)
-4. **Drug Discovery** - Largest pharmacology toolkit (42 functions)
-5. **Validated Data** - 300+ experimental sgRNA sequences
-6. **Executable** - 248 ready-to-use Python functions
-
-## Architecture
-
-### File Structure
-
-```
-Biomni/
-├── package.toml              # Manifest (3 skill components)
-├── README.md                 # This file
-└── skills/                   # Each skill bundles its own tools + data
-    ├── sgrna-design/
-    │   ├── SKILL.md
-    │   └── tools/            # 2 executable tools + sgRNA library
-    ├── single-cell-annotation/
-    │   ├── SKILL.md
-    │   └── tools/            # 3 executable tools + references
-    └── biomedical-tools/
-        ├── SKILL.md
-        └── tools/            # ~1.8 MB Python: 20+ modules (~248 functions)
-            ├── database.py       # ~45 functions
-            ├── pharmacology.py   # ~42 functions
-            ├── genomics.py       # ~20 functions
-            ├── ... (20+ modules total)
-            ├── schema_db/        # Database schemas
-            └── tool_description/ # Tool metadata
-```
-
-### Component Types
-
-All three components are `kind = "skill"`. Executable Python tools and their
-supporting data live inside each skill's `tools/` directory rather than as
-separate manifest components, so selecting the skills is enough to load
-everything.
-
-### No Profiles
-
-Biomni uses **整包加载** (full package loading) - no selective profiles. All 3 skill components load together.
-
-## Using Biomni Tools
-
-### Direct Python Import
+The general modules can also be imported directly:
 
 ```python
-# Import Biomni modules directly
 import sys
-sys.path.append("Biomni/skills/biomedical-tools/tools")
 
-from database import query_pubmed, query_uniprot
-from pharmacology import predict_adme, predict_toxicity
-from genomics import annotate_variants
-from molecular_biology import design_pcr_primers
+sys.path.insert(0, "Biomni/skills/biomedical-tools/tools")
 
-# Use functions
-papers = query_pubmed("CRISPR")
-adme = predict_adme(compound_smiles)
-primers = design_pcr_primers(template, region)
+from literature import query_pubmed
+
+papers = query_pubmed("CRISPR gene editing", max_papers=10)
 ```
 
-### Through Magenta Harness
+Consult the implementation and its corresponding
+`tools/tool_description/<module>.py` descriptor for the current parameters and
+return format.
 
-When loaded via `--harness-package Biomni`, tools are available through Magenta's tool system.
+## Runtime Requirements
 
-## Requirements
+The tool code is bundled, but its third-party scientific dependencies are not.
+Requirements vary substantially by module and function. Representative
+dependencies include:
 
-### Minimal (Included)
+- common utilities: `numpy`, `pandas`, `requests`;
+- databases and literature: `biopython`, `beautifulsoup4`, `PyPDF2`, `pymed`,
+  `googlesearch-python`;
+- LLM-backed functions: `langchain-core`, `langchain-anthropic`, and
+  `ANTHROPIC_API_KEY`;
+- pharmacology: `rdkit`, `chembl-webresource-client`, `DeepPurpose`;
+- single-cell analysis: `scanpy`, `celltypist`, `scvi-tools`.
 
-- All Python code copied locally (1.8 MB)
-- No external Biomni installation needed
+Some functions additionally require external programs, containers, large model
+downloads, service credentials, or specialized environments. Read the relevant
+module and [`biomedical-tools/SKILL.md`](skills/biomedical-tools/SKILL.md) before
+running a function. Common configuration variables include:
 
-### Optional for Full Functionality
+- `BIOMNI_DATA_LAKE`;
+- `ANTHROPIC_API_KEY`;
+- `PROTOCOLS_IO_ACCESS_TOKEN` or `BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN`;
+- `BIOMNI_PROTOCOLS_DIR`;
+- `SYNAPSE_AUTH_TOKEN`.
 
-Some functions may require additional packages:
+## Upstream Adaptation
 
-```bash
-# Cheminformatics (pharmacology module)
-pip install rdkit chembl-webresource-client
+The bundled code is derived from the MIT-licensed Biomni tool modules and has
+been adapted to operate without the upstream `biomni` package. Local changes
+include:
 
-# Bioinformatics (genomics/molecular biology)
-pip install biopython primer3-py pysam
+- replacing upstream configuration and utility imports with local helpers;
+- using Claude Sonnet 5 for the included Anthropic-backed functions;
+- resolving external datasets through `BIOMNI_DATA_LAKE` or explicit paths;
+- preparing DDInter caches from downloaded CSV files;
+- making local protocol storage configurable with `BIOMNI_PROTOCOLS_DIR`;
+- removing the unused upstream tool registry and fixing copied integration
+  issues.
 
-# Lab automation
-pip install opentrons pyhamilton
-
-# Single-cell (for skill examples)
-pip install scanpy celltypist scvi-tools
-```
+Knowledge guides use CC BY 4.0. See each skill's frontmatter for its declared
+license and source information.
 
 ## Citation
 
-If using Biomni resources:
+If you use the bundled Biomni resources, cite the upstream project and its
+paper:
 
-**Biomni System**:
-```
+```text
 Biomni: A General-Purpose Biomedical AI Agent
 bioRxiv 2025.05.30.656746v1
 https://github.com/snap-stanford/Biomni
 ```
 
-**sgRNA Database**:
-- Cite original publications (PubMed IDs in database)
-- Acknowledge: "Validated sgRNA sequences obtained from Addgene"
+For sgRNA data and single-cell workflows, also follow the citations documented
+in the corresponding skill references.
 
-**Single-Cell Guide**:
-```
-Luecken, M.D., Theis, F.J. et al. (2023)
-Current best practices in single-cell RNA-seq analysis: a tutorial
-Molecular Systems Biology
-```
+## Related Packages
 
-## License
-
-- **Python Tools**: MIT License (from Biomni)
-- **Knowledge Guides**: CC BY 4.0
-- **Commercial Use**: ✅ Allowed with attribution
-
-## Migration Notes
-
-### From Original Biomni
-
-This package contains:
-- ✅ All 23 tool modules from `biomni/tool/`
-- ✅ All supporting data (`schema_db`, `tool_description`)
-- ✅ 2 knowledge guides from `biomni/know_how/`
-- ✗ Agent framework (not needed in Magenta context)
-- ✗ Task definitions (use Magenta's task system)
-
-### Code Attribution
-
-All Python code under `skills/biomedical-tools/tools/` is copied from:
-- **Source**: Stanford SNAP Lab Biomni
-- **Commit**: Based on Biomni v1.0 release
-- **License**: MIT License
-- **Modifications**: None - exact copy
-
-## Summary
-
-**Biomni package provides**:
-- 3 skills bundling executable tools:
-  - **sgrna-design**: 2 tools (design + simulation)
-  - **single-cell-annotation**: 3 tools (LLM, Panhuman, popV)
-  - **biomedical-tools**: 20+ Python modules (~248 functions)
-- 25+ database schemas
-- Self-contained: no dependency on an external Biomni install
-
-**Good for**: CRISPR experiments, single-cell analysis, drug discovery,
-database queries, lab automation, genomics, and molecular biology workflows.
-
-## See Also
-
-- [Packages overview](../README.md) — how packages load and how to combine them
-- [`AutOmicScience`](../AutOmicScience/) — grounded, tool-backed omics analysis (the reference package)
-- [`ClaudeScience`](../ClaudeScience/) — computational biology research skills by profile
-- [`PantheonOS`](../PantheonOS/) — bioinformatics workflow best practices
+- [AutOmicScience](../AutOmicScience/)
+- [ClaudeScience](../ClaudeScience/)
+- [PantheonOS](../PantheonOS/)

@@ -181,7 +181,23 @@ def run_autosite(pdb_file, output_dir, spacing=1.0):
 
 
 # Function to get TxGNN predictions and return a summarized string output
-def retrieve_topk_repurposing_drugs_from_disease_txgnn(disease_name, data_lake_path, k=5):
+def _resolve_data_lake(data_lake_path=None):
+    """Resolve the Biomni data lake directory.
+
+    Uses the explicit ``data_lake_path`` if given, else the ``BIOMNI_DATA_LAKE``
+    environment variable. Raises loudly (no silent default) if neither is set.
+    """
+    path = data_lake_path or os.environ.get("BIOMNI_DATA_LAKE")
+    if not path:
+        raise RuntimeError(
+            "Biomni data lake not configured: pass data_lake_path=... or set the "
+            "BIOMNI_DATA_LAKE environment variable. Download the files these tools "
+            "need with: python Biomni/scripts/fetch_biomni_data.py --dest <dir>"
+        )
+    return path
+
+
+def retrieve_topk_repurposing_drugs_from_disease_txgnn(disease_name, data_lake_path=None, k=5):
     """This function computes TxGNN model predictions for drug repurposing. It takes in the paths to the data,
     the disease name, and returns a summary of the top K predicted drugs with their sigmoid-transformed scores.
 
@@ -200,6 +216,7 @@ def retrieve_topk_repurposing_drugs_from_disease_txgnn(disease_name, data_lake_p
         return 1 / (1 + np.exp(-x))
 
     # Step 1: Load the mappings and prediction data from the provided paths
+    data_lake_path = _resolve_data_lake(data_lake_path)
     name_mapping_path = data_lake_path + "/txgnn_name_mapping.pkl"
     result_path = data_lake_path + "/txgnn_prediction.pkl"
 
@@ -2457,14 +2474,16 @@ def analyze_western_blot(
 # DDInter Drug-Drug Interaction Analysis Functions
 
 
-def _load_ddinter_data(data_lake_path):
+def _load_ddinter_data(data_lake_path=None):
     """
     Load DDInter datasets from pickle files, processing if needed.
 
     Parameters
     ----------
-    data_lake_path : str
-        Path to data lake directory containing DDInter pickle files
+    data_lake_path : str, optional
+        Directory containing the raw DDInter CSV files and generated pickle cache.
+        Defaults to ``BIOMNI_DATA_LAKE`` when the package does not bundle a
+        preprocessed DDInter cache.
 
     Returns
     -------
@@ -2474,18 +2493,26 @@ def _load_ddinter_data(data_lake_path):
     import os
     import pickle
 
-    # Define schema directory (following established pattern)
-    schema_dir = os.path.join(os.path.dirname(__file__), "schema_db")
+    filenames = (
+        "ddinter_drugs.pkl",
+        "ddinter_interactions.pkl",
+        "ddinter_name_mapping.pkl",
+    )
 
-    # Define paths to DDInter pickle files
-    drug_info_path = os.path.join(schema_dir, "ddinter_drugs.pkl")
-    interaction_path = os.path.join(schema_dir, "ddinter_interactions.pkl")
-    mapping_path = os.path.join(schema_dir, "ddinter_name_mapping.pkl")
+    # Prefer a cache bundled with the package when one exists. Otherwise resolve
+    # the external data lake and keep the generated cache beside the raw CSVs so
+    # an installed/read-only package is never modified at runtime.
+    bundled_dir = os.path.join(os.path.dirname(__file__), "schema_db")
+    bundled_files = [os.path.join(bundled_dir, name) for name in filenames]
+    if all(os.path.exists(path) for path in bundled_files):
+        cache_dir = bundled_dir
+    else:
+        cache_dir = _resolve_data_lake(data_lake_path)
+        cache_files = [os.path.join(cache_dir, name) for name in filenames]
+        if not all(os.path.exists(path) for path in cache_files):
+            _process_ddinter_data_inline(cache_dir, cache_dir)
 
-    # Check if processing is needed (lazy loading pattern)
-    pkl_files = [drug_info_path, interaction_path, mapping_path]
-    if not all(os.path.exists(f) for f in pkl_files):
-        _process_ddinter_data_inline(data_lake_path, schema_dir)
+    drug_info_path, interaction_path, mapping_path = [os.path.join(cache_dir, name) for name in filenames]
 
     # Load data
     try:
@@ -2825,11 +2852,6 @@ def query_drug_interactions(drug_names, interaction_types=None, severity_levels=
     log += "=" * 40 + "\n"
     log += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
 
-    # Handle default data lake path
-    if data_lake_path is None:
-        # Default path assuming standard Biomni structure
-        data_lake_path = os.path.join(os.path.dirname(__file__), "schema_db")
-
     log += "Query Parameters:\n"
     log += f"- Target drugs: {', '.join(drug_names)}\n"
     log += f"- Severity filter: {severity_levels if severity_levels else 'All levels'}\n"
@@ -2955,10 +2977,6 @@ def check_drug_combination_safety(drug_list, include_mechanisms=True, include_ma
     log = "Drug Combination Safety Analysis\n"
     log += "=" * 35 + "\n"
     log += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-
-    # Handle default data lake path
-    if data_lake_path is None:
-        data_lake_path = os.path.join(os.path.dirname(__file__), "schema_db")
 
     log += "Safety Analysis Parameters:\n"
     log += f"- Drug combination: {', '.join(drug_list)}\n"
@@ -3119,10 +3137,6 @@ def analyze_interaction_mechanisms(drug_pair, detailed_analysis=True, data_lake_
     log += "=" * 37 + "\n"
     log += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
 
-    # Handle default data lake path
-    if data_lake_path is None:
-        data_lake_path = os.path.join(os.path.dirname(__file__), "schema_db")
-
     drug_a, drug_b = drug_pair
     log += "Mechanism Analysis Parameters:\n"
     log += f"- Drug A: {drug_a}\n"
@@ -3276,10 +3290,6 @@ def find_alternative_drugs_ddinter(target_drug, contraindicated_drugs, therapeut
     log = "Alternative Drug Finder (DDInter)\n"
     log += "=" * 32 + "\n"
     log += f"Date: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n"
-
-    # Handle default data lake path
-    if data_lake_path is None:
-        data_lake_path = os.path.join(os.path.dirname(__file__), "schema_db")
 
     log += "Alternative Drug Search Parameters:\n"
     log += f"- Target drug: {target_drug}\n"

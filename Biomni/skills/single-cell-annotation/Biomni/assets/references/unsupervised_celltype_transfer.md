@@ -52,7 +52,9 @@ This function allows you to use different annotation methods: CELLTYPIST, KNN_BB
 ## Usage Example
 
 ```python
-from biomni.tool.genomics import unsupervised_celltype_transfer_between_scRNA_datasets
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")   # <SKILL_DIR> = this skill's directory (where SKILL.md lives)
+from unsupervised_celltype_transfer import unsupervised_celltype_transfer_between_scRNA_datasets
 
 # Basic usage with default SCANVI_POPV method
 result = unsupervised_celltype_transfer_between_scRNA_datasets(
@@ -133,7 +135,6 @@ result = unsupervised_celltype_transfer_between_scRNA_datasets(
 
 ## Dependencies
 
-- **biomni package**: Core framework
 - **popv**: Population-level variation framework for cell type annotation benchmarking
 - **scanpy**: AnnData I/O and preprocessing
 - **scvi-tools**: Variational inference models (scVI, scANVI) - installed with popV

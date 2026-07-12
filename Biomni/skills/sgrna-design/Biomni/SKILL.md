@@ -1,10 +1,10 @@
 ---
 name: sgrna-design
 description: >
-  CRISPR sgRNA design workflow using a three-tiered approach: validated sequences
-  from Addgene database (300+ sequences), CRISPick computational designs, or de novo
-  design tools. Use this skill when designing guide RNAs for CRISPR knockout experiments,
-  validating sgRNA sequences, or planning genome editing experiments.
+  CRISPR sgRNA design workflow using pre-computed ranked human and mouse libraries,
+  external design resources, and de novo design tools. Use this skill when designing
+  guide RNAs for CRISPR knockout experiments, evaluating sgRNA candidates, or planning
+  genome editing experiments.
 tags:
 - CRISPR
 - sgRNA
@@ -17,13 +17,13 @@ license: CC-BY-4.0
 
 # sgRNA Design Skill
 
-Comprehensive workflow for CRISPR sgRNA design using validated databases and computational tools.
+Comprehensive workflow for CRISPR sgRNA design using pre-computed libraries and computational tools.
 
 ## When to Use This Skill
 
 Use this skill when you need to:
 - Design guide RNAs for CRISPR knockout experiments
-- Find experimentally validated sgRNA sequences
+- Find ranked sgRNA candidates from pre-computed libraries
 - Compare different sgRNA design approaches
 - Plan CRISPR-Cas9 or Cas12a genome editing experiments
 
@@ -31,32 +31,33 @@ Use this skill when you need to:
 
 Always start with Tier 1 and proceed to subsequent tiers only if needed.
 
-### Tier 1: Validated sgRNA Sequences (Recommended First)
+### Tier 1: Pre-computed Ranked sgRNAs (Recommended First)
 
-**Approach**: Search experimentally validated sequences from published studies
+**Approach**: Search Biomni's pre-computed human or mouse knockout library.
 
 **When to use**:
-- Gene has been targeted before
-- Need high confidence in efficacy
-- Experimental validation is available
+- Target species is human or mouse
+- Need ranked candidates quickly
+- The target gene is covered by the downloaded library
 
 **Methods**:
-1. **Use Biomni tool** (fastest, 300+ sequences):
-   - See [tools/design_knockout_sgrna.md](assets/references/design_knockout_sgrna.md)
-   - Searches pre-computed library from Addgene
+1. **Use the bundled Biomni tool**:
+   - See [assets/references/design_knockout_sgrna.md](assets/references/design_knockout_sgrna.md)
+   - Searches the files distributed through Biomni's release data lake
 
-2. **Manual Addgene search**:
+2. **Check external experimental resources separately when validation evidence is needed**:
    - Visit: https://www.addgene.org/crispr/reference/grna-sequence/
-   - Filter by gene, CRISPR system, species
+   - Confirm the guide, publication, organism, and experimental context independently
 
-**Citation**: Always cite the original publication (PubMed ID in database)
+The bundled library does not itself establish Addgene provenance or experimental
+validation for every returned guide.
 
 ### Tier 2: CRISPick Computational Designs
 
 **Approach**: Use Broad Institute's CRISPick predictions
 
 **When to use**:
-- No validated sgRNAs available
+- No suitable pre-computed sgRNAs are available
 - Need multiple sgRNA options
 - Want predicted efficacy scores
 
@@ -86,7 +87,7 @@ Always start with Tier 1 and proceed to subsequent tiers only if needed.
 - Benchling: https://www.benchling.com/crispr
 - CCTop: https://crispr.cos.uni-heidelberg.de/
 
-See [tools/crispr_editing.md](assets/references/crispr_editing.md) for CRISPR editing simulation
+See [assets/references/crispr_editing.md](assets/references/crispr_editing.md) for CRISPR editing simulation
 
 ## Key Design Principles
 
@@ -130,7 +131,7 @@ See [tools/crispr_editing.md](assets/references/crispr_editing.md) for CRISPR ed
 ## Workflow Example
 
 ```
-1. Search Tier 1 (Validated)
+1. Search Tier 1 (pre-computed library)
    ↓ (if not found)
 2. Try Tier 2 (CRISPick)
    ↓ (if needed)
@@ -148,14 +149,29 @@ See [tools/crispr_editing.md](assets/references/crispr_editing.md) for CRISPR ed
 This skill includes executable tools for automated design:
 
 ### Tool 1: design_knockout_sgrna
-Search pre-computed sgRNA libraries (300+ validated sequences)
+Search pre-computed, ranked human or mouse sgRNA libraries
 
 **Reference**: [assets/references/design_knockout_sgrna.md](assets/references/design_knockout_sgrna.md)
 
-### Tool 2: perform_crispr_editing
+### Tool 2: perform_crispr_cas9_genome_editing
 Simulate CRISPR-Cas9 genome editing process
 
 **Reference**: [assets/references/crispr_editing.md](assets/references/crispr_editing.md)
+
+## Data Requirements
+
+The sgRNA libraries are not bundled with this skill. From the MagentaPackages
+repository root, download them to an external directory and configure that path:
+
+```bash
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --skill sgrna-design
+export BIOMNI_DATA_LAKE=/absolute/path/to/biomni-data
+```
+
+`design_knockout_sgrna` uses an explicit `data_lake_path` when supplied;
+otherwise it reads `BIOMNI_DATA_LAKE`.
 
 ## Troubleshooting
 
@@ -176,7 +192,7 @@ Simulate CRISPR-Cas9 genome editing process
 **Databases**:
 - Addgene: https://www.addgene.org/crispr/
 - CRISPick: https://portals.broadinstitute.org/gppx/crispick/
-- Biomni curated: 300+ validated sequences
+- Biomni release data lake: pre-computed human and mouse knockout libraries
 
 **Design Tools**:
 - CHOPCHOP: https://chopchop.cbu.uib.no/
@@ -191,5 +207,5 @@ Simulate CRISPR-Cas9 genome editing process
 
 If using Biomni tools:
 - Cite: Biomni bioRxiv 2025.05.30.656746v1
-- Acknowledge Addgene for validated sequences
+- Cite any external guide source or experimental publication actually used
 - License: CC BY 4.0

@@ -143,7 +143,8 @@ def read_function_source_code(function_name: str) -> str:
 
     Parameters
     ----------
-        function_name (str): Fully qualified function name (e.g., 'bioagentos.tool.support_tools.write_python_code')
+        function_name (str): Fully qualified "module.function" name (e.g., 'database.query_uniprot').
+            The module must be importable — add the skill's tools/ to sys.path first.
 
     Returns
     -------

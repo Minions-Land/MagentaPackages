@@ -340,7 +340,6 @@ class SegmentationTool:
             common_paths = [
                 "./models/nnUNet",
                 "~/nnUNet_results",
-                "~/biomni_models/nnUNet",
             ]
 
             for base_path in common_paths:

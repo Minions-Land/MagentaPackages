@@ -46,7 +46,9 @@ String containing detailed research log with:
 ## Usage Example
 
 ```python
-from biomni.tool.bioengineering import perform_crispr_cas9_genome_editing
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")   # <SKILL_DIR> = this skill's directory (where SKILL.md lives)
+from crispr_editing import perform_crispr_cas9_genome_editing
 
 # Single guide editing simulation
 guides = ["GACCCCCTCCACCCCGCCTC"]
@@ -247,7 +249,6 @@ print(result)
 
 ## Dependencies
 
-- **biomni** package
 - **random**: For outcome simulation
 - **datetime**: For logging
 - **os**: For file operations

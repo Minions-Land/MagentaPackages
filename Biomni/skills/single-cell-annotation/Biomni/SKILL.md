@@ -174,6 +174,22 @@ Multi-method consensus label transfer (popV)
 
 **Reference**: [assets/references/unsupervised_celltype_transfer.md](assets/references/unsupervised_celltype_transfer.md)
 
+## Data Requirements
+
+`annotate_celltype_scRNA` requires `czi_census_datasets_v4.parquet`, which is
+not bundled with this skill. From the MagentaPackages repository root:
+
+```bash
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --skill single-cell-annotation
+export BIOMNI_DATA_LAKE=/absolute/path/to/biomni-data
+```
+
+An explicit `data_lake_path` overrides `BIOMNI_DATA_LAKE`. The Panhuman and
+popV workflows have separate model, environment, and reference-data
+requirements described in their linked reference pages.
+
 ## Decision Tree
 
 ```

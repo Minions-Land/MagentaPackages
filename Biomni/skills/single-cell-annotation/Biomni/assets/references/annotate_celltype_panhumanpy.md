@@ -22,7 +22,9 @@ The Azimuth reference is a comprehensive neural network-based mapping tool train
 ## Usage Example
 
 ```python
-from biomni.tool.genomics import annotate_celltype_with_panhumanpy
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")   # <SKILL_DIR> = this skill's directory (where SKILL.md lives)
+from annotate_celltype_panhumanpy import annotate_celltype_with_panhumanpy
 
 # Basic annotation with default settings
 result = annotate_celltype_with_panhumanpy(
@@ -84,7 +86,6 @@ result = annotate_celltype_with_panhumanpy(
 
 ## Dependencies
 
-- **biomni package**: Core framework
 - **panhumanpy**: Panhuman Azimuth annotation package (installed in separate conda env)
 - **scanpy**: AnnData I/O operations
 - **pandas**: Metadata manipulation

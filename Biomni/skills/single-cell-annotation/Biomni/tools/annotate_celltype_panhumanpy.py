@@ -118,7 +118,7 @@ try:
             sys.exit(0)
         log.append("## Calculating UMAP")
         try:
-            azimuth.azimuth_umap()
+            umap_coords = azimuth.azimuth_umap()
             log.append("✓ Generated UMAP of ANN embeddings")
         except Exception as e:
             log.append(f"✗ Error generating UMAP: {{str(e)}}")
@@ -148,7 +148,7 @@ try:
             np.save(embeddings_file, embeddings)
             log.append(f"✓ Saved embeddings to: {{embeddings_file}}")
             umap_file = f"{output_dir}/ann_umap.npy"
-            np.save(umap_file, umap)
+            np.save(umap_file, umap_coords)
             log.append(f"✓ Saved UMAP to: {{umap_file}}")
         else:
             log.append("Skipped saving embeddings and UMAP (umap=False)")

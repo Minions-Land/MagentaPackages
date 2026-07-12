@@ -13,7 +13,7 @@ description = [
                 "type": "str",
             },
             {
-                "default": "claude-3-5-sonnet-20241022",
+                "default": "claude-sonnet-5",
                 "description": "Language model instance for cell type prediction",
                 "name": "llm",
                 "type": "str",
@@ -46,7 +46,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to the data lake",
+                "description": "Path to the Biomni data lake dir; optional, defaults to $BIOMNI_DATA_LAKE if omitted",
                 "name": "data_lake_path",
                 "type": "str",
             },

@@ -93,22 +93,33 @@ def perform_crispr_cas9_genome_editing(guide_rna_sequences, target_genomic_loci,
     # Step 3: Simulate CRISPR-Cas9 delivery
     log += "\nSTEP 3: CRISPR-Cas9 Delivery Simulation\n"
 
-    # Cell-specific delivery efficiencies (simplified model)
-    delivery_efficiencies = {
-        "hek293": 0.85,
-        "hela": 0.75,
-        "ipsc": 0.60,
-        "primary_neuron": 0.40,
-        "hematopoietic_stem_cell": 0.55,
-        "mouse_embryo": 0.70,
-        "plant_cell": 0.30,
+    # Cell-specific delivery efficiency + preferred method (simplified model;
+    # efficiency points fall within the ranges given in the reference guide).
+    delivery_profiles = {
+        "hek293": (0.85, "lipofection"),
+        "hek293t": (0.85, "lipofection"),
+        "hela": (0.75, "lipofection"),
+        "u2os": (0.72, "lipofection"),
+        "k562": (0.65, "electroporation"),
+        "jurkat": (0.60, "electroporation"),
+        "a549": (0.60, "electroporation"),
+        "ipsc": (0.45, "nucleofection"),
+        "primarytcell": (0.45, "nucleofection"),
+        "primaryneuron": (0.40, "nucleofection"),
+        "hematopoieticstemcell": (0.55, "nucleofection"),
+        "mouseembryo": (0.70, "microinjection"),
+        "plantcell": (0.30, "PEG-mediated transfection"),
     }
 
-    # Get delivery efficiency based on cell type (default to 0.5 if unknown)
-    cell_type_key = cell_tissue_type.lower().replace(" ", "_")
-    delivery_efficiency = delivery_efficiencies.get(cell_type_key, 0.5)
+    # Normalize the cell-type label (drop spaces/hyphens/underscores, tolerate a
+    # trailing plural) so documented names like "HEK293T", "iPSCs" and
+    # "primary T cells" resolve instead of silently falling to the default.
+    cell_type_key = cell_tissue_type.lower().replace(" ", "").replace("-", "").replace("_", "")
+    if cell_type_key not in delivery_profiles and cell_type_key.endswith("s"):
+        cell_type_key = cell_type_key[:-1]
+    delivery_efficiency, delivery_method = delivery_profiles.get(cell_type_key, (0.5, "lipofection"))
 
-    log += f"  Delivery method: Lipofection for {cell_tissue_type}\n"
+    log += f"  Delivery method: {delivery_method} for {cell_tissue_type}\n"
     log += f"  Estimated delivery efficiency: {delivery_efficiency * 100:.1f}%\n"
 
     # Step 4: Simulate genome editing
@@ -164,38 +175,3 @@ def perform_crispr_cas9_genome_editing(guide_rna_sequences, target_genomic_loci,
     log += f"  Expected success rate in cell population: {edit_success_rate * 100:.1f}%\n"
 
     return log
-
-
-def analyze_calcium_imaging_data(image_stack_path, output_dir="./"):
-    """Analyze calcium imaging data to quantify neuronal activity metrics.
-
-    This function processes fluorescence microscopy images of GCaMP-labeled neurons
-    to extract quantitative metrics of neuronal activity, including cell counts,
-    event rates, decay times, and signal-to-noise ratios.
-
-    Parameters
-    ----------
-    image_stack_path : str
-        Path to the time-series stack of fluorescence microscopy images (TIFF format)
-    output_dir : str, optional
-        Directory to save output files (default: "./")
-
-    Returns
-    -------
-    str
-        Research log summarizing the analysis steps and results
-
-    """
-    import os
-
-    import numpy as np
-    import pandas as pd
-    from scipy import ndimage, signal
-    from scipy.optimize import curve_fit
-    from skimage import feature, filters, io, measure, segmentation
-
-    # Create output directory if it doesn't exist
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Step 1: Load the image stack
-    log = "CALCIUM IMAGING ANALYSIS LOG\n"

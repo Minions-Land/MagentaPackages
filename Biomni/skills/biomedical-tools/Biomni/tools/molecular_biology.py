@@ -873,9 +873,25 @@ def find_sequence_mutations(query_sequence, reference_sequence, query_start=1):
     }
 
 
+def _resolve_data_lake(data_lake_path=None):
+    """Resolve the Biomni data lake directory.
+
+    Uses the explicit ``data_lake_path`` if given, else the ``BIOMNI_DATA_LAKE``
+    environment variable. Raises loudly (no silent default) if neither is set.
+    """
+    path = data_lake_path or os.environ.get("BIOMNI_DATA_LAKE")
+    if not path:
+        raise RuntimeError(
+            "Biomni data lake not configured: pass data_lake_path=... or set the "
+            "BIOMNI_DATA_LAKE environment variable. Download the files these tools "
+            "need with: python Biomni/scripts/fetch_biomni_data.py --dest <dir>"
+        )
+    return path
+
+
 def design_knockout_sgrna(
     gene_name: str,
-    data_lake_path: str,
+    data_lake_path: str = None,
     species: str = "human",
     num_guides: int = 1,
 ) -> dict[str, Any]:
@@ -884,6 +900,8 @@ def design_knockout_sgrna(
 
     Args:
         gene_name (str): Target gene symbol/name (e.g., "EGFR", "TP53")
+        data_lake_path (str): Path to the directory holding the pre-computed sgRNA
+            libraries (sgRNA_KO_SP_human.txt / sgRNA_KO_SP_mouse.txt)
         species (str): Target organism species (default: "human")
         num_guides (int): Number of guides to return (default: 1)
 
@@ -895,12 +913,13 @@ def design_knockout_sgrna(
             - guides: List of sgRNA sequences
 
     """
+    data_lake_path = _resolve_data_lake(data_lake_path)
     DEFAULT_LIBRARIES = {
         "human": data_lake_path + "/sgRNA_KO_SP_human.txt",
         "mouse": data_lake_path + "/sgRNA_KO_SP_mouse.txt",
     }
 
-    # Use fixed library pathAdd commentMore actions
+    # Resolve the library file path for the requested species
     library_path = DEFAULT_LIBRARIES[species.lower()]
 
     # Check if library file exists
@@ -909,7 +928,7 @@ def design_knockout_sgrna(
         error_msg += "\n\nThis error typically occurs when the datalake files are not available."
         raise FileNotFoundError(error_msg)
 
-    # Load sgRNA library from S3
+    # Load the sgRNA library (local tab-delimited file)
     try:
         df = pd.read_csv(library_path, delimiter="\t")
     except Exception as e:

@@ -285,7 +285,7 @@ description = [
             },
             {
                 "default": None,
-                "description": "Path to the data lake",
+                "description": "Path to the Biomni data lake dir; optional, defaults to $BIOMNI_DATA_LAKE if omitted",
                 "name": "data_lake_path",
                 "type": "str",
             },

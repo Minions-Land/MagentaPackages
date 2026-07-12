@@ -10,20 +10,19 @@ from typing import Any
 
 import requests
 
-try:
-    # Optional import to read from central config if available
-    from biomni.config import default_config  # type: ignore
-except Exception:
-    default_config = None  # fallback if import fails
-
 
 # API Configuration
 PROTOCOLS_IO_API_BASE = "https://www.protocols.io/api/v3"
 
-# Resolve access token from env or config (no hardcoded defaults)
-ACCESS_TOKEN = os.getenv("PROTOCOLS_IO_ACCESS_TOKEN") or os.getenv("BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN")
-if not ACCESS_TOKEN and default_config is not None:
-    ACCESS_TOKEN = getattr(default_config, "protocols_io_access_token", None)
+def _get_access_token() -> str:
+    """Read the protocols.io token from the environment at call time."""
+    token = os.getenv("PROTOCOLS_IO_ACCESS_TOKEN") or os.getenv("BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN")
+    if not token:
+        raise ValueError(
+            "Protocols.io access token is not configured. Set PROTOCOLS_IO_ACCESS_TOKEN "
+            "or BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN."
+        )
+    return token
 
 
 def search_protocols(
@@ -47,23 +46,19 @@ def search_protocols(
         ValueError: If invalid parameters are provided
 
     Example:
-        >>> results = search_protocols("CRISPR gene editing", page_size=5)
+        >>> results = search_protocols("CRISPR gene editing")
         >>> for protocol in results["protocols"]:
         ...     print(f"{protocol['title']}: {protocol['url']}")
     """
     # Validate parameters
     if not query or not query.strip():
         raise ValueError("Query cannot be empty")
-    # Ensure access token is configured
-    if not ACCESS_TOKEN:
-        raise ValueError(
-            "Protocols.io access token is not configured. Set PROTOCOLS_IO_ACCESS_TOKEN or BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN env var, or configure BiomniConfig.protocols_io_access_token."
-        )
+    access_token = _get_access_token()
 
     # Construct API request
-    url = "https://www.protocols.io/api/v3/protocols"
+    url = f"{PROTOCOLS_IO_API_BASE}/protocols"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
     # Prepare search query - wrap in quotes for exact match if requested
     search_key = query.strip()
@@ -145,15 +140,11 @@ def get_protocol_details(protocol_id: int, timeout: int = 30) -> dict[str, Any]:
     Raises:
         requests.RequestException: If API request fails
     """
-    # Ensure access token is configured
-    if not ACCESS_TOKEN:
-        raise ValueError(
-            "Protocols.io access token is not configured. Set PROTOCOLS_IO_ACCESS_TOKEN or BIOMNI_PROTOCOLS_IO_ACCESS_TOKEN env var, or configure BiomniConfig.protocols_io_access_token."
-        )
+    access_token = _get_access_token()
 
-    url = f"https://www.protocols.io/api/v3/protocols/{protocol_id}"
+    url = f"{PROTOCOLS_IO_API_BASE}/protocols/{protocol_id}"
 
-    headers = {"Authorization": f"Bearer {ACCESS_TOKEN}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json"}
 
     try:
         response = requests.get(url, headers=headers, timeout=timeout)
@@ -171,15 +162,24 @@ def get_protocol_details(protocol_id: int, timeout: int = 30) -> dict[str, Any]:
 
 
 def _get_protocols_directory():
-    """Get the path to the local protocols directory."""
-    import biomni
+    """Resolve the local protocols data directory (self-contained; no biomni dependency).
 
-    return os.path.join(os.path.dirname(biomni.__file__), "tool", "protocols")
+    Reads the ``BIOMNI_PROTOCOLS_DIR`` environment variable, which must point at a
+    directory containing per-source subdirs (e.g. ``addgene/``, ``thermofisher/``) of
+    ``.txt`` protocol files. Raises if it is not configured.
+    """
+    resolved = os.getenv("BIOMNI_PROTOCOLS_DIR")
+    if not resolved:
+        raise ValueError(
+            "Local protocols directory is not configured. Set the BIOMNI_PROTOCOLS_DIR "
+            "environment variable to a directory of protocol files (per-source subdirs of .txt)."
+        )
+    return resolved
 
 
 def list_local_protocols(source: str | None = None) -> dict[str, Any]:
     """
-    List available protocol files in the local biomni/tool/protocols/ directory.
+    List available protocol files in the configured protocols directory (BIOMNI_PROTOCOLS_DIR).
 
     Args:
         source: Optional filter by source directory (e.g., 'addgene' or 'thermofisher').
@@ -242,7 +242,7 @@ def list_local_protocols(source: str | None = None) -> dict[str, Any]:
 
 def read_local_protocol(filename: str, source: str | None = None) -> dict[str, Any]:
     """
-    Read the contents of a local protocol file from biomni/tool/protocols/.
+    Read the contents of a local protocol file from the configured protocols directory (BIOMNI_PROTOCOLS_DIR).
 
     Args:
         filename: Name of the protocol file (e.g., 'Addgene_ Protocol - How to Run an Agarose Gel.txt')

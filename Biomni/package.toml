@@ -10,13 +10,14 @@ source = "Biomni"
 # HCP-isomorphic layout: each skill at <skill>/<source>/HcpMagnet.ts
 default_profiles = []
 
-# === Components ===
+# === Knowledge Guide Skills with Tools ===
 
 [[components]]
 kind = "skill"
 name = "sgrna-design"
 source = "Biomni"
 path = "skills/sgrna-design/Biomni"
+description = "CRISPR sgRNA design guide with pre-computed human and mouse libraries and automated design tools"
 include_in_context = false
 
 [[components]]
@@ -24,6 +25,7 @@ kind = "skill"
 name = "single-cell-annotation"
 source = "Biomni"
 path = "skills/single-cell-annotation/Biomni"
+description = "Single-cell RNA-seq cell type annotation with automated tools"
 include_in_context = false
 
 [[components]]
@@ -31,4 +33,5 @@ kind = "skill"
 name = "biomedical-tools"
 source = "Biomni"
 path = "skills/biomedical-tools/Biomni"
+description = "General biomedical research tools covering database queries, drug discovery, genomics, imaging, and lab automation"
 include_in_context = false

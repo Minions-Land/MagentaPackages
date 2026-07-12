@@ -13,26 +13,42 @@ This tool combines marker gene analysis with LLM reasoning to assign cell type l
 - **adata_filename** (str): Name of the AnnData file containing scRNA-seq data
 - **data_dir** (str): Directory containing the data files
 - **data_info** (str): Information about the scRNA-seq data (e.g., "homo sapiens, brain tissue, normal")
-- **data_lake_path** (str): Path to the data lake (used to access CZI Census cell type ontology)
 
 ### Optional
 
+- **data_lake_path** (str): Directory containing `czi_census_datasets_v4.parquet`.
+  When omitted, the tool uses `BIOMNI_DATA_LAKE`.
 - **cluster** (str): Default `"leiden"`. Clustering method to use for cell type annotation
-- **llm** (str): Default `"claude-3-5-sonnet-20241022"`. Language model instance for cell type prediction (e.g., 'claude-3-haiku-20240307')
+- **llm** (str): Default `"claude-sonnet-5"`. Anthropic model ID for cell type prediction.
 - **composition** (pd.DataFrame): Default `None`. Transferred cell type composition for each cluster (optional reference information from label transfer)
+
+## Data Setup
+
+The CZI Census metadata file is not bundled with this skill. From the
+MagentaPackages repository root, download it and configure the data-lake path:
+
+```bash
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --skill single-cell-annotation
+export BIOMNI_DATA_LAKE=/absolute/path/to/biomni-data
+```
+
+An explicit `data_lake_path` overrides the environment variable.
 
 ## Usage Example
 
 ```python
-from biomni.tool.genomics import annotate_celltype_scRNA
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")   # <SKILL_DIR> = this skill's directory (where SKILL.md lives)
+from annotate_celltype_scrna import annotate_celltype_scRNA
 
 # Basic annotation without reference composition
 result = annotate_celltype_scRNA(
     adata_filename="preprocessed_data.h5ad",
     data_dir="./data",
     data_info="homo sapiens, brain tissue, normal",
-    data_lake_path="/path/to/data_lake",
-    llm="claude-3-5-sonnet-20241022"
+    llm="claude-sonnet-5"
 )
 
 # With transferred cell type composition from reference
@@ -45,7 +61,7 @@ result = annotate_celltype_scRNA(
     data_info="homo sapiens, brain tissue, healthy adult",
     data_lake_path="/path/to/data_lake",
     cluster="leiden",
-    llm="claude-3-5-sonnet-20241022",
+    llm="claude-sonnet-5",
     composition=composition_df
 )
 ```
@@ -80,12 +96,11 @@ result = annotate_celltype_scRNA(
 
 ## Dependencies
 
-- **biomni package**: Core framework
 - **scanpy**: Single-cell analysis and marker gene identification
 - **pandas**: Data manipulation for composition dataframes
 - **numpy**: Numerical operations for filtering marker genes
 - **langchain_core.prompts**: LLM prompt templating
-- **biomni.llm.get_llm**: LLM instance retrieval
+- **get_llm** (local helper): LLM instance retrieval via langchain_anthropic
 
 ## Returns
 
@@ -113,7 +128,8 @@ The annotated AnnData object contains:
 
 ## Limitations
 
-- Requires CZI Census dataset at `{data_lake_path}/czi_census_datasets_v4.parquet`
+- Requires `czi_census_datasets_v4.parquet` in the explicit `data_lake_path`
+  or the directory configured by `BIOMNI_DATA_LAKE`
 - Limited to cell types present in Cell Ontology
 - LLM predictions may require manual validation
 - Composition information only trusted when proportion > 0.5

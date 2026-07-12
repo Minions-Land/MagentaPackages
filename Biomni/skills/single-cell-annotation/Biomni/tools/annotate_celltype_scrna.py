@@ -1,10 +1,55 @@
+import os
+
+import numpy as np
+import pandas as pd
+import scanpy as sc
+
+
+def get_llm(model: str | None = None, temperature: float | None = None, api_key: str | None = None):
+    """Return a LangChain Anthropic chat model (self-contained, no biomni dependency).
+
+    Defaults to Claude Sonnet 5 and omits sampling parameters, which Sonnet 5
+    rejects when set to non-default values. ``api_key`` falls back to the
+    ``ANTHROPIC_API_KEY`` environment variable.
+    """
+    from langchain_anthropic import ChatAnthropic
+
+    resolved_model = model or "claude-sonnet-5"
+    kwargs = {
+        "model": resolved_model,
+        "max_tokens": 8192,
+        "api_key": api_key or os.getenv("ANTHROPIC_API_KEY"),
+    }
+    if temperature is not None:
+        if resolved_model == "claude-sonnet-5":
+            raise ValueError("Claude Sonnet 5 does not accept a non-default temperature; pass temperature=None")
+        kwargs["temperature"] = temperature
+    return ChatAnthropic(**kwargs)
+
+
+def _resolve_data_lake(data_lake_path=None):
+    """Resolve the Biomni data lake directory.
+
+    Uses the explicit ``data_lake_path`` if given, else the ``BIOMNI_DATA_LAKE``
+    environment variable. Raises loudly (no silent default) if neither is set.
+    """
+    path = data_lake_path or os.environ.get("BIOMNI_DATA_LAKE")
+    if not path:
+        raise RuntimeError(
+            "Biomni data lake not configured: pass data_lake_path=... or set the "
+            "BIOMNI_DATA_LAKE environment variable. Download the files these tools "
+            "need with: python Biomni/scripts/fetch_biomni_data.py --dest <dir>"
+        )
+    return path
+
+
 def annotate_celltype_scRNA(
     adata_filename,
     data_dir,
     data_info,
-    data_lake_path,
+    data_lake_path=None,
     cluster="leiden",
-    llm="claude-3-5-sonnet-20241022",
+    llm="claude-sonnet-5",
     composition=None,
 ):
     """Annotate cell types based on gene markers and transferred labels using LLM.
@@ -17,7 +62,7 @@ def annotate_celltype_scRNA(
     - data_dir (str): Directory containing the data files
     - data_info (str): Information about the scRNA-seq data (e.g., "homo sapiens, brain tissue, normal")
     - data_lake_path (str): Path to the data lake
-    - llm (str): Language model instance for cell type prediction, such as 'claude-3-haiku-20240307'
+    - llm (str): Anthropic model ID for cell type prediction (default: 'claude-sonnet-5')
     - composition (pd.DataFrame, optional): Transferred cell type composition for each cluster
     Returns:
     - str: Steps performed and file paths where results were saved
@@ -61,6 +106,7 @@ def annotate_celltype_scRNA(
         markers[i] = list(np.array(gene_names)[np.array(gene_scores) > 0])
 
     # TODO: this can be optimized
+    data_lake_path = _resolve_data_lake(data_lake_path)
     czi_celltype_path = data_lake_path + "/czi_census_datasets_v4.parquet"
     df = pd.read_parquet(czi_celltype_path)
     czi_celltype_set = {cell_type.strip() for cell_types in df["cell_type"] for cell_type in str(cell_types).split(";")}

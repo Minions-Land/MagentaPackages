@@ -17,7 +17,7 @@ license: MIT
 
 # Biomedical Research Tools
 
-Comprehensive toolkit of 243 biomedical research functions from Biomni covering database access, computational analysis, and lab automation.
+Comprehensive toolkit of biomedical research functions from Biomni covering database access, computational analysis, and lab automation. This page is a **domain map** — for the exact, current function list and parameters, read `tools/tool_description/<module>.py` (the authoritative, code-synced descriptors).
 
 ## When to Use This Skill
 
@@ -30,10 +30,9 @@ Use this skill when you need to:
 
 ## Tool Categories
 
-### Database & Information (53 functions)
+### Database & Information
 
-**Database queries** (45 functions in `database` module):
-- PubMed literature search
+**Database queries** (`database` module):
 - UniProt protein information
 - KEGG pathway data
 - STRING protein interactions
@@ -41,24 +40,30 @@ Use this skill when you need to:
 - Ensembl, NCBI, PDB structure data
 - And 20+ more databases
 
-**Literature analysis** (8 functions in `literature` module):
-- Scientific paper search and analysis
+**Literature analysis** (`literature` module):
+- PubMed / scientific paper search and analysis
 
-**Usage**: Requires `pip install biomni`
+**Invocation**: Tools are bundled as self-contained modules in this skill's `tools/`
+directory (no `pip install biomni`). Add `tools/` to `sys.path` once, then import each
+tool by its module name. `<SKILL_DIR>` = this skill's directory (where SKILL.md lives).
 
 ```python
-from biomni.tool.database import query_pubmed, query_uniprot
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")   # once per session
+
+from literature import query_pubmed
+from database import query_uniprot
 
 # Search literature
-papers = query_pubmed("CRISPR gene editing", max_results=10)
+papers = query_pubmed("CRISPR gene editing", max_papers=10)
 
 # Get protein info
 protein = query_uniprot(prompt="Find information about human insulin")
 ```
 
-### Drug Discovery (42 functions)
+### Drug Discovery
 
-**Pharmacology** (42 functions in `pharmacology` module):
+**Pharmacology** (`pharmacology` module):
 - ADME property prediction
 - Toxicity assessment
 - Molecular docking (AutoDock Vina, DiffDock)
@@ -67,7 +72,7 @@ protein = query_uniprot(prompt="Find information about human insulin")
 - Physicochemical property calculation
 
 ```python
-from biomni.tool.pharmacology import predict_admet_properties, docking_autodock_vina
+from pharmacology import predict_admet_properties, docking_autodock_vina
 
 # Predict ADME
 results = predict_admet_properties(
@@ -84,32 +89,30 @@ docking = docking_autodock_vina(
 )
 ```
 
-### Genomics & Genetics (28 functions)
+### Genomics & Genetics
 
-**Genomics** (20 functions in `genomics` module - excluding cell annotation):
-- Variant calling and annotation
-- Sequence alignment
-- Coverage calculation
-- Genome comparison
+**Genomics** (`genomics` module):
+- Single-cell RNA-seq embeddings (scVI, Harmony, UCE, ESM, transcriptformer)
+- Cell-type annotation & cross-dataset label transfer
+- Gene-set enrichment analysis
+- ChIP-seq peak calling (MACS2) & motif discovery (HOMER)
+- Chromatin-interaction & comparative-genomics analysis
 
-**Genetics** (8 functions in `genetics` module):
-- GWAS analysis
-- Linkage analysis
-- Population genetics
+**Genetics** (`genetics` module):
+- Statistical genetics: Bayesian fine-mapping, genomic prediction
+- Population genetics: demographic-history simulation
+- Coordinate liftover, TF-binding-site & phylogeny analysis
 
 ```python
-from biomni.tool.genomics import annotate_variants, align_sequences
+from genomics import get_rna_seq_archs4
 
-# Annotate variants
-variants = annotate_variants(
-    vcf_file="variants.vcf",
-    genome_version="hg38"
-)
+# Retrieve genes co-expressed with a query gene (ARCHS4)
+result = get_rna_seq_archs4(gene_name="TP53", K=10)
 ```
 
-### Molecular Biology (23 functions)
+### Molecular Biology
 
-**Molecular biology** (18 functions - excluding sgRNA design):
+**Molecular biology** (`molecular_biology` module):
 - PCR primer design
 - Plasmid annotation
 - Restriction enzyme analysis
@@ -117,169 +120,169 @@ variants = annotate_variants(
 - Sequence mutations
 
 ```python
-from biomni.tool.molecular_biology import design_primer, pcr_simple
+from molecular_biology import design_primer, pcr_simple
 
-# Design primers
+# Design primers around a target position
 primers = design_primer(
-    template_sequence="ATGCGATCG...",
-    target_tm=60
+    sequence="ATGCGATCG...",
+    start_pos=100,
 )
 
 # Simulate PCR
 pcr_result = pcr_simple(
     sequence="ATGC...",
     forward_primer="ATGC",
-    reverse_primer="GCAT"
+    reverse_primer="GCAT",
 )
 ```
 
-### Bio-Imaging & Pathology (20 functions)
+### Bio-Imaging & Pathology
 
-**Bio-imaging** (10 functions):
-- Cell segmentation (Cellpose, SAM, StarDist)
-- Image quantification
-- Microscopy data processing
+**Bio-imaging** (`bioimaging` module):
+- Medical image segmentation (nnU-Net)
+- Image registration (rigid / affine / deformable)
+- Image preprocessing & similarity metrics
 
-**Pathology** (6 functions):
+**Pathology** (`pathology` module):
 - Pathology image analysis
 - Tissue quantification
 
-**Cell biology** (4 functions):
+**Cell biology** (`cell_biology` module):
 - Cell-based assays
 
 ```python
-from biomni.tool.bioimaging import analyze_pixel_distribution, find_roi_from_image
+from bioimaging import calculate_similarity_metrics
 
-# Analyze image
-stats = analyze_pixel_distribution("cell_image.png")
-
-# Find regions of interest
-rois = find_roi_from_image(
-    image_path="tissue.tif",
-    threshold=0.5
+# Compare two medical images (e.g., before/after registration)
+metrics = calculate_similarity_metrics(
+    image1_path="fixed.nii.gz",
+    image2_path="moving.nii.gz",
 )
 ```
 
-### Lab Automation (11 functions)
+### Lab Automation
 
-**Lab automation** (11 functions):
-- Liquid handling robot control
-- Plate layout optimization
-- Worklist generation
-- Protocol automation
+**Lab automation** (`lab_automation` module):
+- PyLabRobot liquid-handling documentation
+- PyLabRobot materials documentation
+- PyLabRobot script validation & testing
 
 ```python
-from biomni.tool.lab_automation import optimize_plate_layout, generate_worklist
+from lab_automation import get_pylabrobot_documentation_liquid
 
-# Optimize plate design
-layout = optimize_plate_layout(
-    samples=["A", "B", "C"],
-    replicates=3,
-    controls=["pos", "neg"],
-    plate_format=96
-)
+# Retrieve PyLabRobot liquid-handling documentation
+docs = get_pylabrobot_documentation_liquid()
 ```
 
-### Immunology & Microbiology (20 functions)
+### Immunology & Microbiology
 
-**Immunology** (9 functions):
+**Immunology** (`immunology` module):
 - Antibody design
 - Immune repertoire analysis
 
-**Microbiology** (11 functions):
+**Microbiology** (`microbiology` module):
 - Microbiome analysis
 - Metagenomics
 
-### Cancer & Systems Biology (11 functions)
+### Cancer & Systems Biology
 
-**Cancer biology** (5 functions):
+**Cancer biology** (`cancer_biology` module):
 - Somatic mutation analysis
 - Structural variant detection
 - Copy number analysis
 
-**Systems biology** (6 functions):
+**Systems biology** (`systems_biology` module):
 - Network analysis
 - Pathway simulation
 
-### Physiology & Biochemistry (15 functions)
+### Physiology & Biochemistry
 
-**Physiology** (10 functions):
+**Physiology** (`physiology` module):
 - Physiological modeling
 
-**Biochemistry** (5 functions):
+**Biochemistry** (`biochemistry` module):
 - Protein analysis
 - Enzyme kinetics
 
-### Synthetic Biology & Bioengineering (16 functions)
+### Synthetic Biology & Bioengineering
 
-**Synthetic biology** (7 functions):
+**Synthetic biology** (`synthetic_biology` module):
 - Genetic circuit design
 - Metabolic engineering
 
-**Bioengineering** (6 functions - excluding CRISPR editing):
+**Bioengineering** (`bioengineering` module):
 - Tissue engineering
 - Biomaterial design
 
-**Biophysics** (2 functions):
+**Biophysics** (`biophysics` module):
 - Biophysical calculations
 
-**Glycoengineering** (3 functions):
+**Glycoengineering** (`glycoengineering` module):
 - Glycan structure analysis
 
-### Protocols & Support (12 functions)
+### Protocols & Support
 
-**Protocols** (5 functions):
+**Protocols** (`protocols` module):
 - Standard lab protocols
 
-**Support tools** (7 functions):
+**Support tools** (`support_tools` module):
 - Utility functions
 
 ## Installation
 
-All tools require Biomni package:
+These tools are bundled with this skill — **no `pip install biomni` required**. They do
+need their scientific dependencies available in the runtime environment (e.g. `scanpy`,
+`pandas`, `requests`, `biopython`; LLM-backed tools additionally need `langchain-anthropic`
+and an `ANTHROPIC_API_KEY`). Check a module's imports for its specific requirements.
 
-```bash
-pip install biomni
-```
-
-Some tools may require additional dependencies. See Biomni documentation for details.
+Some tools have heavier, tool-specific requirements you must provision yourself: external
+CLIs (e.g. `gatk`, `bwa`, `macs2`, `snpEff`, `prokka`, `iqtree`, `synapse`), Docker + a GPU
+(DiffDock docking), a `conda` environment (panhumanpy), or large model downloads (~25 GB for
+SE-600M). A few tools also read tokens/paths from the environment:
+`BIOMNI_DATA_LAKE`, `SYNAPSE_AUTH_TOKEN`, `PROTOCOLS_IO_ACCESS_TOKEN`,
+`BIOMNI_PROTOCOLS_DIR`.
 
 ## Tool Organization
 
-Tools are organized by domain in Biomni source:
+Tools are bundled as self-contained modules in this skill's `tools/` directory:
 
-- `biomni.tool.database` - Database queries
-- `biomni.tool.pharmacology` - Drug discovery
-- `biomni.tool.genomics` - Genomics analysis
-- `biomni.tool.molecular_biology` - Molecular biology
-- `biomni.tool.bioimaging` - Image analysis
-- `biomni.tool.lab_automation` - Lab automation
-- And 15 more modules...
+- `tools/database.py` - Database queries
+- `tools/pharmacology.py` - Drug discovery
+- `tools/genomics.py` - Genomics analysis
+- `tools/molecular_biology.py` - Molecular biology
+- `tools/bioimaging.py` - Image analysis
+- `tools/lab_automation.py` - Lab automation
+- And 16 more modules...
 
 ## Finding Tools
 
 **By domain**: See sections above
 
-**By function name**: Check Biomni documentation at https://github.com/snap-stanford/Biomni
+**By exact parameters**: This skill bundles machine-readable tool schemas at
+`tools/tool_description/<module>.py` — one entry per function with its name,
+description, and required/optional parameters (name, type, default). Read the
+matching module file before calling a tool to get exact parameter names and defaults.
 
-**Tool descriptions**: Biomni includes detailed parameter descriptions in `tool_description/` directory
+**Upstream reference**: https://github.com/snap-stanford/Biomni
 
 ## Usage Pattern
 
-General pattern for using Biomni tools:
+General pattern for using these bundled tools:
 
 ```python
-# 1. Import the tool
-from biomni.tool.{module} import {function_name}
+# 1. Put this skill's tools/ on sys.path (once), then import the tool by module name
+import sys
+sys.path.insert(0, "<SKILL_DIR>/tools")
+from {module} import {function_name}
 
-# 2. Prepare parameters (see tool description)
+# 2. Prepare parameters (see tools/tool_description/{module}.py for exact params)
 params = {
     "required_param": "value",
     "optional_param": "value"
 }
 
 # 3. Call the function
-result = function_name(**params)
+result = {function_name}(**params)
 
 # 4. Process results
 print(result)
@@ -287,15 +290,22 @@ print(result)
 
 ## Data Requirements
 
-Some tools require Biomni data lake (~11GB):
+Some tools need external data files such as `hp.obo`,
+`czi_census_datasets_v4.parquet`, `sgRNA_KO_SP_*.txt`, TxGNN predictions, or
+DDInter tables. These files are not bundled or auto-downloaded by the tools.
 
-```python
-# Download on first run
-from biomni.agent import A1
+From the MagentaPackages repository root, fetch the files used by this skill:
 
-agent = A1(path='./data', llm='claude-sonnet-4')
-# Data lake downloads automatically
+```bash
+python Biomni/scripts/fetch_biomni_data.py \
+  --dest /absolute/path/to/biomni-data \
+  --skill biomedical-tools
+export BIOMNI_DATA_LAKE=/absolute/path/to/biomni-data
 ```
+
+Functions that accept `data_lake_path` use that explicit path first and fall
+back to `BIOMNI_DATA_LAKE`. DDInter functions prepare their pickle caches next
+to the downloaded CSV files on first use.
 
 ## Resources
 
@@ -305,8 +315,8 @@ agent = A1(path='./data', llm='claude-sonnet-4')
 - Web UI: https://biomni.stanford.edu
 
 **Tool Descriptions**:
-- Complete parameter docs in `biomni/tool/tool_description/`
-- 23 modules with full API schemas
+- Machine-readable parameter schemas bundled in this skill at `tools/tool_description/`
+- 22 modules with full API schemas
 
 ## Citation
 

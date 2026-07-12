@@ -33,7 +33,7 @@ description = [
         ],
     },
     {
-        "description": "List available protocol files in the local biomni/tool/protocols/ directory. Includes protocols from Addgene and Thermo Fisher Scientific.",
+        "description": "List protocol files under the directory configured by BIOMNI_PROTOCOLS_DIR, optionally filtered by source subdirectory.",
         "name": "list_local_protocols",
         "optional_parameters": [
             {
@@ -46,7 +46,7 @@ description = [
         "required_parameters": [],
     },
     {
-        "description": "Read the contents of a local protocol file from biomni/tool/protocols/. Use list_local_protocols() first to find available protocol filenames.",
+        "description": "Read a protocol file from the directory configured by BIOMNI_PROTOCOLS_DIR. Use list_local_protocols() first to discover filenames and source subdirectories.",
         "name": "read_local_protocol",
         "optional_parameters": [
             {
