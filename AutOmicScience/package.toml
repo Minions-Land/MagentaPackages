@@ -1,15 +1,26 @@
-schema_version = "magenta.package.v1"
+schema_version = "magenta.package.v2"
 id = "AutOmicScience"
 name = "AutOmicScience"
+version = "1.0.0"
 kind = "domain"
 domain = "bioinformatics"
 description = "Single-cell and spatial omics harness package migrated from AOSE optimize_omics."
 
+# === HCP-isomorphic layout (schema v2) ===
+# This package is an externalized slice of the Magenta3 HarnessComponentProtocol
+# tree. Every contributed component lives at <module>/<source>/ with a real
+# HcpMagnet.ts beside its descriptor/content, exactly like the host's
+# tools/write/magenta/HcpMagnet.ts. The single source here is the package name
+# ("AutOmicScience"); a merge package would add sibling <module>/<other-source>/
+# dirs, each with its own HcpMagnet. The runtime magnet loader resolves
+# `<component.path>/HcpMagnet.ts`, imports it, validates the bare-class shape
+# (static build + module/kind/source + toTool|toCapability|toResource), and
+# registers it into the same HcpClient as built-in magnets.
+source = "AutOmicScience"
+
 # Empty = no default narrowing: `--harness-package AutOmicScience` loads every
 # component. Narrow with a selector, e.g.
 # `--harness-package AutOmicScience:single-cell,spatial`.
-# The foundation skill (omics-shared), tools, runtime, env, and brand are
-# untagged and always load regardless of the selected profiles.
 default_profiles = []
 
 # === Profiles for selective loading (one per domain family) ===
@@ -75,160 +86,192 @@ description = "Immune repertoire (TCR / BCR)"
 extends = []
 
 # === Components ===
-# Untagged skill (omics-shared) + tools/runtime/env/brand are package-wide
-# essentials: they load under any selector. Modality skills carry a profile tag
-# and load on bare selection (no narrowing) or when their profile is selected.
-# Only the foundation and the two most common modalities stay in context by
-# default; the rest are available on demand (loaded when routed to or selected).
+# Each component points to its <module>/<source> dir, where the runtime magnet
+# loader finds HcpMagnet.ts + descriptor/content. Modality skills carry profile
+# tags and load on bare selection or when their profile is selected. Untagged
+# components (omics-shared/tools/brand/env) always load.
 
 [[components]]
 kind = "brand"
 name = "AutOmicScience"
-path = "brands/AutOmicScience"
+source = "AutOmicScience"
+path = "brand/AutOmicScience"
 
 [[components]]
 kind = "skill"
 name = "omics-shared"
-path = "skills/omics-shared"
+source = "AutOmicScience"
+path = "skills/omics-shared/AutOmicScience"
 include_in_context = true
 
 [[components]]
 kind = "skill"
 name = "single-cell"
-path = "skills/single-cell"
+source = "AutOmicScience"
+path = "skills/single-cell/AutOmicScience"
 include_in_context = true
 profiles = ["single-cell"]
 
 [[components]]
 kind = "skill"
 name = "spatial"
-path = "skills/spatial"
+source = "AutOmicScience"
+path = "skills/spatial/AutOmicScience"
 include_in_context = true
 profiles = ["spatial"]
 
 [[components]]
 kind = "skill"
 name = "bulk"
-path = "skills/bulk"
+source = "AutOmicScience"
+path = "skills/bulk/AutOmicScience"
 include_in_context = false
 profiles = ["bulk"]
 
 [[components]]
 kind = "skill"
 name = "bioml"
-path = "skills/bioml"
+source = "AutOmicScience"
+path = "skills/bioml/AutOmicScience"
 include_in_context = false
 profiles = ["bioml"]
 
 [[components]]
 kind = "skill"
 name = "cancer-genomics"
-path = "skills/cancer-genomics"
+source = "AutOmicScience"
+path = "skills/cancer-genomics/AutOmicScience"
 include_in_context = false
 profiles = ["genomics"]
 
 [[components]]
 kind = "skill"
 name = "proteomics"
-path = "skills/proteomics"
+source = "AutOmicScience"
+path = "skills/proteomics/AutOmicScience"
 include_in_context = false
 profiles = ["proteomics"]
 
 [[components]]
 kind = "skill"
 name = "cancer-dependency"
-path = "skills/cancer-dependency"
+source = "AutOmicScience"
+path = "skills/cancer-dependency/AutOmicScience"
 include_in_context = false
 profiles = ["dependency"]
 
 [[components]]
 kind = "skill"
 name = "metabolomics"
-path = "skills/metabolomics"
+source = "AutOmicScience"
+path = "skills/metabolomics/AutOmicScience"
 include_in_context = false
 profiles = ["metabolomics"]
 
 [[components]]
 kind = "skill"
 name = "clinical-survival"
-path = "skills/clinical-survival"
+source = "AutOmicScience"
+path = "skills/clinical-survival/AutOmicScience"
 include_in_context = false
 profiles = ["clinical"]
 
 [[components]]
 kind = "skill"
 name = "microbiome"
-path = "skills/microbiome"
+source = "AutOmicScience"
+path = "skills/microbiome/AutOmicScience"
 include_in_context = false
 profiles = ["microbiome"]
 
 [[components]]
 kind = "skill"
 name = "phase-separation"
-path = "skills/phase-separation"
+source = "AutOmicScience"
+path = "skills/phase-separation/AutOmicScience"
 include_in_context = false
 profiles = ["phase-separation"]
 
 [[components]]
 kind = "skill"
 name = "statistical-genetics"
-path = "skills/statistical-genetics"
+source = "AutOmicScience"
+path = "skills/statistical-genetics/AutOmicScience"
 include_in_context = false
 profiles = ["genomics"]
 
 [[components]]
 kind = "skill"
 name = "immune-repertoire"
-path = "skills/immune-repertoire"
+source = "AutOmicScience"
+path = "skills/immune-repertoire/AutOmicScience"
 include_in_context = false
 profiles = ["immune"]
 
 [[components]]
-kind = "append-system-prompt"
+kind = "system-prompt"
 name = "system-prompt"
-path = "system-prompt/system-prompt.toml"
+source = "AutOmicScience"
+path = "system-prompt/AutOmicScience"
 
 [[components]]
 kind = "tool"
 name = "omics_environment"
-path = "tools/omics-environment/omics-environment.toml"
+source = "AutOmicScience"
+path = "tools/omics-environment/AutOmicScience"
 
 [[components]]
 kind = "tool"
 name = "omics_preflight"
-path = "tools/omics-preflight/omics-preflight.toml"
+source = "AutOmicScience"
+path = "tools/omics-preflight/AutOmicScience"
 
 [[components]]
 kind = "tool"
-name = "omics_install_env"
-path = "tools/omics-environment/omics-install.toml"
+name = "omics_install"
+source = "AutOmicScience"
+path = "tools/omics-install/AutOmicScience"
 
 [[components]]
 kind = "tool"
 name = "omics_compute"
-path = "tools/omics-compute/omics-compute.toml"
+source = "AutOmicScience"
+path = "tools/omics-compute/AutOmicScience"
 
 [[components]]
 kind = "tool"
 name = "bio_api"
-path = "tools/bio-api/bio-api.toml"
+source = "AutOmicScience"
+path = "tools/bio-api/AutOmicScience"
+
+# === Package-local infrastructure (no host module counterpart) ===
+# These kinds back the tools above but are not themselves module/source/magnet
+# HCP components: a Python runtime, its tests, and the pinned Pixi env + lock.
+# They ship inside the package and are referenced by the tool descriptors
+# (runtime = "aose_omics_runtime", env_manifest = "pixi.toml"). Flagged for the
+# Magenta3 side: decide whether these stay manifest-declared infra or move under
+# a dedicated runtime/<source> module in a later pass.
 
 [[components]]
 kind = "python-runtime"
 name = "aose_omics_runtime"
+source = "AutOmicScience"
 path = "tools/omics-compute/python/aose_omics_runtime"
 
 [[components]]
 kind = "runtime-tests"
 name = "aose_omics_runtime_tests"
+source = "AutOmicScience"
 path = "tools/omics-compute/python/tests"
 
 [[components]]
 kind = "env"
 name = "pixi"
+source = "AutOmicScience"
 path = "tools/omics-environment/pixi.toml"
 
 [[components]]
 kind = "env-lock"
 name = "pixi"
+source = "AutOmicScience"
 path = "tools/omics-environment/pixi.lock"
