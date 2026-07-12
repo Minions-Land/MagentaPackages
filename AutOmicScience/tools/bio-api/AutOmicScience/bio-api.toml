@@ -5,12 +5,12 @@ runtime = "mcp"
 
 # Command that launches the MCP server over stdio. The aose-bio-mcp binary is
 # vendored into this package (see rust/) because the upstream AutOmicScience
-# (BioAgent) workspace is retired. Build it with:
-#   cargo build --release --bin aose-bio-mcp
-# from rust/, which produces rust/target/release/aose-bio-mcp. Magenta currently
-# resolves this command from its own repository root when packages are mounted
-# under packages/.
-command = "packages/AutOmicScience/tools/bio-api/rust/target/release/aose-bio-mcp"
+# (BioAgent) workspace is retired. Package releases embed the matching native
+# binary at this stable path; source checkouts can produce it with
+# `cargo build --release --bin aose-bio-mcp` from rust/. Relative command paths
+# are resolved from this descriptor and must remain inside the package root.
+command = "../rust/target/release/aose-bio-mcp"
+command_windows = "../rust/target/release/aose-bio-mcp.exe"
 args = []
 
 # Namespace the remote tool names so they surface as biofetch_<tool> in the

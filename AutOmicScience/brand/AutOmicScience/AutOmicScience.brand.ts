@@ -4,11 +4,9 @@
  * Colors are migrated from BioAgent/AutOmicScience/crates/aose-tui/src/theme.rs.
  */
 
-import type { BrandConfig } from "../../../../brands/brand.interface.ts";
-
-export const BRAND_CONFIG: BrandConfig = {
+export const BRAND_CONFIG = {
 	name: "AutOmicScience",
-	version: "0.1.0",
+	version: "1.0.0",
 	packageScope: "@automic-science",
 
 	theme: {
@@ -40,4 +38,4 @@ export const BRAND_CONFIG: BrandConfig = {
 	},
 
 	productPackages: [],
-};
+} as const;

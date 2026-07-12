@@ -3,27 +3,79 @@ import { fileURLToPath } from "node:url";
 
 /**
  * Tool Source magnet for the AutOmicScience package (source = "AutOmicScience").
- * Isomorphic to host tools/<tool>/<source>/HcpMagnet.ts: one tool item, one
- * descriptor, resolved relative to this file for relocatable loading.
+ * Isomorphic to the host Tool Source while retaining the package's real
+ * HcpMagnet identity around the Client-built Tool product.
  */
 export class HcpMagnet {
 	static readonly module = "tools/omics-install";
 	static readonly kind = "tool";
 	static readonly source = "AutOmicScience";
-	static build(context: unknown) {
-		return new HcpMagnet(context);
+	static async build(context: HcpMagnetBuildContext) {
+		const products = await HcpMagnetbuildtools(context, {
+			kind: "tool",
+			name: "omics-install",
+			source: "AutOmicScience",
+			descriptorPath: join(dirname(fileURLToPath(import.meta.url)), "omics-install.toml"),
+		});
+		return products.map((product) => new HcpMagnet(product));
 	}
 
-	readonly kind = "tool";
+	readonly kind: string;
 	readonly source = "AutOmicScience";
-	readonly descriptorPath = join(dirname(fileURLToPath(import.meta.url)), "omics-install.toml");
-	private readonly context: unknown;
+	private readonly product: HcpMagnettoolproduct;
 
-	constructor(context: unknown) {
-		this.context = context;
+	constructor(product: HcpMagnettoolproduct) {
+		this.product = product;
+		this.kind = product.kind;
 	}
 
-	descriptor() {
-		return { kind: "tool" as const, name: "omics-install", source: "AutOmicScience", descriptorPath: this.descriptorPath };
+	toTool() {
+		return this.product.toTool();
 	}
+
+	async dispose() {
+		await this.product.close?.();
+	}
+}
+
+type HcpMagnetBuildContext = {
+	repoRoot: string;
+	resolveCapability?<T>(name: string): T | undefined;
+	cwd?: string;
+	kind: string;
+	name: string;
+	descriptorPath?: string;
+	source: string;
+	settings?: {
+		HcpClientbuildtools?: (
+			descriptor: HcpClientpackagetooldescriptor,
+			context: HcpMagnetBuildContext,
+		) => Promise<HcpMagnettoolproduct[]>;
+	};
+	description?: string;
+	hotSwappable?: boolean;
+};
+
+type HcpClientpackagetooldescriptor = {
+	kind: "tool";
+	name: string;
+	source: string;
+	descriptorPath: string;
+};
+
+type HcpMagnettoolproduct = {
+	readonly kind: string;
+	toTool(): unknown;
+	close?(): void | Promise<void>;
+};
+
+async function HcpMagnetbuildtools(
+	context: HcpMagnetBuildContext,
+	descriptor: HcpClientpackagetooldescriptor,
+): Promise<HcpMagnettoolproduct[]> {
+	const build = context.settings?.HcpClientbuildtools;
+	if (typeof build !== "function") {
+		throw new Error(`Package tool ${descriptor.name} has no HcpClient Tool builder.`);
+	}
+	return build(descriptor, context);
 }

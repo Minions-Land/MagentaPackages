@@ -49,9 +49,9 @@ the how-to.
    domain = "quantum-chemistry"
    description = "Quantum chemistry workflow skills for DFT, MD, and docking."
    source = "QuantumChem"            # package-wide source = package name
-   
+
    default_profiles = []             # load everything by default
-   
+
    # Add [[profiles]] if the package has many skills and users need subsets
    # Add [[components]] as you create skills/tools below
    ```
@@ -60,6 +60,9 @@ the how-to.
    ```bash
    mkdir -p skills/dft-workflows/QuantumChem
    ```
+
+   Add `skills/dft-workflows/HcpServer.ts` with a bare `HcpServer` whose
+   `moduleName` is exactly `"skills/dft-workflows"`.
 
 5. **Write the first skill**:
    - `skills/dft-workflows/QuantumChem/SKILL.md` — the skill content.
@@ -112,6 +115,14 @@ the how-to.
 2. **Create the skill source directory**:
    ```bash
    mkdir -p skills/protein-folding/ClaudeScience
+   ```
+
+   Also create `skills/protein-folding/HcpServer.ts`:
+   ```typescript
+   export class HcpServer {
+       readonly moduleName = "skills/protein-folding";
+       readonly description = "Protein-folding package skill.";
+   }
    ```
 
 3. **Write the skill content**:
@@ -205,6 +216,9 @@ put sub-skill directories **under the source dir** (e.g.
    mkdir -p tools/rosetta-dock/QuantumChem
    ```
 
+   Add `tools/rosetta-dock/HcpServer.ts` with
+   `moduleName = "tools/rosetta-dock"` before adding its source Magnet.
+
 2. **Write the tool descriptor** (`tools/rosetta-dock/QuantumChem/rosetta-dock.toml`):
    ```toml
    kind = "tool"
@@ -244,43 +258,45 @@ put sub-skill directories **under the source dir** (e.g.
    /**
     * Tool Source magnet for the QuantumChem package (source = "QuantumChem").
     *
-    * Isomorphic to the host's tools/<tool>/<source>/HcpMagnet.ts. This is a
-    * descriptor-backed tool: the magnet resolves its own descriptor (.toml)
-    * relative to this file and hands it to the host tool runtime, which reads
-    * the toml and builds the AgentTool using the host's sandbox/runtime infra.
+    * Isomorphic to the host's tools/<tool>/<source>/HcpMagnet.ts. The package
+    * Source calls the injected Client builder and wraps its host-backed product.
     */
    export class HcpMagnet {
        static readonly module = "tools/rosetta-dock";
        static readonly kind = "tool";
        static readonly source = "QuantumChem";
-       static build(context: unknown) {
-           return new HcpMagnet(context);
+       static async build(context: HcpMagnetBuildContext) {
+           const descriptorPath = join(dirname(fileURLToPath(import.meta.url)), "rosetta-dock.toml");
+           const products = await context.settings.HcpClientbuildtools(
+               { kind: "tool", name: "rosetta-dock", source: "QuantumChem", descriptorPath },
+               context,
+           );
+           return products.map((product) => new HcpMagnet(product));
        }
 
-       readonly kind = "tool";
+       readonly kind: string;
        readonly source = "QuantumChem";
-       readonly descriptorPath = join(dirname(fileURLToPath(import.meta.url)), "rosetta-dock.toml");
-       private readonly context: unknown;
+       private readonly product: HcpMagnettoolproduct;
 
-       constructor(context: unknown) {
-           this.context = context;
+       constructor(product: HcpMagnettoolproduct) {
+           this.product = product;
+           this.kind = product.kind;
        }
 
-       descriptor() {
-           return {
-               kind: "tool" as const,
-               name: "rosetta-dock",
-               source: "QuantumChem",
-               descriptorPath: this.descriptorPath,
-           };
+       toTool() {
+           return this.product.toTool();
+       }
+
+       async dispose() {
+           await this.product.close?.();
        }
    }
    ```
    **Key points**:
-   - Tool magnets are **descriptor providers**, not AgentTool builders.
-   - `descriptor()` returns `{ kind, name, source, descriptorPath }`.
-   - The host reads the toml at `descriptorPath` and runs its own tool-build
-     chain (`createPackageToolProduct`) to make the `AgentTool`.
+   - `static build()` calls the injected `HcpClientbuildtools` hook.
+   - The package's real Magnet wraps each returned host product with `toTool()`.
+   - `dispose()` delegates to the product's optional `close()`.
+   - Copy the structural helper types from a current Package Tool magnet.
 
 4. **If the tool needs a backing implementation** (Rust binary, Python module):
    - **Rust**: Keep the workspace under `tools/rosetta-dock/rust/`, vendor the
@@ -377,7 +393,8 @@ kind = "tool"
 name = "biofetch"                    # remote tools surface as biofetch_<db>_<op>
 description = "BioFetch: read-only access to bioinformatics databases over MCP."
 runtime = "mcp"
-command = "packages/AutOmicScience/tools/bio-api/rust/target/release/aose-bio-mcp"
+command = "../rust/target/release/aose-bio-mcp"
+command_windows = "../rust/target/release/aose-bio-mcp.exe"
 args = []
 name_prefix = "biofetch"             # ensembl_search -> biofetch_ensembl_search
 timeout_ms = 60000
@@ -391,9 +408,9 @@ package = "AutOmicScience"
 ```
 
 Notes:
-- `command` for a vendored binary is resolved from the **Magenta repo root**
-  when packages are mounted under `packages/`, so the path starts with
-  `packages/<Package>/...`. Build the binary in CI or vendor it (`rust/`).
+- A relative `command` is resolved from the tool descriptor directory and must
+  stay inside the package root. Use descriptor-relative paths such as
+  `../rust/target/release/aose-bio-mcp`; never hard-code a checkout or cache path.
 - With `name_prefix = "biofetch"`, a remote tool `ensembl_search` reaches the
   LLM as `biofetch_ensembl_search`. The prefix stacks on top of the remote
   name — factor it in when you document tool names.
@@ -441,12 +458,11 @@ enum = ["load_dataset", "summarize", "preprocess"]  # your dispatch table
 | An MCP server (any language) | `runtime = "mcp"` | `command`, `name_prefix`, optional `[env]` | the server binary (vendor / build) |
 | A Python module you ship | `runtime = "<runtime-name>"` | `module`, `pixi_environment` | a `python-runtime` + `env`/`env-lock` (next section) |
 
-**Frozen contract (aligned with the main session):** in all three cases the
-tool magnet is only a *descriptor provider* — it emits
-`descriptor() => { kind, name, source, descriptorPath }` and never `toTool()`.
-The host reads the `.toml` at `descriptorPath` and runs its own
-`createPackageToolProduct` chain to build the `AgentTool` with sandbox/runtime
-wiring. Do not try to construct an `AgentTool` inside a package.
+**Frozen contract (aligned with the host):** in all three cases the package's
+real Tool Magnet calls `context.settings.HcpClientbuildtools` from `static
+build()`, wraps every returned host product, exposes it through `toTool()`, and
+delegates cleanup through `dispose()`. The package must not construct the
+`AgentTool` or duplicate sandbox/runtime wiring itself.
 
 ---
 
@@ -457,7 +473,7 @@ A tool carries **three names that are allowed to differ**, each with a distinct
 job. This trips up agents who assume they must match — they must not. Live
 evidence from `AutOmicScience`:
 
-| Tool dir (`tools/<dir>/`) | magnet `descriptor().name` | `<tool>.toml` `name` | `package.toml` component `name` |
+| Tool dir (`tools/<dir>/`) | Magnet build descriptor `name` | `<tool>.toml` `name` | `package.toml` component `name` |
 |---|---|---|---|
 | `bio-api` | `bio-api` | `biofetch` | `bio_api` |
 | `omics-compute` | `omics-compute` | `omics_compute` | `omics_compute` |
@@ -469,8 +485,8 @@ Note `bio-api`: all three names differ, and none of them is what the LLM calls.
 
 The three layers:
 
-1. **Locator name** = the `tools/<dir>/` directory name = the magnet's
-   `descriptor().name`. Hyphen-style by convention. The loader uses it to find
+1. **Locator name** = the `tools/<dir>/` directory name = the descriptor `name`
+   passed by the Magnet to `HcpClientbuildtools`. Hyphen-style by convention. The loader uses it to find
    the magnet and its descriptor on disk. Keep the magnet name equal to its
    directory.
 2. **Manifest name** = `package.toml` component `name`. Underscore-style by
@@ -497,8 +513,9 @@ rename one layer expecting the others to follow — they're independent.
 Some assets **back** tools but are **not** module/source/magnet components:
 a Python runtime, its tests, a pinned Pixi env, and its lockfile. They ship
 inside the package and are referenced by tool descriptors — but they have **no
-`HcpMagnet.ts`** and the loader does not build a component for them. The
-validator only checks that their `path` exists (these kinds are outside
+`HcpMagnet.ts`**. The loader preserves their declarations in the package tool
+context/component map so descriptors can resolve them; it does not assemble
+them as HCP products. The validator checks that their `path` exists (these kinds are outside
 `MODULE_SOURCE_KINDS`, so the HcpMagnet.ts / descriptor rules do not apply).
 
 The four infra kinds (from `AutOmicScience/package.toml`):
@@ -591,7 +608,7 @@ source has its own `<module>/<source>/HcpMagnet.ts` tree.
    name = "genomic-pipelines"
    source = "codex"                    # different source
    path = "skills/genomic-pipelines/codex"
-   
+
    [[components]]
    kind = "tool"
    name = "seq_align"
@@ -646,20 +663,21 @@ last-writer-wins.
 
 4. **Wait for CI**: The `.github/workflows/release.yml` workflow triggers on
    the tag push, parses the package name and version, validates that the tag
-   matches the manifest, builds a relocatable `tar.gz` + SHA256, and publishes
-   a GitHub Release under the tag `AutOmicScience-v1.1.0`.
+   matches the manifest, builds one relocatable `tar.gz` + SHA256 per Magenta
+   binary platform, and publishes a GitHub Release under the tag
+   `AutOmicScience-v1.1.0`.
 
 5. **Verify the release** on GitHub:
    - Go to `https://github.com/Minions-Land/MagentaPackages/releases`.
-   - Confirm the release `AutOmicScience v1.1.0` exists with the `tar.gz` artifact.
+   - Confirm the release `AutOmicScience v1.1.0` contains all four platform archives.
 
 **Users load it with**:
 ```bash
 magenta --harness-package github:Minions-Land/MagentaPackages/AutOmicScience@1.1.0
 ```
 
-The acquisition layer resolves that to the release artifact and downloads it
-into `~/.magenta/harness-packages/AutOmicScience@1.1.0/`.
+The acquisition layer resolves that to the current platform archive and
+downloads it into Magenta's origin-, version-, and platform-scoped cache.
 
 ---
 
@@ -682,6 +700,9 @@ This checks:
 - Each brand source has a `brand.toml`.
 - Each system-prompt source has a `system-prompt.toml`.
 - Each v2 component source has an `HcpMagnet.ts`.
+- Each module has a real `HcpServer.ts` with the exact module path.
+- Magnets expose the required product method, and Resource magnets expose
+  `contentPath`/`content` rather than a tool-only descriptor pointer.
 - No build outputs (`target/`, `__pycache__/`, `.pixi/`, `node_modules/`) are
   committed (the validator scans git-visible files and flags them).
 
@@ -702,8 +723,14 @@ Fix it before pushing.
 You created the `<module>/<source>` directory and wrote the `SKILL.md` /
 `.toml` but forgot the magnet. Copy an existing `HcpMagnet.ts` from a
 similar component, update the `module`, `kind`, `source`, and product method
-(`toResource()` or `descriptor()`), and save it as
+(`toResource()` or `toTool()`), and save it as
 `<module>/<source>/HcpMagnet.ts`.
+
+### "Validator says the module lacks HcpServer.ts"
+
+Create `<module>/HcpServer.ts` beside the source directories. It must export a
+bare `class HcpServer` and its `moduleName` must exactly match the module path.
+Do not route an item module through a generic parent Server.
 
 ### "Validator says 'skill path lacks SKILL.md'"
 
@@ -714,14 +741,15 @@ dir** (e.g. `skills/single-cell/AutOmicScience/SKILL.md`), not at
 
 ### "Tool magnet: should I call `toTool()` or `descriptor()`?"
 
-Tools call `descriptor()`, not `toTool()`. The magnet is a descriptor provider;
-the host builds the `AgentTool`. Skills/brands/system-prompts call
+Tools call `HcpClientbuildtools` in `static build()`, wrap the returned host
+product, and expose it through `toTool()`. They do not implement `descriptor()`
+or construct the `AgentTool` themselves. Skills/brands/system-prompts call
 `toResource()`.
 
 ### "How do I know if it's an item-type module (4 layers) or direct-type (3 layers)?"
 
 - **Item-type** (4 layers: `<module>/<item>/<source>/`): `tools`, `skills`.
-  Each tool or skill is a separate item with its own `HcpServer` in the host.
+  Each tool or skill is a separate item with its own package `HcpServer.ts`.
 - **Direct-type** (3 layers: `<module>/<source>/`): `brand`, `system-prompt`,
   `theme`, `prompt-templates`. Only one of each per package.
 

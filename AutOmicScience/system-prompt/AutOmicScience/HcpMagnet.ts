@@ -25,7 +25,7 @@ export class HcpMagnet {
 			name: "system-prompt",
 			source: "AutOmicScience",
 			mergeMode: "append" as const,
-			descriptorPath: join(dirname(fileURLToPath(import.meta.url)), "system-prompt.toml"),
+			contentPath: join(dirname(fileURLToPath(import.meta.url)), "SYSTEM.md"),
 		};
 	}
 }

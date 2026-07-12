@@ -38,7 +38,9 @@ cargo build --release --bin aose-bio-mcp
 ```
 
 The resulting binary is `target/release/aose-bio-mcp`. The package descriptor
-`../bio-api.toml` points its `command` at that path.
+`../bio-api.toml` points its Unix `command` at that path and its Windows
+override at `target/release/aose-bio-mcp.exe`. Tagged package releases build
+and embed the matching binary automatically.
 
 ## Re-syncing from upstream
 

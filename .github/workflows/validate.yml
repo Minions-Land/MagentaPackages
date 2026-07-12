@@ -1,19 +1,31 @@
 name: Validate Packages
 
 on:
-  push:
-    branches: [main]
   pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-      - name: Validate package manifests
+          python-version: "3.13"
+
+      - name: Validate manifests and HCP package structure
         run: python scripts/validate_packages.py
+
+      - name: Test package validation and release assembly
+        run: |
+          python scripts/test_validate_packages.py
+          python scripts/test_build_release_artifact.py
+
       - name: Test bio API workspace
         run: cargo test --locked --manifest-path AutOmicScience/tools/bio-api/rust/Cargo.toml --workspace

@@ -26,7 +26,7 @@ export class HcpMagnet {
 			name: "AutOmicScience",
 			source: "AutOmicScience",
 			mergeMode: "replace" as const,
-			descriptorPath: join(dirname(fileURLToPath(import.meta.url)), "brand.toml"),
+			contentPath: join(dirname(fileURLToPath(import.meta.url)), "brand.toml"),
 		};
 	}
 }

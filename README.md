@@ -15,31 +15,40 @@ a session can pull in a focused subset.
 ## Package layout (schema v2: HCP-isomorphic)
 
 A package is an externalized slice of the Magenta HarnessComponentProtocol
-tree. Its on-disk shape mirrors the host exactly: every contributed component
-lives at `<module>/<source>/` with a real `HcpMagnet.ts` beside its descriptor
-or content, just like the host's `tools/write/magenta/HcpMagnet.ts`.
+tree. Its on-disk shape mirrors the host exactly: every module has a real
+`HcpServer.ts`, and every contributed source lives at `<module>/<source>/`
+with a real `HcpMagnet.ts` beside its descriptor or content.
 
 ```text
 <package-root>/
   package.toml                 # schema_version = magenta.package.v2, version, source
-  skills/<skill>/<source>/     # source = package name (single-source package)
-    HcpMagnet.ts               # bare class: static build + module/kind/source + toResource
-    SKILL.md
-  tools/<tool>/<source>/
-    HcpMagnet.ts               # bare class + descriptor(); one tool per item
-    <tool>.toml
-  brand/<source>/ , system-prompt/<source>/   # same shape, resource magnets
+  skills/<skill>/
+    HcpServer.ts               # bare class: real Server for this module
+    <source>/                  # source = package name (single-source package)
+      HcpMagnet.ts             # static build + module/kind/source + toResource
+      SKILL.md
+  tools/<tool>/
+    HcpServer.ts
+    <source>/
+      HcpMagnet.ts             # Client-built product wrapper + toTool()
+      <tool>.toml
+  brand/HcpServer.ts , system-prompt/HcpServer.ts
+  brand/<source>/ , system-prompt/<source>/   # resource magnets
 ```
 
 The `source` segment is the package name. A **merge package** aggregating
 multiple upstreams would add sibling `<module>/<other-source>/` directories,
-each with its own `HcpMagnet`. Each magnet is a bare class (HCP spec §2, no
-imported interface) that resolves its own content path relative to itself via
+each with its own `HcpMagnet`. Each Server and Magnet is a bare class (HCP
+spec §2, no imported interface). Each Magnet resolves its own content path relative to itself via
 `import.meta.url`, so the package is relocatable when downloaded into the local
 cache. The runtime magnet loader imports each `HcpMagnet.ts`, validates the
-shape (static `build`, `module`/`kind`/`source`, one of
-`toTool`/`toCapability`/`toResource`/`descriptor`), and registers it into the
+shape (static `build`, `module`/`kind`/`source`, and the matching
+`toTool`/`toCapability`/`toResource` product method), and registers it into the
 same `HcpClient` as built-in magnets.
+
+A manifest may offer the same `kind:name` from different Sources; only an exact
+duplicate `kind:name:source` is invalid. Source selection resolves those offers
+before the session overlay applies its final `kind:name` precedence.
 
 ## Loading a package
 
@@ -71,8 +80,10 @@ git push origin AutOmicScience-v1.0.0
 
 The [`release`](./.github/workflows/release.yml) workflow parses the package
 and version from the tag, validates the manifest, verifies the tag matches the
-manifest `version`, builds a relocatable source `tar.gz` + SHA256, and
-publishes a GitHub Release. The acquisition layer resolves
+manifest `version`, and builds one relocatable `tar.gz` + SHA256 for each
+Magenta binary platform. Native package tools are compiled into the matching
+archive, so downloaded packages do not require a local Rust toolchain. The
+acquisition layer resolves
 `github:Minions-Land/MagentaPackages/<Package>@<version>` to that release.
 
 ## Repository maintenance
@@ -83,8 +94,9 @@ Run the repository validator before pushing (requires Python >= 3.11):
 python3 scripts/validate_packages.py
 ```
 
-The validator parses TOML, verifies package component paths, checks skill entry
-points, and prevents generated environments/build outputs from being committed.
+The validator parses TOML, verifies package component paths and profile graphs,
+checks every real HcpServer/HcpMagnet shape and product method, checks skill
+entry points, and prevents generated environments/build outputs from being committed.
 The bio-API Rust workspace can be checked independently:
 
 ```bash
@@ -92,8 +104,8 @@ cargo test --locked --manifest-path AutOmicScience/tools/bio-api/rust/Cargo.toml
 ```
 
 Generated directories such as `.pixi/`, `target/`, `__pycache__/`, and
-`node_modules/` are intentionally excluded. Rebuild them from committed
-manifests and locks when needed.
+`node_modules/` are intentionally excluded from source control. Release jobs
+rebuild declared native tools and embed only their final executable.
 
 ## Packages in this repository
 
@@ -126,9 +138,10 @@ The template is README-only on purpose — copy the current, executable rules
 rather than a stale scaffold:
 
 - Keep skills under `skills/<capability>/<source>/SKILL.md` with a sibling
-  `HcpMagnet.ts` (source = package name).
-- Put system prompts under `system-prompt/<source>/` with a `system-prompt.toml`
-  descriptor and an `HcpMagnet.ts`.
+  `HcpMagnet.ts`, plus `skills/<capability>/HcpServer.ts` for the real module.
+- Put system prompts under `system-prompt/<source>/` with a `system-prompt.toml`,
+  `SYSTEM.md`, and `HcpMagnet.ts`; the Resource exposes `SYSTEM.md` through
+  `contentPath`. Add `system-prompt/HcpServer.ts`.
 - Put tool descriptors under `tools/<tool>/<source>/` (one tool per item) with
   their `<tool>.toml` and an `HcpMagnet.ts`; keep shared implementation assets
   (Rust/Python runtimes, pixi env) at the tool-item or package-infra level.

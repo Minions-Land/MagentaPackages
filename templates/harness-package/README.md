@@ -20,6 +20,7 @@ The host harness (in `Magenta3/HarnessComponentProtocol/`) organizes every
 capability as:
 
 ```text
+<module>/HcpServer.ts
 <module>/<source>/HcpMagnet.ts        # e.g. tools/write/magenta/HcpMagnet.ts
 ```
 
@@ -29,20 +30,26 @@ segment: instead of `magenta`, a package uses its own name as the source.
 ```text
 <PackageName>/
   package.toml                        # manifest: id, version, source, components
-  skills/<skill>/<PackageName>/
-    HcpMagnet.ts                      # skill Source magnet
-    SKILL.md                          # skill content
-    assets/ ...                       # optional skill-local assets
-  tools/<tool>/<PackageName>/
-    HcpMagnet.ts                      # tool Source magnet
-    <tool>.toml                       # tool descriptor
+  skills/<skill>/
+    HcpServer.ts                      # real module Server
+    <PackageName>/
+      HcpMagnet.ts                    # skill Source magnet
+      SKILL.md                        # skill content
+      assets/ ...                     # optional skill-local assets
+  tools/<tool>/
+    HcpServer.ts
+    <PackageName>/
+      HcpMagnet.ts                    # tool Source magnet
+      <tool>.toml                     # tool descriptor
+  brand/HcpServer.ts
   brand/<PackageName>/
-    HcpMagnet.ts                      # brand Source magnet
-    brand.toml
+      HcpMagnet.ts                    # brand Source magnet
+      brand.toml
+  system-prompt/HcpServer.ts
   system-prompt/<PackageName>/
-    HcpMagnet.ts                      # system-prompt Source magnet
-    system-prompt.toml
-    SYSTEM.md
+      HcpMagnet.ts                    # system-prompt Source magnet
+      system-prompt.toml
+      SYSTEM.md
 ```
 
 - `<module>` is the host module name: `skills`, `tools`, `brand`,
@@ -50,8 +57,24 @@ segment: instead of `magenta`, a package uses its own name as the source.
   `brand` is singular).
 - `<source>` is the package name. It is the same for every component in a
   single-source package.
-- `tools` and `skills` are **item-type** modules: one item per directory, one
-  `HcpServer`/tool per item. Keep one tool per `tools/<tool>/`.
+- `tools` and `skills` are **item-type** modules: one item per directory and
+  one real `HcpServer.ts` per item. Direct modules (`brand`, `system-prompt`)
+  likewise own one `HcpServer.ts` at their module root.
+
+## The HcpServer contract
+
+Every module directory exports a dependency-free bare class named `HcpServer`.
+Its `moduleName` exactly matches the directory path relative to the package:
+
+```typescript
+export class HcpServer {
+	readonly moduleName = "skills/single-cell";
+	readonly description = "Single-cell package skill.";
+}
+```
+
+The file is not a facade and imports no interface. `HcpClient` supplies the
+common dispatch/instance behavior when it attaches the Server.
 
 ### Merge packages (multiple sources)
 
@@ -81,10 +104,11 @@ Required members:
 | `static readonly module` | Host module path, e.g. `"skills/single-cell"`, `"tools/bio-api"`. |
 | `static readonly kind` | Component kind: `"skill"`, `"tool"`, `"brand"`, `"system-prompt"`. |
 | `static readonly source` | The source id = package name. |
-| `static build(context)` | Single construction entry point. Returns an instance. |
-| one product method | `toResource()` for resources, `descriptor()` for tools. |
+| `static build(context)` | Single construction entry point. Tool Sources call the injected Client builder. |
+| one product method | `toResource()` for resources, `toTool()` for tools. |
 
-Two product shapes only:
+Two product shapes only. Resource products expose `contentPath` or inline
+`content`; Tool magnets wrap host-built products and expose `toTool()`:
 
 **Resource magnets** (skill / brand / system-prompt) are self-sufficient. They
 resolve their own content path relative to the magnet file and return the
@@ -117,12 +141,12 @@ export class HcpMagnet {
 }
 ```
 
-**Tool magnets** are *descriptor providers*, not AgentTool builders. Building an
-`AgentTool` needs host infrastructure (sandbox, process/python runtime, MCP
-discovery), which must not be baked into a package. So a tool magnet only
-declares its identity and hands over the absolute path to its descriptor
-`.toml`; the host reads that toml and runs its own tool-build chain
-(`createPackageToolProduct`) to produce the `AgentTool`.
+**Tool magnets** retain their real package Source identity, but do not build an
+`AgentTool` themselves. Their static `build()` passes the relocatable descriptor
+to `context.settings.HcpClientbuildtools`, the Client-owned hook backed by the
+host sandbox/process/python/MCP chain. Each returned product is wrapped in the
+package's own `HcpMagnet`, whose `toTool()` exposes the product and whose
+`dispose()` releases it. MCP descriptors may return multiple magnets.
 
 ```typescript
 import { dirname, join } from "node:path";
@@ -132,24 +156,36 @@ export class HcpMagnet {
 	static readonly module = "tools/bio-api";
 	static readonly kind = "tool";
 	static readonly source = "AutOmicScience";
-	static build(context: unknown) {
-		return new HcpMagnet(context);
+	static async build(context: HcpMagnetBuildContext) {
+		const descriptorPath = join(dirname(fileURLToPath(import.meta.url)), "bio-api.toml");
+		const products = await context.settings.HcpClientbuildtools(
+			{ kind: "tool", name: "bio-api", source: "AutOmicScience", descriptorPath },
+			context,
+		);
+		return products.map((product) => new HcpMagnet(product));
 	}
 
-	readonly kind = "tool";
+	readonly kind: string;
 	readonly source = "AutOmicScience";
-	readonly descriptorPath = join(dirname(fileURLToPath(import.meta.url)), "bio-api.toml");
+	private readonly product: HcpMagnettoolproduct;
 
-	descriptor() {
-		return {
-			kind: "tool" as const,
-			name: "bio-api",
-			source: "AutOmicScience",
-			descriptorPath: this.descriptorPath,
-		};
+	constructor(product: HcpMagnettoolproduct) {
+		this.product = product;
+		this.kind = product.kind;
+	}
+
+	toTool() {
+		return this.product.toTool();
+	}
+
+	async dispose() {
+		await this.product.close?.();
 	}
 }
 ```
+
+The example abbreviates the dependency-free structural types for readability;
+copy a current package Tool magnet when implementing one.
 
 ### Why `import.meta.url`, not a harness path
 
@@ -223,7 +259,9 @@ git push origin AutOmicScience-v1.0.0
 
 The `.github/workflows/release.yml` workflow parses `<PackageName>-v<version>`,
 validates the manifest, verifies the tag matches `package.toml`'s `version`,
-builds a relocatable source `tar.gz` + SHA256, and publishes a GitHub Release.
+builds a relocatable `tar.gz` + SHA256 for every Magenta binary platform, and
+publishes one GitHub Release. Native tools are rebuilt and embedded only in the
+matching platform archive.
 Users load it with:
 
 ```bash

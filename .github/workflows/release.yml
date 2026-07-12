@@ -1,13 +1,9 @@
 name: Release Package
 
-# Monorepo + per-package release. Push a tag shaped `<PackageName>-v<version>`
-# (e.g. AutOmicScience-v1.0.0) to build and publish only that package.
-#
-#   git tag AutOmicScience-v1.0.0
-#   git push origin AutOmicScience-v1.0.0
-#
-# The acquisition layer resolves `github:Minions-Land/MagentaPackages/<Package>@<version>`
-# to the release tagged `<Package>-v<version>` and downloads its artifact.
+# Push a tag shaped `<PackageName>-v<version>` (for example,
+# `AutOmicScience-v1.0.0`) to publish one package for every Magenta binary
+# platform. Platform-specific archives let packages ship native tools without
+# requiring Rust or another compiler on the user's machine.
 
 on:
   push:
@@ -18,83 +14,161 @@ permissions:
   contents: write
 
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      package: ${{ steps.parse.outputs.package }}
+      version: ${{ steps.parse.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Parse package name and version from tag
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Parse and validate the release identity
         id: parse
+        shell: bash
         run: |
           tag="${GITHUB_REF_NAME}"
-          # Split on the last occurrence of "-v": everything before is the
-          # package name, everything after is the semantic version.
           pkg="${tag%-v*}"
           ver="${tag##*-v}"
           if [ -z "$pkg" ] || [ -z "$ver" ] || [ "$pkg" = "$tag" ]; then
             echo "::error::Tag '$tag' is not of the form <PackageName>-v<version>"
             exit 1
           fi
+          python - "$pkg" "$ver" <<'PY'
+          import sys
+          sys.path.insert(0, "scripts")
+          from validate_packages import HcpClientisportablepackageid, HcpClientisstrictsemver
+
+          package, version = sys.argv[1:]
+          if not HcpClientisportablepackageid(package):
+              raise SystemExit(f"unsafe package id: {package!r}")
+          if not HcpClientisstrictsemver(version):
+              raise SystemExit(f"invalid semantic version: {version!r}")
+          PY
           if [ ! -f "$pkg/package.toml" ]; then
-            echo "::error::No package.toml found for package '$pkg' (expected $pkg/package.toml)"
+            echo "::error::No package.toml found for package '$pkg'"
             exit 1
           fi
           echo "package=$pkg" >> "$GITHUB_OUTPUT"
           echo "version=$ver" >> "$GITHUB_OUTPUT"
-          echo "Releasing package '$pkg' version '$ver'"
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
 
       - name: Validate the package manifest
         run: python scripts/validate_packages.py --package "${{ steps.parse.outputs.package }}"
 
       - name: Verify manifest version matches tag
+        shell: bash
         run: |
-          pkg="${{ steps.parse.outputs.package }}"
-          ver="${{ steps.parse.outputs.version }}"
-          manifest_ver="$(python scripts/package_version.py "$pkg")"
-          if [ "$manifest_ver" != "$ver" ]; then
-            echo "::error::Tag version ($ver) does not match $pkg/package.toml version ($manifest_ver)"
+          manifest_ver="$(python scripts/package_version.py "${{ steps.parse.outputs.package }}")"
+          if [ "$manifest_ver" != "${{ steps.parse.outputs.version }}" ]; then
+            echo "::error::Tag version (${{ steps.parse.outputs.version }}) does not match package.toml ($manifest_ver)"
             exit 1
           fi
 
-      - name: Build package artifact
-        id: build
+      - name: Test the release artifact builder
+        run: python scripts/test_build_release_artifact.py
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux-x64
+            rust_target: x86_64-unknown-linux-gnu
+            binary: aose-bio-mcp
+          - runner: macos-14
+            platform: macos-arm64
+            rust_target: aarch64-apple-darwin
+            binary: aose-bio-mcp
+          - runner: macos-14
+            platform: macos-x64
+            rust_target: x86_64-apple-darwin
+            binary: aose-bio-mcp
+          - runner: windows-latest
+            platform: windows-x64
+            rust_target: x86_64-pc-windows-msvc
+            binary: aose-bio-mcp.exe
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Rust target for native package tools
+        if: needs.prepare.outputs.package == 'AutOmicScience'
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Build native package tools
+        if: needs.prepare.outputs.package == 'AutOmicScience'
+        shell: bash
         run: |
-          pkg="${{ steps.parse.outputs.package }}"
-          ver="${{ steps.parse.outputs.version }}"
-          out="${pkg}-v${ver}.tar.gz"
-          # Package the package directory as a relocatable source bundle. Build
-          # outputs and caches are excluded; the acquisition layer unpacks this
-          # under ~/.magenta/harness-packages/<pkg>@<ver>/ and the runtime magnet
-          # loader imports each <module>/<source>/HcpMagnet.ts from there.
-          tar --exclude='*/target' \
-              --exclude='*/__pycache__' \
-              --exclude='*/.pytest_cache' \
-              --exclude='*/.pixi' \
-              --exclude='*/node_modules' \
-              -czf "$out" "$pkg"
-          sha256sum "$out" > "${out}.sha256"
-          echo "artifact=$out" >> "$GITHUB_OUTPUT"
+          cargo build --locked --release \
+            --manifest-path AutOmicScience/tools/bio-api/rust/Cargo.toml \
+            --target "${{ matrix.rust_target }}" \
+            --bin aose-bio-mcp
+
+      - name: Build platform package artifact
+        shell: bash
+        run: |
+          args=(
+            --package "${{ needs.prepare.outputs.package }}"
+            --version "${{ needs.prepare.outputs.version }}"
+            --platform "${{ matrix.platform }}"
+            --output-dir release-assets
+          )
+          if [ "${{ needs.prepare.outputs.package }}" = "AutOmicScience" ]; then
+            args+=(
+              --native-binary
+              "AutOmicScience/tools/bio-api/rust/target/${{ matrix.rust_target }}/release/${{ matrix.binary }}"
+            )
+          fi
+          python scripts/build_release_artifact.py "${args[@]}"
+
+      - name: Upload platform package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ matrix.platform }}
+          path: |
+            release-assets/${{ needs.prepare.outputs.package }}-v${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.tar.gz
+            release-assets/${{ needs.prepare.outputs.package }}-v${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download platform package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: package-*
+          path: release-assets
+          merge-multiple: true
 
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ steps.parse.outputs.package }} v${{ steps.parse.outputs.version }}
+          name: ${{ needs.prepare.outputs.package }} v${{ needs.prepare.outputs.version }}
           files: |
-            ${{ steps.build.outputs.artifact }}
-            ${{ steps.build.outputs.artifact }}.sha256
+            release-assets/*.tar.gz
+            release-assets/*.tar.gz.sha256
           body: |
-            Automated release of the `${{ steps.parse.outputs.package }}` harness package,
-            version `${{ steps.parse.outputs.version }}`.
+            Automated release of the `${{ needs.prepare.outputs.package }}` harness package,
+            version `${{ needs.prepare.outputs.version }}`.
 
             Load it with:
             ```
-            magenta --harness-package github:Minions-Land/MagentaPackages/${{ steps.parse.outputs.package }}@${{ steps.parse.outputs.version }}
+            magenta --harness-package github:Minions-Land/MagentaPackages/${{ needs.prepare.outputs.package }}@${{ needs.prepare.outputs.version }}
             ```
 
-            The artifact is a relocatable source bundle (`tar.gz`). Verify it against
-            the published `.sha256` before use.
+            Magenta selects the archive matching its binary platform and verifies
+            the adjacent SHA256 file before extraction. Native package tools are
+            embedded in the matching archive; no local Rust build is required.
