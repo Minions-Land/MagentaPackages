@@ -260,12 +260,27 @@ git push origin AutOmicScience-v1.0.0
 The `.github/workflows/release.yml` workflow parses `<PackageName>-v<version>`,
 validates the manifest, verifies the tag matches `package.toml`'s `version`,
 builds a relocatable `tar.gz` + SHA256 for every Magenta binary platform, and
-publishes one GitHub Release. Native tools are rebuilt and embedded only in the
-matching platform archive.
-Users load it with:
+publishes a private source Release. Native tools are rebuilt and embedded only
+in the matching platform archive. Then run Magenta's
+`Promote Harness Package Release` workflow with the Package id and version; it
+independently verifies all eight assets and promotes them to the public
+`Minions-Land/Magenta-CLI` distribution repository without changing the CLI
+`latest` Release.
+
+Promote it with:
 
 ```bash
-magenta --harness-package github:Minions-Land/MagentaPackages/AutOmicScience@1.0.0
+gh workflow run promote-package-release.yml \
+  --repo Minions-Land/Magenta \
+  --ref main \
+  -f package=AutOmicScience \
+  -f version=1.0.0
+```
+
+After promotion, users load it with:
+
+```bash
+magenta --harness-package github:Minions-Land/Magenta-CLI/AutOmicScience@1.0.0
 ```
 
 ## Before you push

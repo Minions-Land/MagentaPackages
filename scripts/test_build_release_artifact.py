@@ -34,7 +34,9 @@ class BuildReleaseArtifactTests(unittest.TestCase):
             )
 
             self.assertTrue(checksum.is_file())
-            digest, name = checksum.read_text(encoding="utf-8").strip().split("  ", 1)
+            checksum_bytes = checksum.read_bytes()
+            self.assertNotIn(b"\r", checksum_bytes)
+            digest, name = checksum_bytes.decode("utf-8").strip().split("  ", 1)
             self.assertEqual(name, artifact.name)
             self.assertEqual(digest, hashlib.sha256(artifact.read_bytes()).hexdigest())
             with tarfile.open(artifact, "r:gz") as archive:
@@ -94,6 +96,41 @@ class BuildReleaseArtifactTests(unittest.TestCase):
                     root / "out",
                     root,
                 )
+
+    def test_rejects_sensitive_files_but_allows_env_templates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            package = root / "Biomni"
+            package.mkdir()
+            (package / "package.toml").write_text(
+                'id = "Biomni"\nversion = "1.0.0"\n',
+                encoding="utf-8",
+            )
+            (package / ".env.example").write_text("TOKEN=replace-me\n", encoding="utf-8")
+            secret = package / ".env"
+            secret.write_text("TOKEN=do-not-publish\n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "sensitive file"):
+                HcpClientbuildreleaseartifact(
+                    "Biomni",
+                    "1.0.0",
+                    "linux-x64",
+                    None,
+                    root / "out",
+                    root,
+                )
+
+            secret.unlink()
+            artifact, _checksum = HcpClientbuildreleaseartifact(
+                "Biomni",
+                "1.0.0",
+                "linux-x64",
+                None,
+                root / "out",
+                root,
+            )
+            with tarfile.open(artifact, "r:gz") as archive:
+                self.assertIn("Biomni/.env.example", archive.getnames())
 
     def test_requires_the_native_binary_for_automic_science(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

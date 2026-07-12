@@ -164,9 +164,9 @@ jobs:
             Automated release of the `${{ needs.prepare.outputs.package }}` harness package,
             version `${{ needs.prepare.outputs.version }}`.
 
-            Load it with:
+            After promotion to the public distribution repository, load it with:
             ```
-            magenta --harness-package github:Minions-Land/MagentaPackages/${{ needs.prepare.outputs.package }}@${{ needs.prepare.outputs.version }}
+            magenta --harness-package github:Minions-Land/Magenta-CLI/${{ needs.prepare.outputs.package }}@${{ needs.prepare.outputs.version }}
             ```
 
             Magenta selects the archive matching its binary platform and verifies

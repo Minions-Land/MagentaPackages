@@ -39,6 +39,22 @@ HcpClientreleaseignoreddirs = {
     "tmp",
     "venv",
 }
+HcpClientreleasesensitivefilenames = {
+    ".env",
+    ".envrc",
+    ".netrc",
+    ".npmrc",
+    ".pypirc",
+    "credentials.json",
+    "id_dsa",
+    "id_ecdsa",
+    "id_ed25519",
+    "id_rsa",
+    "service-account.json",
+    "service_account.json",
+}
+HcpClientreleasesensitivesuffixes = {".key", ".p12", ".pem", ".pfx"}
+HcpClientreleaseenvtemplates = {".env.example", ".env.sample", ".env.template"}
 HcpClientnativereleases = {
     "AutOmicScience": Path("tools/bio-api/rust/target/release/aose-bio-mcp"),
 }
@@ -54,6 +70,20 @@ def HcpClienttarfilter(info: tarfile.TarInfo) -> tarfile.TarInfo:
     info.uname = ""
     info.gname = ""
     return info
+
+
+def HcpClientassertreleasesafepath(path: Path, package_root: Path) -> None:
+    relative = path.relative_to(package_root)
+    if any(part in HcpClientreleaseignoreddirs for part in relative.parts[:-1]):
+        return
+    name = path.name.lower()
+    sensitive_env = name.startswith(".env.") and name not in HcpClientreleaseenvtemplates
+    if (
+        name in HcpClientreleasesensitivefilenames
+        or sensitive_env
+        or path.suffix.lower() in HcpClientreleasesensitivesuffixes
+    ):
+        raise ValueError(f"package release contains a sensitive file: {relative}")
 
 
 def HcpClientbuildreleaseartifact(
@@ -85,6 +115,8 @@ def HcpClientbuildreleaseartifact(
     for source_path in package_root.rglob("*"):
         if source_path.is_symlink():
             raise ValueError(f"package releases cannot contain symlinks: {source_path}")
+        if source_path.is_file():
+            HcpClientassertreleasesafepath(source_path, package_root)
 
     native_destination = HcpClientnativereleases.get(package)
     if native_destination is not None:
@@ -116,7 +148,12 @@ def HcpClientbuildreleaseartifact(
             archive.add(staged_package, arcname=package, filter=HcpClienttarfilter)
 
     digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
-    checksum.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
+    # Release checksums are consumed on every host. Force LF even when the
+    # artifact is built by a Windows runner so `shasum -c` does not retain a
+    # trailing carriage return in the referenced filename.
+    checksum.write_text(f"{digest}  {artifact.name}\n", encoding="utf-8", newline="\n")
+    if b"\r" in checksum.read_bytes():
+        raise RuntimeError(f"release checksum must use LF line endings: {checksum}")
     return artifact, checksum
 
 

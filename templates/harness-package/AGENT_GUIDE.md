@@ -664,16 +664,22 @@ last-writer-wins.
 4. **Wait for CI**: The `.github/workflows/release.yml` workflow triggers on
    the tag push, parses the package name and version, validates that the tag
    matches the manifest, builds one relocatable `tar.gz` + SHA256 per Magenta
-   binary platform, and publishes a GitHub Release under the tag
+   binary platform, and publishes a private source Release under the tag
    `AutOmicScience-v1.1.0`.
 
-5. **Verify the release** on GitHub:
-   - Go to `https://github.com/Minions-Land/MagentaPackages/releases`.
+5. **Promote the verified Release** with the Magenta repository's
+   `Promote Harness Package Release` workflow, passing Package
+   `AutOmicScience` and version `1.1.0`. That workflow re-verifies all four
+   archives and publishes them to the public distribution repository without
+   changing the Magenta CLI `latest` Release.
+
+6. **Verify the public Release** on GitHub:
+   - Go to `https://github.com/Minions-Land/Magenta-CLI/releases`.
    - Confirm the release `AutOmicScience v1.1.0` contains all four platform archives.
 
 **Users load it with**:
 ```bash
-magenta --harness-package github:Minions-Land/MagentaPackages/AutOmicScience@1.1.0
+magenta --harness-package github:Minions-Land/Magenta-CLI/AutOmicScience@1.1.0
 ```
 
 The acquisition layer resolves that to the current platform archive and

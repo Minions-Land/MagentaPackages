@@ -83,8 +83,25 @@ and version from the tag, validates the manifest, verifies the tag matches the
 manifest `version`, and builds one relocatable `tar.gz` + SHA256 for each
 Magenta binary platform. Native package tools are compiled into the matching
 archive, so downloaded packages do not require a local Rust toolchain. The
-acquisition layer resolves
-`github:Minions-Land/MagentaPackages/<Package>@<version>` to that release.
+private source tag creates the verified source Release. Magenta's
+`Promote Harness Package Release` workflow then copies and re-verifies those
+assets in the public `Minions-Land/Magenta-CLI` distribution repository,
+matching the Magenta binary release model. The acquisition layer resolves
+`github:Minions-Land/Magenta-CLI/<Package>@<version>` to that public Release.
+
+For a skill-only Package such as ClaudeScience, the platform archive itself is
+the binary Release payload; it is not an executable program. A native
+executable is embedded only when the Package declares a native Tool.
+
+Promote a completed private source Release with:
+
+```bash
+gh workflow run promote-package-release.yml \
+  --repo Minions-Land/Magenta \
+  --ref main \
+  -f package=AutOmicScience \
+  -f version=1.0.0
+```
 
 ## Repository maintenance
 
