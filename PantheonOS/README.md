@@ -1,6 +1,6 @@
 # PantheonOS Package
 
-Bioinformatics and scientific workflow skills migrated from PantheonOS covering single-cell/spatial omics, image analysis, and scientific publishing.
+Bioinformatics and scientific workflow skills migrated from PantheonOS covering single-cell/spatial omics, image analysis, and scientific publishing. This package owns the instruction resources; `MagentaWithPantheonOS` supplies the companion execution tools.
 
 ## Package Structure
 
@@ -18,19 +18,33 @@ PantheonOS is organized into **3 domain profiles** for selective loading:
 
 ## Usage
 
-### Load All Skills (Default)
+Load `PantheonOS` and `MagentaWithPantheonOS` together. Harness package selectors are repeatable; loading only this package provides guidance but not the companion notebook/Python execution surface expected by execution-heavy workflows such as `gene-panel`.
+
+### Load All Skills and Tools
 
 ```bash
-# Load all 11 PantheonOS skills
-magenta --harness-package PantheonOS
+magenta \
+  --harness-package PantheonOS \
+  --harness-package MagentaWithPantheonOS
 ```
 
-### Load Specific Profiles
+### Load Specific Skill Profiles
 
 ```bash
-# Load only selected profiles (comma-separated)
-magenta --harness-package PantheonOS:omics,publishing
+magenta \
+  --harness-package PantheonOS:omics,publishing \
+  --harness-package MagentaWithPantheonOS
 ```
+
+For versioned releases, select both packages explicitly:
+
+```bash
+magenta \
+  --harness-package github:Minions-Land/Magenta-CLI/PantheonOS@0.1.0 \
+  --harness-package github:Minions-Land/Magenta-CLI/MagentaWithPantheonOS@0.1.0
+```
+
+Magenta's native `read`, `write`, `edit`, `find`, `grep`, `show`, `bash`, `bg_shell`, `web-search`, and `web-fetch` tools remain responsible for ordinary file, process, preview, and web operations. Use `sub_agent` for one-shot delegation, `teammate_agent` for a persistent collaborator, and a `sub_agent` workflow only when workflow support is enabled.
 
 ## Skills Inventory
 
@@ -89,6 +103,8 @@ magenta --harness-package PantheonOS:omics,publishing
   - Standardized frontmatter (added `source`, `license`)
   - Moved sub-documents to `assets/references/`
   - Created package.toml with profiles
+  - Localized PantheonOS named-agent and file-manager instructions to Magenta's native tools
+  - Declared `MagentaWithPantheonOS` as the execution companion in usage documentation
 
 ## License
 
@@ -96,7 +112,7 @@ All skills retain their original BSD-2-Clause license from PantheonOS.
 
 ## See Also
 
-- [Packages overview](../README.md) — how packages load and how to combine them
+- Magenta's bundled package documentation — how packages load and how to combine selectors
 - [PantheonOS Repository](https://github.com/aristoteleo/PantheonOS)
 - [Single-cell Best Practices](https://www.sc-best-practices.org)
 - [scverse Documentation](https://scverse.org)

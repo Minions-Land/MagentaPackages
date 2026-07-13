@@ -1,0 +1,37 @@
+kind = "tool"
+name = "observe_figure"
+description = "Inspect a figure with deterministic pixel preflight and a controlled Magenta CLI vision evaluator. Returns a vision-backed PASS, WARN, or FAIL; vision unavailability is a tool error."
+runtime = "magenta_with_pantheon_runtime"
+module = "magenta_with_pantheon_runtime.observe_figure_cli"
+pixi_environment = "default"
+operation = "read"
+read_only = true
+destructive = false
+tags = ["network-read"]
+timeout_ms = 120000
+
+[metadata]
+package = "MagentaWithPantheonOS"
+implementation = "tools/run-python/python/magenta_with_pantheon_runtime"
+vision_backend = "controlled magenta --print subprocess with direct image attachment"
+vision_unavailable_policy = "nonzero tool error; never downgrade to a semantic WARN or fabricated PASS"
+
+[parameters]
+type = "object"
+required = ["file_path", "question"]
+additionalProperties = false
+
+[parameters.properties.file_path]
+type = "string"
+maxLength = 4096
+description = "Path to an image file."
+
+[parameters.properties.question]
+type = "string"
+maxLength = 2000
+description = "Specific visual question that requires semantic inspection. The result explicitly says when it could not be answered."
+
+[parameters.properties.expectation]
+type = "string"
+maxLength = 2000
+description = "Optional expected visual structure or quality criterion."

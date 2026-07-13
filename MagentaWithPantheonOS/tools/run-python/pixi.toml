@@ -1,0 +1,18 @@
+[workspace]
+name = "magenta-with-pantheon-runtime"
+version = "0.1.0"
+description = "Locked wrapper runtime for MagentaWithPantheonOS package tools"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "win-64"]
+
+[dependencies]
+python = ">=3.11,<3.14"
+nbformat = ">=5.10,<6"
+pillow = ">=10,<13"
+pytest = ">=8,<9"
+
+[environments]
+default = { solve-group = "default" }
+
+[tasks]
+test = "pytest python/tests -q"

@@ -27,5 +27,17 @@ jobs:
           python scripts/test_validate_packages.py
           python scripts/test_build_release_artifact.py
 
+      - name: Test PantheonOS package contracts
+        run: python -m unittest discover -s PantheonOS/tests -v
+
+      - uses: prefix-dev/setup-pixi@v0.10.0
+        with:
+          pixi-version: v0.70.2
+          run-install: false
+          cache: false
+
+      - name: Test MagentaWithPantheonOS runtime
+        run: pixi run --manifest-path MagentaWithPantheonOS/tools/run-python/pixi.toml --frozen test
+
       - name: Test bio API workspace
         run: cargo test --locked --manifest-path AutOmicScience/tools/bio-api/rust/Cargo.toml --workspace

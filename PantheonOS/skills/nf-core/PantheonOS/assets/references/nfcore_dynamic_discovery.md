@@ -77,8 +77,8 @@ URL: https://nf-co.re/pipelines/
 
 ## Step 2: Fetch Pipeline Documentation
 
-All nf-core pipelines follow a **standardized URL structure**. Use WebFetch
-to retrieve documentation for any pipeline:
+All nf-core pipelines follow a **standardized URL structure**. Use native
+`web-fetch` to retrieve documentation for any pipeline:
 
 ### Documentation URLs
 
@@ -91,10 +91,11 @@ to retrieve documentation for any pipeline:
 
 ### Example: Fetching info for nf-core/ampliseq
 
+```text
+web-fetch url=https://nf-co.re/ampliseq/latest/docs/usage/
 ```
-WebFetch: https://nf-co.re/ampliseq/latest/docs/usage/
-Prompt: "Extract the samplesheet format, required parameters, and usage examples"
-```
+
+Extract the samplesheet format, required parameters, and usage examples from the returned content.
 
 ### Fetching the Parameter Schema
 
@@ -205,19 +206,19 @@ follow this workflow:
 
 ```
 1. Identify the pipeline name
-   └─ Search: nf-core pipelines list <keyword>
-   └─ Or: WebFetch https://nf-co.re/pipelines/
+   └─ Search with `web-search`: nf-core pipelines list <keyword>
+   └─ Or `web-fetch`: https://nf-co.re/pipelines/
 
 2. Fetch usage documentation
-   └─ WebFetch https://nf-co.re/<pipeline>/latest/docs/usage/
+   └─ `web-fetch`: https://nf-co.re/<pipeline>/latest/docs/usage/
    └─ Extract: samplesheet format, required inputs, run examples
 
 3. Fetch parameter documentation (if user needs specific params)
-   └─ WebFetch https://nf-co.re/<pipeline>/latest/parameters/
+   └─ `web-fetch`: https://nf-co.re/<pipeline>/latest/parameters/
    └─ Extract: parameter names, defaults, descriptions
 
 4. Fetch output documentation (if user wants to know what they'll get)
-   └─ WebFetch https://nf-co.re/<pipeline>/latest/docs/output/
+   └─ `web-fetch`: https://nf-co.re/<pipeline>/latest/docs/output/
    └─ Extract: output files, directory structure
 
 5. Construct and provide:
@@ -235,7 +236,7 @@ User asks: "I have 16S amplicon sequencing data, how do I process it?"
 **Agent workflow:**
 
 1. Identify: 16S → nf-core/ampliseq
-2. Fetch: `WebFetch https://nf-co.re/ampliseq/latest/docs/usage/`
+2. Fetch `https://nf-co.re/ampliseq/latest/docs/usage/` with `web-fetch`
 3. Extract samplesheet format and key parameters
 4. Provide:
 

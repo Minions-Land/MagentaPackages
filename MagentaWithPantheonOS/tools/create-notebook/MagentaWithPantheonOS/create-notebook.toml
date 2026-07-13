@@ -1,0 +1,36 @@
+kind = "tool"
+name = "create_notebook"
+description = "Atomically create a new nbformat 4.5 notebook. The destination must end in .ipynb and must not already exist."
+runtime = "magenta_with_pantheon_runtime"
+module = "magenta_with_pantheon_runtime.create_notebook_cli"
+pixi_environment = "default"
+operation = "write"
+read_only = false
+destructive = false
+tags = ["workspace-write"]
+timeout_ms = 120000
+
+[metadata]
+package = "MagentaWithPantheonOS"
+implementation = "tools/run-python/python/magenta_with_pantheon_runtime"
+write_mode = "locked temporary file plus atomic replace"
+
+[parameters]
+type = "object"
+required = ["filePath"]
+additionalProperties = false
+
+[parameters.properties.filePath]
+type = "string"
+maxLength = 4096
+description = "Notebook path relative to the project workspace or an absolute path. Must end in .ipynb."
+
+[parameters.properties.kernel]
+type = "string"
+maxLength = 128
+description = "Optional Jupyter kernelspec name, such as python3, ir, or julia-1.10."
+
+[parameters.properties.title]
+type = "string"
+maxLength = 512
+description = "Optional notebook title stored in metadata and added as the first Markdown cell."

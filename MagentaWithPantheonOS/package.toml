@@ -1,0 +1,57 @@
+schema_version = "magenta.package.v2"
+id = "MagentaWithPantheonOS"
+name = "MagentaWithPantheonOS"
+version = "0.1.0"
+kind = "domain"
+domain = "scientific-computing"
+description = "PantheonOS-inspired Python, notebook, and figure-inspection tools for Magenta scientific workflows."
+source = "MagentaWithPantheonOS"
+default_profiles = []
+
+[[components]]
+kind = "tool"
+name = "run_python"
+source = "MagentaWithPantheonOS"
+path = "tools/run-python/MagentaWithPantheonOS"
+
+[[components]]
+kind = "tool"
+name = "create_notebook"
+source = "MagentaWithPantheonOS"
+path = "tools/create-notebook/MagentaWithPantheonOS"
+
+[[components]]
+kind = "tool"
+name = "add_cell"
+source = "MagentaWithPantheonOS"
+path = "tools/add-cell/MagentaWithPantheonOS"
+
+[[components]]
+kind = "tool"
+name = "observe_figure"
+source = "MagentaWithPantheonOS"
+path = "tools/observe-figure/MagentaWithPantheonOS"
+
+[[components]]
+kind = "python-runtime"
+name = "magenta_with_pantheon_runtime"
+source = "MagentaWithPantheonOS"
+path = "tools/run-python/python/magenta_with_pantheon_runtime"
+
+[[components]]
+kind = "runtime-tests"
+name = "magenta_with_pantheon_runtime_tests"
+source = "MagentaWithPantheonOS"
+path = "tools/run-python/python/tests"
+
+[[components]]
+kind = "env"
+name = "pixi"
+source = "MagentaWithPantheonOS"
+path = "tools/run-python/pixi.toml"
+
+[[components]]
+kind = "env-lock"
+name = "pixi"
+source = "MagentaWithPantheonOS"
+path = "tools/run-python/pixi.lock"

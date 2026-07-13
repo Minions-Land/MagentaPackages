@@ -1,8 +1,8 @@
 ---
 name: paper-writing
-description: 'Skills for the Paper Write Team: report and academic templates for HTML/PDF
-  rendering. Each template file is self-contained (HTML + CSS or LaTeX in a single
-  markdown file).'
+description: 'Report and academic templates for HTML/PDF rendering. Each template
+  file is self-contained (HTML + CSS or LaTeX in a single markdown file) and can be
+  used by the current session or a delegated scientific-reporting worker.'
 tags: []
 source: PantheonOS
 license: BSD-2-Clause
@@ -10,8 +10,8 @@ license: BSD-2-Clause
 
 # Paper Writing Skills
 
-Resources for the Paper Write Team's reporter agent. Each template is a
-self-contained markdown file with the full HTML+CSS or LaTeX content.
+Resources for the current session or a delegated scientific-reporting worker. Each
+template is a self-contained markdown file with the full HTML+CSS or LaTeX content.
 
 ## Templates
 
@@ -26,21 +26,18 @@ self-contained markdown file with the full HTML+CSS or LaTeX content.
 
 ### Report style (default)
 
-1. Reporter reads this skill index
-2. Reporter reads `report_standard.md` — contains both the HTML template and CSS
-3. Reporter reads paper.md, parses frontmatter, converts Markdown body to HTML
-4. Reporter fills the HTML template with metadata + CSS + content
-5. Reporter writes the final HTML file
-6. The UI exports the HTML to PDF on user request (browser print-to-PDF using the `@media print` CSS rules)
+1. Read this skill index and `report_standard.md`, which contains the HTML template and CSS.
+2. Read `paper.md`, parse its frontmatter, and convert the Markdown body to HTML.
+3. Fill the HTML template with metadata, CSS, and content; write the final HTML file.
+4. Preview the HTML with `show(url=<html path>)`, correct rendering issues, then export it to PDF with an available browser/print workflow.
 
 ### Academic style
 
-1. Reporter reads this skill index
-2. Reporter reads the LaTeX template (`latex_cn.md` or `latex_en.md` based on lang)
-3. Reporter reads paper.md, parses frontmatter, converts Markdown body to LaTeX
-4. Reporter fills the LaTeX template with metadata + content, writes .tex file
-5. Reporter runs Tectonic to compile PDF
-6. Reporter also reads `report_academic.md` to generate an HTML preview
+1. Read this skill index and the LaTeX template (`latex_cn.md` or `latex_en.md` based on language).
+2. Read `paper.md`, parse its frontmatter, and convert the Markdown body to LaTeX.
+3. Fill the template with metadata and content, then write the `.tex` file.
+4. Run Tectonic to compile the PDF and read `report_academic.md` to generate an HTML preview.
+5. Preview the PDF and HTML with `show(url=<artifact path>)`; fix any clipping, missing fonts, or layout defects before delivery.
 
 ### Custom templates
 

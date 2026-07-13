@@ -1,0 +1,42 @@
+kind = "tool"
+name = "add_cell"
+description = "Atomically add a cell with a stable id to an existing nbformat 4.5 notebook."
+runtime = "magenta_with_pantheon_runtime"
+module = "magenta_with_pantheon_runtime.add_cell_cli"
+pixi_environment = "default"
+operation = "edit"
+read_only = false
+destructive = false
+tags = ["workspace-write"]
+timeout_ms = 120000
+
+[metadata]
+package = "MagentaWithPantheonOS"
+implementation = "tools/run-python/python/magenta_with_pantheon_runtime"
+write_mode = "locked temporary file plus atomic replace"
+
+[parameters]
+type = "object"
+required = ["filePath", "source"]
+additionalProperties = false
+
+[parameters.properties.filePath]
+type = "string"
+maxLength = 4096
+description = "Path to an existing .ipynb notebook."
+
+[parameters.properties.cellType]
+type = "string"
+enum = ["code", "markdown", "raw"]
+default = "code"
+description = "Cell type."
+
+[parameters.properties.source]
+type = "string"
+maxLength = 16000
+description = "Complete cell source. Split larger programs across cells or reference a script artifact."
+
+[parameters.properties.position]
+type = ["integer", "string"]
+maxLength = 64
+description = "Optional insertion index, negative index (-1 appends), or an existing cell id after which to insert. Omit to append."

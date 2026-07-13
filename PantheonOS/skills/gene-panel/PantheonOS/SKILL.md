@@ -19,11 +19,22 @@ tags:
 - random-forest
 source: PantheonOS
 license: BSD-2-Clause
+requiredTools:
+- run_python
+- create_notebook
+- add_cell
+- observe_figure
+- read
+- write
+- edit
+- find
+- grep
+- sub_agent
 ---
 
 # Gene Panel Selection Workflow
 
-This skill is used when you need to construct **biologically meaningful** and **algorithmically robust** gene panels. You will receive context from the `leader` agent , use this context and **STRICLTY** follow this **Gene Panel Selection Workflow**
+Use this skill to construct **biologically meaningful** and **algorithmically robust** gene panels. Treat the user's request and the current Magenta session context as authoritative, and **STRICTLY** follow this **Gene Panel Selection Workflow**.
 
 ## Workflow Enforcement (MANDATORY)
 
@@ -36,25 +47,30 @@ No partial execution or silent degradation is allowed.
 
 
 ## Workdir
-Always work in the workdir provided by the leader agent.
+Always work in the workdir supplied by the user or parent session. If none is supplied, create a task-specific directory under the current workspace and report its path.
 
-## Calling other agents
-You can call other agents by using the `call_agent(agent_name, instruction)` function.
+## Delegation in Magenta
+Choose the smallest orchestration surface that preserves the task:
 
-- **Call the `browser_use` agent** for information collection:
-  When you encounter software or biological knowledge you are not familiar with, call `browser_use` to search the web and collect the necessary information.
+- Use native `web-search` and `web-fetch` directly for focused software or biological lookups. Use a one-shot `sub_agent` only when an independent research pass or a separate context window is useful.
+- Use `bash` for short environment checks and `bg_shell` for long installs or computations. Do not delegate installation merely to imitate PantheonOS's former named system-manager role.
+- Use a one-shot `sub_agent` with an explicit biology-review instruction for an independent interpretation of figures, panels, and intermediate results.
+- Use a one-shot `sub_agent` with an explicit scientific-reporting instruction after the evidence and artifacts are complete. The parent session remains responsible for checking and delivering the report.
+- Any `sub_agent` task that needs this workflow's skills or execution tools must set `packages: ["PantheonOS", "MagentaWithPantheonOS"]` in the request. Mentioning package names only in task prose does not grant them.
+- Use `teammate_agent` only when the same collaborator must persist across multiple workflow stages; exchange assignments and results through `send_message`. `teammate_agent` currently has no `packages` parameter, so do not assign it work that depends on PantheonOS Package skills or tools.
+- When several independent reviews can run concurrently and workflow support is enabled, use a `sub_agent` workflow (the Magenta multiagent capability). Otherwise issue ordinary one-shot `sub_agent` calls and synthesize their results yourself.
 
-- **Call the `system_manager` agent** for software environment installation:
-  When you need to install software packages, call `system_manager` to install them.
+Never pass a PantheonOS role name as though Magenta exposes a named-agent registry. Give each delegated worker its role, inputs, artifact paths, expected output, and acceptance criteria in the task instruction.
 
-- **Call the `biologist` agent** for results interpretation:
-  When you plot figures, compute a panel, or have intermediate results, call `biologist` to ask for interpretations and include them in your report.
+## Files and visual checks
+Use `read` for text and for PNG/JPEG/GIF/WebP images, `find` for file discovery, `grep` for content search, and `write`/`edit` for text artifacts. For every generated image:
 
-- **Call the `reporter`agent** when all the results are obtained, to make a well written pdf.
+1. Call `observe_figure(file_path=<figure path>, question=<specific semantic check>, expectation=<quality criterion>)`. It performs pixel preflight and a real vision-backed evaluation, returning `PASS`, `WARN`, or `FAIL`.
+2. Accept the visual gate only on `PASS`. For `WARN` or `FAIL`, follow the returned `analysis` (and optional `observations` compatibility details), revise the figure, and rerun `observe_figure` until it passes or a documented blocker prevents correction.
+3. When a second opinion or closer inspection is useful, call `read` on the image path so the current vision-capable model receives real ImageContent and checks legibility, clipping, contrast, panel consistency, and semantic content.
+4. Use `show` only when a host preview is useful; it is not the model's semantic inspection channel.
 
-## Visual understanding
-Use the `observe_images` function in the `file_manager` toolset to examine images and figures.
-If a figure is not publication-quality, replot it.
+A vision-backend failure is a tool error, not a semantic `WARN`. Do not fabricate a verdict when `observe_figure` fails to run.
 
 ## Reporting
 At the end of the task, write a markdown report named:
@@ -84,7 +100,7 @@ global config file to edit. -->
 | `SCGENEFIT_MAX_CONSTRAINTS` | 1000 | Max LP constraints for scGeneFit |
 | `SPAPROS_N_HVG` | 3000 | HVG pre-filter size for SpaPROS |
 | `RF_N_ESTIMATORS` | 300 | Random Forest tree count |
-| `SPAPROS_RUNTIME_WARNING_MINUTES` | 5.0 | Leader prompts the user via `notify_user` if SpaPROS estimate exceeds this |
+| `SPAPROS_RUNTIME_WARNING_MINUTES` | 5.0 | Current session requests explicit user approval if the SpaPROS estimate exceeds this |
 | `SPAPROS_RUNTIME_SKIP_MINUTES` | 30.0 | Strong-warning threshold; user may choose to skip SpaPROS |
 | `ARI_DROP_THRESHOLD` | 0.05 | Max acceptable ARI degradation during panel completion |
 | `DOWNSAMPLE_MAX_CELLS` | 500000 | Above this cell count, downsampling is required before selection |
@@ -109,7 +125,7 @@ before proceeding. Follow the sub-steps below **in order**.
 > and follow the reference guides it points to (especially its CELLxGENE Census and gget guides).
 
 ### 0.1 Parse the user query
-Extract search parameters from the leader-provided context:
+Extract search parameters from the user request and current session context:
 - **Organism**: e.g., "Homo sapiens", "Mus musculus"
 - **Tissue / organ**: e.g., "lung", "brain", "bone marrow", "tumor"
 - **Disease context**: e.g., "COVID-19", "cancer", "normal"
@@ -224,10 +240,10 @@ spatial data needed), try these alternatives **in order of preference**:
    adata = gget.cellxgene(species="homo_sapiens", tissue="<tissue>",
                            cell_type=["<cell_type1>", "<cell_type2>"])
    ```
-2. **GEO / ArrayExpress** — call `browser_use` to search for accession numbers,
-   then download via `gget` or direct URL
+2. **GEO / ArrayExpress** — use `web-search` and `web-fetch` to find accession numbers,
+   then download via `gget` or a verified direct URL
 3. **Human Cell Atlas (HCA)** / **Tabula Sapiens** / **Broad Single Cell Portal**
-   — call `browser_use` for specific dataset URLs
+   — use `web-search` and `web-fetch` to locate and verify specific dataset URLs
 
 Prefer datasets that already provide **processed count matrices**
 (h5ad, loom, mtx format) with cell type annotations and metadata.
@@ -238,7 +254,7 @@ Before proceeding to Step 1, verify:
 - [ ] Sufficient number of cells (ideally >10k for robust panel selection)
 - [ ] Cell type annotations exist (check `.obs` columns) — if not, they will be computed in Step 1
 - [ ] The dataset is relevant to the user's biological context
-- [ ] Save the dataset to workdir via `file_manager`
+- [ ] Save the dataset to the workdir from Python, then verify the path with `find` or `read` as appropriate
 
 > [!NOTE]
 > Document in the notebook which database was queried, what filters were used,
@@ -246,7 +262,7 @@ Before proceeding to Step 1, verify:
 
 ## 1) Dataset Understanding and Splitting
 
-Start with exploratory inspection using an **integrated notebook**.
+Start exploratory inspection by creating an nbformat record with `create_notebook` and `add_cell`, then execute each computation with a fresh `run_python` call. Persist datasets, tables, and figures to the workdir between calls; notebook cells do not share interpreter memory.
 
 ### 1.1 Basic structure
 Inspect:
@@ -271,7 +287,7 @@ Thresholds come from the module-level constants in
 Rules:
 - If `adata.n_obs > DOWNSAMPLE_MAX_CELLS` (default 500000): downsample to below that limit, **preserving all cell types**.
 - If `adata.n_vars > GENE_COUNT_THRESHOLD` (default 30000): reduce to ≤ `GENE_COUNT_THRESHOLD` via QC/HVG for compute-heavy steps.
-- Save downsampled `adata` to a new file in workdir via `file_manager`.
+- Save downsampled `adata` to a new file in the workdir from Python, then verify that the output exists.
 
 > [!IMPORTANT]
 > Prefer stratified downsampling by `label_key` if available; otherwise stratify by clustering labels.
@@ -295,7 +311,7 @@ If provided one dataset, split to preserve all cell type distribution across all
 Rules:
 - **Process in memory whenever possible.** Do not save intermediate h5ad files unless they
   will be re-read later by a different step. Chain downsampling → splitting → preprocessing
-  in one notebook session when feasible.
+  in one complete `run_python` stage when feasible; otherwise persist only the artifacts required by the next fresh call.
 - **Keep only these files on disk:**
   - The **raw downloaded dataset** (Step 0 output) — for reproducibility
   - The **training split** (preprocessed) — used by all algorithmic methods
@@ -338,7 +354,7 @@ Recompute only if missing or invalid.
 - Marker plots (dotplots, heatmaps)
 
 > [!IMPORTANT]
-> If heavy steps are slow or unstable on notebook use python code
+> For heavy steps, run tested Python scripts or `run_python` calls in the selected project Pixi environment, save checkpoints to the workdir, and record the exact code and artifact paths in the notebook.
 
 ---
 
@@ -361,15 +377,15 @@ Algorithmic Methods = `{HVG, DE, Random Forest, scGeneFit, SpaPROS}`
 The helper lives at `assets/references/scripts/gene_panel_helpers.py`, resolved
 relative to **this skill's directory** (the directory containing this SKILL.md).
 You already know that directory's absolute path from the skills catalog (the skill's
-`<location>`). In a notebook cell, put that directory on `sys.path`, then import:
+`<location>`). Record the import in a notebook code cell, and execute the same complete code through `run_python` with that directory on `sys.path`:
 
 ```python
 import sys
 from pathlib import Path
 
 # Substitute the absolute path of THIS skill's directory (the one holding SKILL.md),
-# e.g. <...>/packages/PantheonOS/skills/gene-panel
-skill_dir = Path("<ABSOLUTE PATH OF THIS SKILL'S DIRECTORY>")
+# e.g. <PACKAGE_ROOT>/skills/gene-panel/PantheonOS
+skill_dir = Path("<ABSOLUTE PATH OF THIS SKILL SOURCE DIRECTORY>")
 sys.path.insert(0, str(skill_dir / "assets/references/scripts"))
 
 from gene_panel_helpers import (
@@ -386,9 +402,10 @@ from gene_panel_helpers import (
 )
 ```
 
-If you are unsure of the skill's directory, `read` the file
-`assets/references/scripts/gene_panel_helpers.py` (relative paths resolve against
-this skill's directory) to confirm its location, then set `skill_dir` accordingly.
+Resolve this skill's absolute `<location>` from the skills catalog, take its parent
+directory as `skill_dir`, and `read` the absolute path
+`<skill_dir>/assets/references/scripts/gene_panel_helpers.py` before importing.
+Native file tools resolve relative paths from the agent workspace, not from the skill directory.
 
 > [!CAUTION]
 > **SpaPROS runtime gate (MANDATORY).** SpaPROS can run for tens of minutes
@@ -396,13 +413,15 @@ this skill's directory) to confirm its location, then set `skill_dir` accordingl
 > and inspect the `severity` tier of the returned dict:
 >
 > - `"fast"` → run `select_spapros(...)` directly, no user confirmation needed.
-> - `"slow"` or `"very_slow"` → **stop**, return the estimate dict verbatim
->   to the leader so it can call `notify_user` with a Run/Skip choice. The
->   leader then dispatches back with one of:
->     - `"SpaPROS APPROVED by user"` → run `select_spapros(...)` as normal.
->     - `"SpaPROS SKIPPED by user"` → **do not** call `select_spapros`;
->       report the skip in `report_analysis.md` and continue with the other
->       methods only.
+> - `"slow"` or `"very_slow"` → **stop** and present the estimate dict to the
+>   user in the current conversation with a clear Run/Skip choice. Continue only
+>   after an explicit response:
+>     - Run approved → call `select_spapros(...)` as normal.
+>     - Skip chosen → **do not** call `select_spapros`; report the skip in
+>       `report_analysis.md` and continue with the other methods only.
+>
+> A delegated worker cannot approve this cost. It must return the estimate to its
+> parent session, which obtains the user's decision before dispatching more work.
 
 ```python
 # --- SpaPROS pre-check (cheap, metadata-only read of the .h5ad) ---
@@ -415,7 +434,7 @@ estimate = estimate_spapros_runtime(
 )
 print(estimate)
 # If estimate["severity"] != "fast": return this dict verbatim to the
-# leader and STOP. Do not call select_spapros in this dispatch.
+# parent session and STOP. Do not call select_spapros in this dispatch.
 
 # IMPORTANT: call each method ONCE with return_scores=True.
 # This writes a full ranked CSV (every gene + score). For the ARI vs K
@@ -430,8 +449,8 @@ select_scgenefit(
     workdir=workdir,
 )
 
-# SpaPROS — ONLY when severity=="fast" or the leader's directive says
-# "SpaPROS APPROVED by user". Otherwise, skip this cell entirely.
+# SpaPROS — ONLY when severity=="fast" or the session context records
+# explicit user approval. Otherwise, skip this cell entirely.
 select_spapros(
     adata_path=adata_path,
     label_key="cell_type",
@@ -464,7 +483,7 @@ select_random_forest(
 
 For **each method independently (HVG, DE, Scgenefit, RF, SpapROS)**:
 
-Let N be the target final panel size requested by the leader.
+Let N be the target final panel size requested by the user.
 
 > [!CRITICAL]
 > The ARI vs K sweep is a **pandas slicing** operation, not a re-run of
@@ -520,17 +539,17 @@ Check this on the training dataset.
 **1) Assess Seed Coverage First**
 Before biological lookup, inspect genes in the seed panel:
 - Map seed gene IDs to symbols
-- Identify which biological categories from the leader's context are already covered
+- Identify which biological categories from the user request and session context are already covered
 - Note which categories are MISSING or under-represented
 
 **2) Exhaustive Biological Lookup (CRITICAL — MUST BE THOROUGH)**
-Derive the relevant biological categories from the **leader-provided context** (e.g., cell type markers, signaling pathways, functional states, disease-specific genes — whatever the user's goal requires).
+Derive the relevant biological categories from the **user request and session context** (e.g., cell type markers, signaling pathways, functional states, disease-specific genes — whatever the user's goal requires).
 
-Call `browser_use` **MULTIPLE times**, once per major biological category identified.
+Run **multiple focused literature/database searches**, once per major biological category identified. Use native `web-search`/`web-fetch`; delegate independent search streams through `sub_agent` only when parallelism or an isolated context is useful.
 For **each category**, collect **all** well-established marker genes (typically 10-30+ per category, not just 3-5).
 Sources: GeneCards, GO, UniProt, KEGG, Reactome, MSigDB, published marker gene lists, review articles.
 
-> A single browser_use call returning a handful of genes for an entire panel is INSUFFICIENT.
+> A single broad search returning a handful of genes for an entire panel is INSUFFICIENT.
 > The number of biologically curated genes should scale with the gap between seed size and target N.
 > Do multiple rounds of lookup — breadth across ALL relevant categories AND depth within each.
 
@@ -539,7 +558,7 @@ For each candidate gene:
    - check not already in seed panel
    - ensure no redundancy
    - maintain balanced biological coverage across categories
-   - categorize into a relevant biological category (from leader context, or inferred)
+   - categorize into a relevant biological category (from user/session context, or inferred)
    - after each batch of additions, check Completion Rule (ARI stability on training)
    - if ARI drops sharply, try a different set; a modest drop for strong biological coverage is acceptable
    - continue until all important biological genes are added or panel reaches size N
@@ -598,7 +617,7 @@ Compare vs reference:
 
 ## 6) Summarizing
 
-Report must include the full workflow (Steps 0 → 5) and at minimum, in a very well written **pdf** (ask `reporter` to make the pdf):
+Report must include the full workflow (Steps 0 → 5) in a well-written **PDF**. A reporting `sub_agent` may draft it from completed evidence and artifacts, but the current session must verify the final file:
 
 - **Objective & context**
 - **Dataset description** (structure, labels, preprocessing status)
@@ -627,7 +646,7 @@ Report must include the full workflow (Steps 0 → 5) and at minimum, in a very 
 | Gene | Methods where it appears | Biological Function | Relevance score |
 |------|--------------------------|----------------------|-----------------|
 
-2) Per-category count recap table based on leader context.
+2) Per-category count recap table based on the user request and session context.
 
 ### Figures (MANDATORY)
 The report should contain at **least** all of the following figures , and any other figures that you consider relevant:
@@ -637,25 +656,19 @@ The report should contain at **least** all of the following figures , and any ot
   - UMAP comparisons + quantitative similarity metric (See above **Benchmarking results**)
 ---
 
-# Guidelines for integrated notebook usage
+# Guidelines for reproducible notebook records
 
-Use the `integrated_notebook` toolset to create/manage/execute notebooks.
+Use `create_notebook` to initialize one nbformat notebook per analysis task and `add_cell` to record Markdown and code cells. These tools edit notebook structure; they do not execute cells and they do not own a persistent kernel.
 
-- Keep all related code in the same notebook
-- Each notebook handles one specific analysis task
-- Start each notebook with a markdown cell:
-  - background
-  - objective
-- After each code cell producing results, add a markdown cell explaining the result
-- Save figures and also display them in notebook outputs
-
-If memory becomes insufficient:
-- close kernels using `manage_kernel`
-- reduce compute via **stratified downsampling** (preserve all cell types) and/or split heavy operations into separate cells
-- document decisions explicitly (what was checked, what was changed, why)
+- Start each notebook with a Markdown cell containing the background and objective.
+- Use `run_python` for computation. Every call starts a fresh interpreter, so each call must include all imports and definitions it needs, or load explicit artifacts saved by an earlier call.
+- After a successful `run_python` call, add the exact code to the notebook with `add_cell`, then add a Markdown cell explaining the observed result. Do not imply that adding the cell executed it or populated notebook outputs.
+- Save datasets, tables, models, and figures under the workdir so later stateless calls can load them. Record those artifact paths in the notebook.
+- Keep related code in the same notebook, but split memory-heavy work into complete, independently executable stages that communicate through saved artifacts.
+- Use **stratified downsampling** only when justified by the workflow thresholds, preserving all cell types, and document what was checked, changed, and why.
 
 > [!IMPORTANT]
-> **Do NOT lighten the computation or reduce the data to dodge a kernel crash** — the point of the pipeline is to capture the full complexity of the dataset. If `manage_kernel` + splitting doesn't help, save the heavy code to a `.py` file and run it via `python_interpreter`, leaving a markdown cell in the notebook that points to the script path. This is a **last resort** — note it explicitly in `report_analysis.md` with a reason.
+> **Do not reduce the data merely to evade a memory failure.** First make the computation more memory-efficient or split it into explicit stateless stages. If the complete code is too large for a practical inline `run_python` call, write a `.py` script, record that script path in a notebook Markdown cell, and use `run_python` with a small loader that executes the script in its fresh interpreter. Document the reason in `report_analysis.md`.
 
 ---
 
@@ -664,8 +677,10 @@ If memory becomes insufficient:
 We expect **high-quality, publication-level figures**.
 
 After generating a figure:
-- inspect via `observe_images`
-- if not good → replot
+- call `observe_figure(file_path=<figure path>, question=<specific semantic check>, expectation=<quality criterion>)`
+- accept the quality gate only on vision-backed `PASS`; for `WARN` or `FAIL`, revise according to the returned analysis and rerun the check
+- when useful, call `read` on the image path for a second semantic inspection by the current model using the returned ImageContent
+- use `show` only for optional host preview; if the vision evaluator cannot run, treat that as a tool error and do not guess
 
 High-quality means:
 - clear, readable

@@ -556,7 +556,7 @@ Before proceeding to downstream analysis, summarize the quality status:
 - [ ] Filtering thresholds: values used and justification (all applied in Step 5)
 - [ ] Cell counts: per sample before/after unified filtering
 
-**Flag for leader review if**:
+**Flag for review in the current or parent session if**:
 - Marker genes appear in >50% of cells unexpectedly (potential ambient contamination)
 - Any sample has <500 cells after filtering
 - Doublet rate > 15% (may indicate loading issues)

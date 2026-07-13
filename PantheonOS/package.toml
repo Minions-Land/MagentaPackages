@@ -4,7 +4,7 @@ name = "PantheonOS"
 version = "0.1.0"
 kind = "domain"
 domain = "bioinformatics"
-description = "Bioinformatics and scientific workflow skills from PantheonOS covering single-cell/spatial omics, image analysis, and scientific publishing."
+description = "PantheonOS bioinformatics workflow skills localized for Magenta; load with MagentaWithPantheonOS for execution tools."
 source = "PantheonOS"
 
 # HCP-isomorphic layout: each skill at <skill>/<source>/HcpMagnet.ts
@@ -136,3 +136,11 @@ path = "skills/presentation/PantheonOS"
 description = "Marp slides and presentation templates"
 include_in_context = false
 profiles = ['publishing']
+
+# === Package Infrastructure ===
+
+[[components]]
+kind = "runtime-tests"
+name = "pantheonos_package_tests"
+source = "PantheonOS"
+path = "tests"

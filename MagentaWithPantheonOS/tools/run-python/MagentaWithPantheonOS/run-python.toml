@@ -1,0 +1,39 @@
+kind = "tool"
+name = "run_python"
+description = "Execute Python code once in a fresh subprocess. No interpreter state persists between calls. Returns JSON with stdout, stderr, and exitCode."
+runtime = "magenta_with_pantheon_runtime"
+module = "magenta_with_pantheon_runtime.run_python_cli"
+pixi_environment = "default"
+operation = "execute"
+read_only = false
+destructive = false
+tags = ["trusted"]
+timeout_ms = 360000
+
+[metadata]
+package = "MagentaWithPantheonOS"
+implementation = "tools/run-python/python/magenta_with_pantheon_runtime"
+interpreter_lifecycle = "one new subprocess per call"
+
+[parameters]
+type = "object"
+required = ["code"]
+additionalProperties = false
+
+[parameters.properties.code]
+type = "string"
+maxLength = 16000
+description = "Python source code to execute in a new interpreter subprocess. For larger programs, write a script artifact and execute a short loader."
+
+[parameters.properties.env]
+type = "string"
+pattern = "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
+default = "default"
+description = "Pixi environment selector. Omit/default uses the locked package wrapper; named selectors resolve only against the current project's locked pixi.toml. Aliases: sc-rna->task1, spatial->task2, sc-multiome->task3, sc-atac->task4. Missing or unknown environments fail loudly."
+
+[parameters.properties.timeoutMs]
+type = "integer"
+minimum = 1
+maximum = 300000
+default = 60000
+description = "Subprocess timeout in milliseconds (default 60000)."

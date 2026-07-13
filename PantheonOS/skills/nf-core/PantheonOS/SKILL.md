@@ -5,6 +5,9 @@ description: Skills for using nf-core community pipelines to process omics data,
 tags: []
 source: PantheonOS
 license: BSD-2-Clause
+requiredTools:
+- web-search
+- web-fetch
 ---
 
 # nf-core Pipelines Skills

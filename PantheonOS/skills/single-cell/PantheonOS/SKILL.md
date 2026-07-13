@@ -17,7 +17,7 @@ license: BSD-2-Clause
 
 High-priority, actionable workflows for the most common single-cell analysis tasks.
 For deeper background and alternative methods, see the supplementary
-[SC Best Practices](../sc-best-practices/SKILL.md) reference.
+[SC Best Practices](../../sc-best-practices/PantheonOS/SKILL.md) reference.
 
 ## Available Skills
 

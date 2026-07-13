@@ -272,7 +272,7 @@ adata = sc.read_h5ad('checkpoint.h5ad')  # Reload when needed
 
 - **Scrublet**: `del scrub, X` immediately after `scrub_doublets()`
 - **scVI**: Use `batch_size=128` (default 256) if OOM; checkpoint before training
-- **Emergency**: `gc.collect()` or `manage_kernel(action="restart")`
+- **Emergency**: save a checkpoint, release large objects with `del` + `gc.collect()`, and continue in a fresh stateless `run_python` stage
 
 ## 7. Dask for Out-of-Core Computing
 

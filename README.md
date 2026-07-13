@@ -59,8 +59,8 @@ magenta --harness-package AutOmicScience
 # Load only selected profiles (comma-separated, package-defined)
 magenta --harness-package ClaudeScience:structure,design
 
-# Combine packages in one session
-magenta --harness-package AutOmicScience --harness-package PantheonOS
+# Combine PantheonOS skills with their execution tools
+magenta --harness-package PantheonOS --harness-package MagentaWithPantheonOS
 ```
 
 The selector grammar is `PackageName[:profile1,profile2,...]`. Parsing and
@@ -131,12 +131,13 @@ rebuild declared native tools and embed only their final executable.
 | [`AutOmicScience`](./AutOmicScience/) | Single-cell / spatial / bulk omics, cancer & clinical genomics | 14 skills · 5 tools · system prompt · brand · Python/Pixi runtime | Production omics analysis grounded in a real compute tool (`omics_compute`) |
 | [`Biomni`](./Biomni/) | Biomedical AI (Stanford SNAP Lab) | 3 skills bundling executable tools | CRISPR sgRNA design, single-cell annotation, and a broad biomedical toolkit copied in-tree |
 | [`ClaudeScience`](./ClaudeScience/) | Computational biology research | 20 skills · 6 profiles | Structure/docking, protein design, sequence models, single-cell, research, and publishing — selected by profile |
-| [`PantheonOS`](./PantheonOS/) | Bioinformatics workflow best practices | 11 skills · 3 profiles | scverse/nf-core workflow guidance, image analysis, scientific publishing |
+| [`PantheonOS`](./PantheonOS/) | Bioinformatics workflow best practices | 11 skills · 3 profiles | Magenta-native scverse/nf-core workflow discipline, image analysis, and scientific publishing |
+| [`MagentaWithPantheonOS`](./MagentaWithPantheonOS/) | PantheonOS execution bridge | 4 tools · locked Python/Pixi runtime | Stateless Python, atomic nbformat editing, and real vision-backed figure QA |
 
-AutOmicScience is the **canonical reference package**: it is the only one that
-ships tools, a system prompt, a brand, and a pinned runtime, so use its layout
-when you need an executable example. The other three are skill-led knowledge
-packages.
+AutOmicScience remains the **canonical full-stack reference package** because it
+ships tools, a system prompt, a brand, and a pinned domain runtime. Use
+MagentaWithPantheonOS as the compact executable-tool reference, and treat
+Biomni, ClaudeScience, and PantheonOS as skill-led knowledge packages.
 
 ### Choosing between them
 
@@ -144,9 +145,12 @@ packages.
 - **Wet-lab / biomedical breadth** → `Biomni` (executable tools across 20+ domains).
 - **Model-heavy research** (folding, design, biological sequence models) → `ClaudeScience`, by profile.
 - **Workflow / best-practice guidance** → `PantheonOS`.
+- **PantheonOS Python/notebook/figure execution** → load `MagentaWithPantheonOS` with `PantheonOS`.
 
-They compose. A common research stack is `AutOmicScience` for grounded
-computation plus `PantheonOS` for workflow discipline.
+They compose. The normal Pantheon stack loads `PantheonOS` for workflow
+discipline together with `MagentaWithPantheonOS` for the four execution tools;
+`AutOmicScience` can still be added when its grounded omics capabilities are
+needed.
 
 ## Creating a new package
 

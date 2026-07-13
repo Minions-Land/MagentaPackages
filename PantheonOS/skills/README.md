@@ -41,30 +41,39 @@ PantheonOS skills provide comprehensive guidance for:
 
 ## Structure
 
-Each skill follows the Magenta package structure:
+Each skill follows the HCP-isomorphic Magenta package structure:
 
 ```
-skill-name/
-├── SKILL.md                # Main skill document with YAML frontmatter
-└── assets/                 # Optional bundled resources
-    ├── references/         # Method documentation (loaded on-demand)
-    ├── scripts/            # Helper scripts
-    └── templates/          # Output templates
+skills/skill-name/
+├── HcpServer.ts
+└── PantheonOS/
+    ├── HcpMagnet.ts
+    ├── SKILL.md            # Main skill document with YAML frontmatter
+    └── assets/             # Optional bundled resources
+        ├── references/     # Method documentation (loaded on demand)
+        ├── scripts/        # Helper scripts
+        └── templates/      # Output templates
 ```
 
 ## Usage in Magenta
 
-Skills are automatically discoverable by the Magenta harness:
+Load this resource package together with its execution companion:
 
-```typescript
-import { loadSkills } from "@magenta/harness";
-
-const { skills } = await loadSkills(env, [
-  "/path/to/MagentaPackages/PantheonOS/skills"
-]);
-
-// Skills are now available to agents
+```bash
+magenta \
+  --harness-package PantheonOS \
+  --harness-package MagentaWithPantheonOS
 ```
+
+For versioned releases, select both packages explicitly:
+
+```bash
+magenta \
+  --harness-package github:Minions-Land/Magenta-CLI/PantheonOS@0.1.0 \
+  --harness-package github:Minions-Land/Magenta-CLI/MagentaWithPantheonOS@0.1.0
+```
+
+`PantheonOS` provides the 11 skill resources. `MagentaWithPantheonOS` provides the stateless `run_python`, atomic `create_notebook`/`add_cell`, and vision-backed `observe_figure` tools used by execution-heavy workflows.
 
 ## Skill Relationships
 
@@ -101,7 +110,7 @@ const { skills } = await loadSkills(env, [
 
 ## Dependencies
 
-Most skills describe **scanpy/scverse ecosystem** workflows:
+The package-level execution dependency is `MagentaWithPantheonOS`; load it in the same session as shown above. Individual workflows also require the scientific libraries they describe. Most skills use the **scanpy/scverse ecosystem**:
 - `scanpy` — Single-cell analysis
 - `squidpy` — Spatial transcriptomics
 - `muon` — Multimodal integration
@@ -117,6 +126,8 @@ Most skills describe **scanpy/scverse ecosystem** workflows:
   - Standardized frontmatter (added `source`, `license`)
   - Moved sub-documents to `assets/references/`
   - Updated cross-references to new paths
+  - Localized named PantheonOS roles and file operations to Magenta tools
+  - Documented the required `MagentaWithPantheonOS` execution companion
 
 ## License
 
