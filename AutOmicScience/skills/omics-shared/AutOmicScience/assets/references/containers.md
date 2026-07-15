@@ -82,8 +82,8 @@ Use `conventions.is_embedding_key(key)` to check if a key follows this conventio
 
 ```python
 import sys, os
-sys.path.insert(0, os.path.join(os.environ.get("AOS_SKILLS_DIR", "skills"), "omics", "_shared", "scripts"))
-import io as omics_io
+sys.path.insert(0, os.environ.get("AOSE_OMICS_PYTHON_DIR") or "tools/omics-compute/python")
+from aose_omics_runtime.shared import io as omics_io
 
 # Basic load
 adata, report = omics_io.load_h5ad(path="data.h5ad")
@@ -382,11 +382,10 @@ evidence = {
 
 ```python
 import sys, os
-sys.path.insert(0, os.path.join(os.environ.get("AOS_SKILLS_DIR", "skills"), "omics", "_shared", "scripts"))
+sys.path.insert(0, os.environ.get("AOSE_OMICS_PYTHON_DIR") or "tools/omics-compute/python")
 
-import conventions
-import io as omics_io
-from conventions import (
+from aose_omics_runtime.shared import conventions, io as omics_io
+from aose_omics_runtime.shared.conventions import (
     LAYER_COUNTS, OBS_LEIDEN, OBS_CELLTYPE, OBSM_PCA, OBSM_UMAP
 )
 ```

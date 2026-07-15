@@ -1,5 +1,7 @@
 # Reference — Hugging Face Fetch (models & datasets)
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 How to download a Hugging Face model or dataset when the canonical host (`huggingface.co`) is slow, blocked, or TCP-reset — the common case behind a restrictive network.
 
 > Magenta's `WebFetch`/network layer auto-probes local proxies and VPN ports, so a running proxy is used automatically. But the `huggingface-cli`, `git-lfs`, `requests`, and `httpx` paths do **not** always inherit that — they frequently need an explicit **mirror endpoint** and LFS handling. This doc is that recipe.

@@ -69,7 +69,6 @@ def standard_preprocess(
     leiden_flavor: str = LEIDEN_FLAVOR,
     seed: int = RANDOM_SEED,
     run_doublets: bool = True,
-    inplace: bool = False,
     return_report: bool = True,
 ) -> Tuple[AnnData, Optional[dict]]:
     """
@@ -83,7 +82,9 @@ def standard_preprocess(
     Preconditions
     -------------
     Raw counts must be in adata.layers['counts'] OR an X that looks_like_counts.
-    Raises ValueError if neither is present.
+    When layers['counts'] is present it is authoritative: X is reset from it so
+    QC, filtering, doublet detection and normalization all use raw counts (X may
+    have been normalized upstream). Raises ValueError if neither is present.
 
     Parameters
     ----------
@@ -125,8 +126,6 @@ def standard_preprocess(
         Random seed for reproducibility
     run_doublets : bool, default=True
         Whether to run scrublet doublet detection (flags, never auto-drops)
-    inplace : bool, default=False
-        If False, work on a copy; if True, modify input
     return_report : bool, default=True
         Whether to return detailed report dict
 
@@ -176,26 +175,33 @@ def standard_preprocess(
             f"Available columns: {list(adata.obs.columns)}"
         )
 
-    # Work on copy unless inplace=True
-    if not inplace:
-        adata = adata.copy()
+    adata = adata.copy()
 
-    # Preserve raw counts in layers['counts'] if not already there
-    if LAYER_COUNTS not in adata.layers:
-        if _looks_like_counts(adata.X):
-            adata.layers[LAYER_COUNTS] = adata.X.copy()
-        else:
-            raise ValueError(
-                f"Neither layers['{LAYER_COUNTS}'] nor a counts-like X is present. "
-                "Cannot proceed with normalization on already-normalized data. "
-                "Ensure raw counts are available."
-            )
+    # Single raw-counts source for all count-based steps: a counts layer is
+    # authoritative (reset X from it, since X may be normalized); else X must be counts.
+    if LAYER_COUNTS in adata.layers:
+        adata.X = adata.layers[LAYER_COUNTS].copy()
+    elif _looks_like_counts(adata.X):
+        adata.layers[LAYER_COUNTS] = adata.X.copy()
+    else:
+        raise ValueError(
+            f"Neither layers['{LAYER_COUNTS}'] nor a counts-like X is present. "
+            "Cannot proceed with normalization on already-normalized data. "
+            "Ensure raw counts are available."
+        )
 
     initial_shape = (adata.n_obs, adata.n_vars)
     warnings = []
 
-    # 1. QC metrics
-    adata.var['mt'] = adata.var_names.str.startswith(mt_prefix)
+    # 1. QC metrics — keep a caller-provided var['mt']; only derive from prefix if absent.
+    if 'mt' not in adata.var.columns:
+        adata.var['mt'] = adata.var_names.str.startswith(mt_prefix)
+        if not bool(adata.var['mt'].any()):
+            warnings.append(
+                f"No genes matched mt_prefix='{mt_prefix}' (var_names may be Ensembl IDs "
+                "or lower-case); pct_counts_mt will be 0 and mt-based QC is disabled. "
+                "Provide a boolean var['mt'] or the correct mt_prefix."
+            )
     sc.pp.calculate_qc_metrics(
         adata, qc_vars=['mt'], percent_top=None, log1p=False, inplace=True
     )
@@ -237,8 +243,8 @@ def standard_preprocess(
 
                     median = np.median(values)
                     mad = np.median(np.abs(values - median))
-                    if mad == 0:  # Avoid division by zero
-                        continue
+                    # No mad==0 skip: keep bounds at the median so zero-inflated
+                    # outliers (e.g. high pct_counts_mt) are still flagged.
                     lower = median - nmads * mad
                     upper = median + nmads * mad
 
@@ -265,8 +271,7 @@ def standard_preprocess(
 
                 median = np.median(values)
                 mad = np.median(np.abs(values - median))
-                if mad == 0:
-                    continue
+                # No mad==0 skip (see per-batch branch above).
                 lower = median - nmads * mad
                 upper = median + nmads * mad
 
@@ -325,8 +330,10 @@ def standard_preprocess(
             )
         except ImportError as e:
             raise ImportError(
-                f"hvg_flavor='seurat_v3' requires scikit-misc (skmisc.loess). "
-                f"Install with: pip install scikit-misc. Error: {e}"
+                f"hvg_flavor='seurat_v3' requires scikit-misc (skmisc.loess), which is "
+                f"pinned in task1-4 — seeing this means you are not running in a pinned "
+                f"env. Select one (modality='scrna') rather than installing into the "
+                f"current interpreter. Error: {e}"
             ) from e
     else:
         sc.pp.highly_variable_genes(
@@ -380,7 +387,7 @@ def standard_preprocess(
 
         report.update({
             "genes_filtered_min_cells": genes_filtered,
-            "doublets_flagged": doublets_flagged if run_doublets else None,
+            "doublets_flagged": doublets_flagged if 'predicted_doublet' in adata.obs.columns else None,
             "batch_key": batch_key,
             "n_hvg": n_hvg,
             "hvg_flavor": hvg_flavor,
@@ -412,7 +419,7 @@ def standard_preprocess(
                 "X": "log1p-normalized",
                 "layers": [LAYER_COUNTS],
                 "obsm": [OBSM_PCA, OBSM_UMAP],
-                "obs": [OBS_LEIDEN] + (["predicted_doublet", "doublet_score"] if run_doublets else []),
+                "obs": [OBS_LEIDEN] + (["predicted_doublet", "doublet_score"] if 'predicted_doublet' in adata.obs.columns else []),
             },
             "warnings": warnings,
             "start_time": start_time.isoformat(),
@@ -427,17 +434,16 @@ def standard_preprocess(
 def _looks_like_counts(matrix) -> bool:
     """
     Heuristic: all-finite, non-negative, integer-valued sample -> likely raw counts.
-    Used only to warn, never to silently coerce.
+    Gates whether X is accepted/copied as the counts layer.
     """
     if matrix is None:
         return False
 
     # Sample to avoid memory issues on large matrices
-    if hasattr(matrix, 'toarray'):
+    sample = matrix[:min(1000, matrix.shape[0])]
+    if hasattr(sample, 'toarray'):
         # Sparse matrix
-        sample = matrix[:min(1000, matrix.shape[0]), :min(100, matrix.shape[1])].toarray()
-    else:
-        sample = matrix[:min(1000, matrix.shape[0]), :min(100, matrix.shape[1])]
+        sample = sample.toarray()
 
     if not np.all(np.isfinite(sample)):
         return False
@@ -465,7 +471,7 @@ def main(args):
     report["input"] = args.input
     report["output"] = args.output
     report["modality"] = getattr(args, "modality", "scrna")
-    report["saved_bytes"] = save_meta.get("bytes")
+    report["saved_bytes"] = save_meta.get("size_bytes")
     print(json.dumps(report, indent=2, default=str))
 
 

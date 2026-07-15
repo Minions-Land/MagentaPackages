@@ -133,19 +133,35 @@ def annotate_markers(
         for celltype, genes in reference_db.items()
     }
 
-    # Build cluster-to-celltype mapping
+    # Build the mapping over the FULL set of clusters in the data (not just those
+    # with surviving markers), using string cluster ids on both sides so
+    # numeric-typed clusters map correctly.
     cluster_to_celltype = {}
     annotation_details = {}
+    marker_group = markers['group'].astype(str)
+    marker_groups = set(marker_group.unique())
 
-    for cluster in markers['group'].unique():
-        # Get top N markers for this cluster
-        cluster_markers = markers[markers['group'] == cluster].head(top_n)
+    for cluster in adata.obs[cluster_key].astype(str).unique():
+        if cluster not in marker_groups:
+            cluster_to_celltype[cluster] = "Unknown"
+            annotation_details[cluster] = {
+                "assigned_celltype": "Unknown",
+                "best_score": 0.0, "best_overlap": 0,
+                "raw_best_score": 0.0, "raw_best_overlap": 0, "raw_best_celltype": None,
+                "all_scores": {}, "top_markers": [],
+                "reason": "no markers passed filtering for this cluster",
+            }
+            continue
+
+        cluster_markers = markers[marker_group == cluster].head(top_n)
         cluster_genes = set(cluster_markers['names'].str.upper().tolist())
 
-        # Compute overlap with each cell type
         best_celltype = None
         best_score = 0.0
         best_overlap = 0
+        raw_best_score = 0.0        # best evidence regardless of the min_overlap gate
+        raw_best_overlap = 0
+        raw_best_celltype = None
         all_scores = {}
 
         for celltype, ref_genes in reference_db_normalized.items():
@@ -163,28 +179,35 @@ def annotate_markers(
                 "overlapping_genes": sorted(overlap),
             }
 
+            if score > raw_best_score:
+                raw_best_score = score
+                raw_best_overlap = n_overlap
+                raw_best_celltype = celltype
             if score > best_score and n_overlap >= min_overlap:
                 best_score = score
                 best_overlap = n_overlap
                 best_celltype = celltype
 
-        # Assign cell type if confidence threshold met
         if best_celltype and best_score >= min_score:
             cluster_to_celltype[cluster] = best_celltype
         else:
             cluster_to_celltype[cluster] = "Unknown"
 
-        annotation_details[str(cluster)] = {
+        annotation_details[cluster] = {
             "assigned_celltype": cluster_to_celltype[cluster],
             "best_score": best_score,
             "best_overlap": best_overlap,
+            "raw_best_score": raw_best_score,
+            "raw_best_overlap": raw_best_overlap,
+            "raw_best_celltype": raw_best_celltype,
             "all_scores": all_scores,
             "top_markers": cluster_markers['names'].tolist()[:5],
         }
 
-    # Apply suggestions to adata (a non-final suggestion column by default;
-    # the locked `cell_type` endpoint is written only after LLM/expert judgment).
-    adata.obs[target_key] = adata.obs[cluster_key].map(cluster_to_celltype).astype('category')
+    # Apply suggestions to adata (a non-final suggestion column by default; the
+    # locked `cell_type` endpoint is written only after LLM/expert judgment). Map on
+    # string cluster ids so numeric-typed clusters are matched.
+    adata.obs[target_key] = adata.obs[cluster_key].astype(str).map(cluster_to_celltype).fillna("Unknown").astype('category')
 
     end_time = datetime.now(UTC)
 
@@ -254,7 +277,23 @@ def format_annotation_summary(report: dict) -> str:
         top_markers = ", ".join(details['top_markers'])
 
         if celltype == "Unknown":
-            lines.append(f"  Cluster {cluster}: Unknown (score={score:.2f}, overlap={overlap})")
+            # Surface the strongest RAW evidence too: printing only the eligible best
+            # would show 0/0 for a sub-threshold hit and read as "no overlap at all"
+            # to the reviewer this text is written for.
+            reason = details.get('reason')
+            raw_celltype = details.get('raw_best_celltype')
+            raw_score = details.get('raw_best_score', 0.0)
+            raw_overlap = details.get('raw_best_overlap', 0)
+            if reason:
+                lines.append(f"  Cluster {cluster}: Unknown ({reason})")
+            elif raw_celltype and raw_overlap > overlap:
+                lines.append(
+                    f"  Cluster {cluster}: Unknown (eligible score={score:.2f}, overlap={overlap}; "
+                    f"strongest raw evidence {raw_celltype} score={raw_score:.2f}, "
+                    f"overlap={raw_overlap} — below threshold)"
+                )
+            else:
+                lines.append(f"  Cluster {cluster}: Unknown (score={score:.2f}, overlap={overlap})")
         else:
             lines.append(
                 f"  Cluster {cluster}: {celltype} "

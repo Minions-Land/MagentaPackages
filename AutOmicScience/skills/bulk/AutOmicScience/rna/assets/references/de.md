@@ -1,11 +1,17 @@
 # Differential expression (count-based)
 
+**Maturity: REFERENCE** — hand-rolled, but **Recipe A runs on the pinned stack**: `pydeseq2` is in `task1`
+(select it with `modality="scrna"` — that is an environment selector, not a claim about your data).
+**Recipe B (R) is PARTIAL**: `DESeq2`/`edgeR`/`limma`/`apeglm` are **not installed in any environment** —
+`r-env` ships `r-base` + `r-essentials` only. Verified against pydeseq2 **0.5.4** (the installed version);
+API checks below were executed on it.
+
 **Default:** a negative-binomial / voom count model — `pyDESeq2` (Python) or `DESeq2`/`edgeR`/`limma-voom`
 (R). A Welch t-test or OLS on log-CPM ignores the count mean–variance relationship and is statistically
 weaker; prefer a count model. Input = **raw integer counts** + a sample metadata table with the condition
 and every relevant covariate.
 
-## Recipe A — pyDESeq2 (Python, no R needed)
+## Recipe A — pyDESeq2 (Python, no R needed) — runs on `task1`
 
 ```python
 import pandas as pd, numpy as np, json
@@ -17,12 +23,19 @@ meta   = pd.read_csv("meta.csv",   index_col=0)          # samples x covariates;
 counts = counts.T.loc[meta.index]                        # DeseqDataSet wants samples x genes
 counts = counts.loc[:, counts.sum(0) >= 10]              # low-expression filter (see normalization.md)
 
+# `design` takes a formulaic formula. Do NOT use `design_factors=` — it is deprecated in 0.5.x
+# (DeprecationWarning, "will soon be removed") and merely rewrites itself into this same string.
 dds = DeseqDataSet(counts=counts, metadata=meta,
-                   design_factors=["batch", "condition"])  # covariates FIRST, tested factor LAST
+                   design="~batch + condition")           # covariates first, tested factor last
 dds.deseq2()
 st = DeseqStats(dds, contrast=["condition", "treated", "control"])  # (factor, numerator, reference)
-st.summary()
-st.lfc_shrink(coeff="condition_treated_vs_control")       # apeglm-style shrinkage — do this before ranking
+st.summary()                                              # returns None — it POPULATES st.results_df
+
+# The shrinkage coeff must name a real LFC column. pydeseq2 names them the formulaic way
+# ("condition[T.treated]"), NOT the R-DESeq2 way ("condition_treated_vs_control") — passing the
+# R-style name raises KeyError. Read it off the model instead of hardcoding either spelling:
+coeff = dds.varm["LFC"].columns[-1]                       # -> 'condition[T.treated]'
+st.lfc_shrink(coeff=coeff)                                # apeglm-style; do this before ranking
 res = st.results_df.dropna(subset=["padj"])
 
 sig = res[res.padj < 0.05]
@@ -30,12 +43,26 @@ sig = sig.reindex(sig.log2FoldChange.abs().sort_values(ascending=False).index)  
 report = {"n_tested": int(len(res)), "n_sig_fdr05": int((res.padj < 0.05).sum()),
           "n_up": int(((res.padj<0.05)&(res.log2FoldChange>0)).sum()),
           "n_down": int(((res.padj<0.05)&(res.log2FoldChange<0)).sum()),
+          "shrinkage_coeff": coeff,
           "top_up": sig[sig.log2FoldChange>0].head(10).index.tolist(),
           "top_down": sig[sig.log2FoldChange<0].head(10).index.tolist()}
 res.to_csv("de_results.csv"); print(json.dumps(report))    # emit report for grounding
 ```
 
+**Choosing the reference level.** `contrast=[factor, numerator, reference]` sets the *tested* contrast, but
+the LFC coefficient is built against the level formulaic picks first (alphabetical). `ref_level=` is
+deprecated; to force a reference, put it in the formula:
+`design="~C(condition, contr.treatment(base='control'))"`.
+
 ## Recipe B — DESeq2 (R, via Rscript) with covariate design + apeglm shrinkage
+
+> **PARTIAL — needs provisioning.** `DESeq2`/`edgeR`/`limma`/`apeglm` are in **no** environment here
+> (`r-env` is `r-base` + `r-essentials` only). **Recipe A gives the same model in Python and needs nothing**
+> — prefer it. If you specifically need the R implementations, stand up an R env per `omics-shared`'s
+> `assets/references/AOSE_nonStandard_env.md` (§A: a `deseq2-r` feature with
+> `bioconductor-deseq2`/`bioconductor-apeglm` from bioconda and its own `solve-group`; §B a **named** conda
+> env if the solve fails). Never bare-`pip`/`R -e install.packages` into a shared env, and never report a
+> t-test on log-CPM as a substitute.
 
 ```r
 # Rscript -e '...'  (requires DESeq2 + apeglm in the R env)
@@ -82,6 +109,22 @@ pb  = X.groupby(key.values).sum()                        # pseudobulk: donor|gro
 - Apply the stated status/quality filter (Cuffdiff `status == "OK"`), FC + q-value thresholds.
 - **Handle infinite FC** (`value_1==0` or `value_2==0`): keep and name the gene (e.g. report as `+Inf`)
   rather than silently dropping it.
+
+## Failure Modes
+
+- **`KeyError: The coeff argument '…' should be one the LFC columns`** — *symptom:* `lfc_shrink` dies.
+  *Diagnosis:* an R-DESeq2 coefficient name (`condition_treated_vs_control`) was passed to pydeseq2, whose
+  columns are formulaic-style (`condition[T.treated]`). *Fix:* `coeff = dds.varm["LFC"].columns[-1]`.
+- **`AttributeError: 'NoneType' object has no attribute 'log2FoldChange'`** — *symptom:* the line after
+  `summary()` fails. *Diagnosis:* `res = st.summary()` — `summary()` returns **None**; it writes
+  `st.results_df` as a side effect. *Fix:* call `st.summary()`, then read `st.results_df`.
+- **`DeprecationWarning: design_factors is deprecated`** — *symptom:* a warning, results still fine today.
+  *Diagnosis:* `design_factors=` is 0.4-era API kept as a shim that rewrites itself into `design=`.
+  *Fix:* pass `design="~batch + condition"` directly. `pydeseq2` is **unpinned** in `pixi.toml`, so this
+  shim will disappear under you on a future solve — migrate rather than rely on it.
+- **Unshrunk LFCs ranked** — *symptom:* the top "most changed" genes are all low-count. *Diagnosis:*
+  `lfc_shrink` was skipped, or it errored and the error was swallowed. *Fix:* shrink before ranking, and
+  record `shrinkage_coeff` in the report so a skipped shrinkage is visible in the evidence.
 
 ## Sources
 

@@ -31,9 +31,9 @@ snap.pp.select_features(adata, n_features=25000)
 
 # After clustering, call peaks per cluster (grounded subcommand), then build the peak matrix
 omics_compute(subcommand="peak_calling", modality="scatac", args={
-    "input": "qc.h5ad", "output": "peaks.bed", "fragment-file": "fragments.tsv.gz",
-    "mode": "pseudobulk", "cluster-column": "leiden"})
-# then snap.pp.make_peak_matrix(adata, ...) — see peak_calling.md
+    "adata": "qc.h5ad", "output": "peaks.bed",
+    "mode": "pseudobulk", "cluster-column": "leiden", "create-matrix": "true"})
+# create-matrix builds the peak x cell matrix in the same call — see peak_calling.md
 ```
 
 ## Pitfalls & Quality Checks

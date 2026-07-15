@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # BioML Coding — ML Engineering Discipline
 
-> Subskill of `bioml`. Enter here from the parent skill when you write, repair, or package ML code for a reproduction or training task. Read `../SKILL.md` (parent) and `../../omics-shared/SKILL.md` first — their ML-engineering foundations and evidence rules apply here.
+> Subskill of `bioml`. Enter here from the parent skill when you write, repair, or package ML code for a reproduction or training task. Read the parent (`../SKILL.md`) and the always-loaded `omics-shared` skill first — their ML-engineering foundations and evidence rules apply here.
 
 The coding methodology for BioML work: plan before writing, implement surgically, repair failing checks in a bounded loop, keep error paths honest, and package a reproducible snapshot. Adapted for the ML-reproduction context where the deliverable is a trained model producing an exact output.
 

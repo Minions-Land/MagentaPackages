@@ -6,8 +6,23 @@ of an AnnData object's structure and contents, suitable for including in
 LLM prompts to provide dataset context.
 """
 
+import re
+
 import numpy as np
 import pandas as pd
+
+from .conventions import CATEGORICAL_OBS_KEYS
+
+
+# Every character Python's splitlines() / text renderers treat as a line break or
+# control code: C0, DEL+C1 (incl. NEL \x85), and the Unicode LINE/PARAGRAPH separators.
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
+
+
+def _safe(value) -> str:
+    """Stringify and neutralize control chars so a value cannot inject summary
+    lines (this text is fed to LLM prompts)."""
+    return _CONTROL_CHARS.sub(" ", str(value))
 
 
 def summarize_adata(adata, *, top_k: int = 20) -> str:
@@ -43,7 +58,7 @@ def summarize_adata(adata, *, top_k: int = 20) -> str:
 
     # Layers
     if adata.layers:
-        layer_names = ", ".join(sorted(adata.layers.keys()))
+        layer_names = ", ".join(_safe(k) for k in sorted(adata.layers.keys()))
         lines.append(f"Layers: {layer_names}")
     else:
         lines.append("Layers: (none)")
@@ -56,25 +71,25 @@ def summarize_adata(adata, *, top_k: int = 20) -> str:
             col_data = adata.obs[col]
 
             # Check if numeric
-            if pd.api.types.is_numeric_dtype(col_data):
+            if col not in CATEGORICAL_OBS_KEYS and pd.api.types.is_numeric_dtype(col_data):
                 min_val = col_data.min()
                 max_val = col_data.max()
                 mean_val = col_data.mean()
-                lines.append(f"  {col} (numeric): range [{min_val:.3g}, {max_val:.3g}], mean={mean_val:.3g}")
+                lines.append(f"  {_safe(col)} (numeric): range [{min_val:.3g}, {max_val:.3g}], mean={mean_val:.3g}")
             else:
-                # Categorical or object
-                value_counts = col_data.value_counts()
+                # Categorical or object. dropna=False so missing values are counted
+                # and the totals reconcile with n_obs; values escaped to prevent
+                # a newline-bearing category from injecting a fake summary line.
+                value_counts = col_data.value_counts(dropna=False)
                 n_unique = len(value_counts)
 
                 if n_unique <= top_k:
-                    # Show all values
-                    items = [f"{val}({count})" for val, count in value_counts.items()]
-                    lines.append(f"  {col} (categorical, {n_unique} unique): {', '.join(items)}")
+                    items = [f"{_safe(val)}({count})" for val, count in value_counts.items()]
+                    lines.append(f"  {_safe(col)} (categorical, {n_unique} unique): {', '.join(items)}")
                 else:
-                    # Show top_k and indicate there are more
-                    top_items = [f"{val}({count})" for val, count in value_counts.head(top_k).items()]
+                    top_items = [f"{_safe(val)}({count})" for val, count in value_counts.head(top_k).items()]
                     n_more = n_unique - top_k
-                    lines.append(f"  {col} (categorical, {n_unique} unique): {', '.join(top_items)}, +{n_more} more")
+                    lines.append(f"  {_safe(col)} (categorical, {n_unique} unique): {', '.join(top_items)}, +{n_more} more")
     else:
         lines.append("  (none)")
     lines.append("")
@@ -82,7 +97,7 @@ def summarize_adata(adata, *, top_k: int = 20) -> str:
     # Embeddings and other obsm
     lines.append("Embeddings/matrices (obsm):")
     if adata.obsm:
-        obsm_keys = ", ".join(sorted(adata.obsm.keys()))
+        obsm_keys = ", ".join(_safe(k) for k in sorted(adata.obsm.keys()))
         lines.append(f"  {obsm_keys}")
     else:
         lines.append("  (none)")

@@ -1,5 +1,9 @@
 # Reference — Histone Mark Interpretation
 
+**Maturity: REFERENCE (domain knowledge — no code, no dependency).** This doc has no API surface, so
+nothing here can go stale against a library version; it is the interpretive layer the other epigenomics
+docs feed into. Everything below is standard Roadmap/ENCODE chromatin-state knowledge — see `## Sources`.
+
 Biological meaning of common histone modifications and how to interpret differential ChIP-seq signal.
 
 ## The core marks
@@ -50,7 +54,9 @@ ATAC-seq measures open chromatin (all regulatory elements at once), not a specif
 ## QC by mark
 
 - **H3K4me3**: sharp TSS enrichment; check the TSS enrichment score
-- **H3K27me3/H3K9me3**: broad; low FRiP is expected (signal spread over domains)
+- **H3K27me3/H3K9me3**: broad; low FRiP is expected (signal spread over domains). ENCODE's ">1% FRiP" rule
+  is **TF-ChIP guidance** and does not apply to these marks — see `peak_loading.md`. Do not fail a broad-mark
+  sample on a threshold written for a different assay.
 - **H3K27ac**: should overlap H3K4me1 at enhancers
 
 ## Pitfalls
@@ -63,4 +69,13 @@ ATAC-seq measures open chromatin (all regulatory elements at once), not a specif
 
 ## Grounding
 
-`report`: mark identity, biological interpretation of the direction of change, peak mode used, relevant combinatorial context (co-marks checked), TSS enrichment / FRiP QC.
+`report`: mark identity, biological interpretation of the direction of change, peak mode used, relevant combinatorial context (co-marks checked), TSS enrichment / FRiP QC **judged against this mark's own convention**.
+
+## Sources
+
+- Roadmap Epigenomics Consortium 2015, *Nature* 518:317 — reference chromatin states across 111 epigenomes.
+- Ernst & Kellis 2012, *Nat Methods* 9:215 — ChromHMM (the combinatorial state logic above).
+- Creyghton et al. 2010, *PNAS* 107:21931 — H3K27ac distinguishes active from poised enhancers.
+- Bernstein et al. 2006, *Cell* 125:315 — bivalent (H3K4me3 + H3K27me3) domains.
+- Barski et al. 2007, *Cell* 129:823 — genome-wide mark distributions (H3K4me3 promoters, H3K36me3 gene bodies).
+- Landt et al. 2012, *Genome Research* 22:1813 — ENCODE ChIP-seq QC (FRiP; narrow vs broad practice).

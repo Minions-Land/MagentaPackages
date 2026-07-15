@@ -27,62 +27,17 @@ default_profiles = []
 
 [[profiles]]
 name = "single-cell"
-description = "Single-cell RNA / ATAC / multiome analysis"
+description = "Single-cell / spatial / immune-repertoire — scverse-stack, cell-resolution analysis"
 extends = []
 
 [[profiles]]
-name = "spatial"
-description = "Spatial transcriptomics analysis"
+name = "bulk-genomics"
+description = "Sample / cohort level — bulk RNA-seq & epigenomics, somatic & statistical genetics, CRISPR dependency"
 extends = []
 
 [[profiles]]
-name = "bulk"
-description = "Bulk RNA-seq and epigenomics"
-extends = []
-
-[[profiles]]
-name = "genomics"
-description = "Cancer somatic variants (MAF/CNA) and statistical genetics"
-extends = []
-
-[[profiles]]
-name = "proteomics"
-description = "Proteomics (Olink / mass-spec / phospho)"
-extends = []
-
-[[profiles]]
-name = "metabolomics"
-description = "Metabolomics / lipidomics"
-extends = []
-
-[[profiles]]
-name = "microbiome"
-description = "Microbiome (16S / metagenomics)"
-extends = []
-
-[[profiles]]
-name = "dependency"
-description = "Cancer dependency (DepMap / CCLE CRISPR screens)"
-extends = []
-
-[[profiles]]
-name = "clinical"
-description = "Clinical survival analysis (KM / Cox)"
-extends = []
-
-[[profiles]]
-name = "bioml"
-description = "Bioinformatics ML engineering and model reproduction"
-extends = []
-
-[[profiles]]
-name = "phase-separation"
-description = "Biomolecular phase separation / condensates"
-extends = []
-
-[[profiles]]
-name = "immune"
-description = "Immune repertoire (TCR / BCR)"
+name = "molecular"
+description = "Quantitative molecular omics — proteomics, metabolomics, microbiome, phase-separation"
 extends = []
 
 # === Components ===
@@ -118,7 +73,7 @@ name = "spatial"
 source = "AutOmicScience"
 path = "skills/spatial/AutOmicScience"
 include_in_context = true
-profiles = ["spatial"]
+profiles = ["single-cell"]
 
 [[components]]
 kind = "skill"
@@ -126,7 +81,7 @@ name = "bulk"
 source = "AutOmicScience"
 path = "skills/bulk/AutOmicScience"
 include_in_context = false
-profiles = ["bulk"]
+profiles = ["bulk-genomics"]
 
 [[components]]
 kind = "skill"
@@ -134,7 +89,7 @@ name = "bioml"
 source = "AutOmicScience"
 path = "skills/bioml/AutOmicScience"
 include_in_context = false
-profiles = ["bioml"]
+profiles = ["single-cell", "bulk-genomics", "molecular"]
 
 [[components]]
 kind = "skill"
@@ -142,7 +97,7 @@ name = "cancer-genomics"
 source = "AutOmicScience"
 path = "skills/cancer-genomics/AutOmicScience"
 include_in_context = false
-profiles = ["genomics"]
+profiles = ["bulk-genomics"]
 
 [[components]]
 kind = "skill"
@@ -150,7 +105,7 @@ name = "proteomics"
 source = "AutOmicScience"
 path = "skills/proteomics/AutOmicScience"
 include_in_context = false
-profiles = ["proteomics"]
+profiles = ["molecular"]
 
 [[components]]
 kind = "skill"
@@ -158,7 +113,7 @@ name = "cancer-dependency"
 source = "AutOmicScience"
 path = "skills/cancer-dependency/AutOmicScience"
 include_in_context = false
-profiles = ["dependency"]
+profiles = ["bulk-genomics"]
 
 [[components]]
 kind = "skill"
@@ -166,7 +121,7 @@ name = "metabolomics"
 source = "AutOmicScience"
 path = "skills/metabolomics/AutOmicScience"
 include_in_context = false
-profiles = ["metabolomics"]
+profiles = ["molecular"]
 
 [[components]]
 kind = "skill"
@@ -174,7 +129,7 @@ name = "clinical-survival"
 source = "AutOmicScience"
 path = "skills/clinical-survival/AutOmicScience"
 include_in_context = false
-profiles = ["clinical"]
+profiles = ["single-cell", "bulk-genomics", "molecular"]
 
 [[components]]
 kind = "skill"
@@ -182,7 +137,7 @@ name = "microbiome"
 source = "AutOmicScience"
 path = "skills/microbiome/AutOmicScience"
 include_in_context = false
-profiles = ["microbiome"]
+profiles = ["molecular"]
 
 [[components]]
 kind = "skill"
@@ -190,7 +145,7 @@ name = "phase-separation"
 source = "AutOmicScience"
 path = "skills/phase-separation/AutOmicScience"
 include_in_context = false
-profiles = ["phase-separation"]
+profiles = ["molecular"]
 
 [[components]]
 kind = "skill"
@@ -198,7 +153,7 @@ name = "statistical-genetics"
 source = "AutOmicScience"
 path = "skills/statistical-genetics/AutOmicScience"
 include_in_context = false
-profiles = ["genomics"]
+profiles = ["bulk-genomics"]
 
 [[components]]
 kind = "skill"
@@ -206,7 +161,7 @@ name = "immune-repertoire"
 source = "AutOmicScience"
 path = "skills/immune-repertoire/AutOmicScience"
 include_in_context = false
-profiles = ["immune"]
+profiles = ["single-cell"]
 
 [[components]]
 kind = "system-prompt"
@@ -228,7 +183,7 @@ path = "tools/omics-preflight/AutOmicScience"
 
 [[components]]
 kind = "tool"
-name = "omics_install"
+name = "omics_install_env"
 source = "AutOmicScience"
 path = "tools/omics-install/AutOmicScience"
 

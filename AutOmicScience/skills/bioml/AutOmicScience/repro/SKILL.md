@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # BioML Reproduction — Run Paper Code & Fetch Weights
 
-> Subskill of `bioml`. Enter here from the parent skill when you need to reproduce a published method by running its paper repo. Read `../SKILL.md` (parent) and `../../omics-shared/SKILL.md` first — their ML-engineering foundations and evidence rules apply here.
+> Subskill of `bioml`. Enter here from the parent skill when you need to reproduce a published method by running its paper repo. Read the parent (`../SKILL.md`) and the always-loaded `omics-shared` skill first — their ML-engineering foundations and evidence rules apply here.
 
 The central skill for NatureBench-style tasks: **get the paper's code running, adapt its I/O to the required output, fetch model weights from Hugging Face, and exploit escape hatches when a simpler method already beats the target.**
 
@@ -108,16 +108,17 @@ python scripts/train.py --data ./data/ --output ./output/ --epochs 50
 
 ### Step 5: Adapt Output to Contract
 
-The paper's script often writes a checkpoint or intermediate format. You must convert it to the **exact output contract** (`.npy`, `.h5ad`, `.csv`, exact shape/dtype):
+The paper's script often writes a checkpoint or intermediate format. You must convert it to the
+**exact output contract** — format, shape, **and dtype**.
 
-```python
-# Example: repo writes model.ckpt, you need predictions.npy
-import numpy as np
-# ... load model, run inference on test set ...
-predictions = model.predict(test_data)
-assert predictions.shape == (n_samples,), f"wrong shape: {predictions.shape}"
-np.save("predictions.npy", predictions.astype(np.float32))
-```
+- **`assert` the shape** before saving. A silently-wrong shape is the single most common way a
+  reproduction "succeeds" and scores zero
+- **The dtype is part of the contract**, not an afterthought: `float32` for scores, `int` for class
+  labels. Casting labels to float, or probabilities to int, satisfies the shape check and destroys the
+  values
+
+The adaptation recipes (checkpoint → `.npy`, `.h5ad` → `.npy`) are in
+`assets/references/run_paper_repo.md`.
 
 **Verify the output:**
 - Shape/dtype match exactly

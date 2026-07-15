@@ -1,5 +1,7 @@
 # Reference — DNA Foundation Models
 
+**Maturity: PARTIAL** — `transformers` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 NT, DNABERT, HyenaDNA, Borzoi for DNA regulatory prediction, plus the CNN escape hatch.
 
 ## Nucleotide Transformer (NT)
@@ -11,7 +13,18 @@ model = AutoModelForSequenceClassification.from_pretrained(
     "InstaDeepAI/nucleotide-transformer-500m-1000g", num_labels=n_classes)
 # Tokenize, then Trainer.train()
 ```
-Max ~1kb (6-mer → ~1000 tokens). Longer → HyenaDNA/Enformer.
+
+**The checkpoint is a masked-LM; the classifier head starts as noise.** NT publishes
+`architectures: ["EsmForMaskedLM"]`, `model_type: esm`, so `AutoModelForSequenceClassification`
+resolves it to `EsmForSequenceClassification`: it keeps the encoder, drops the LM head, and creates a
+**randomly initialised** classifier. transformers warns about exactly that, and the warning is correct
+and expected — it is what finetuning means. Do not silence it, and **never report zero-shot numbers
+from this object**: until you train it, the head is noise. `transformers` is **not pinned** — provision
+it first (see the parent SKILL.md).
+Max **~6 kb** — 1000 tokens × 6 nt/token. (From the checkpoint itself: `tokenizer_config.json`
+`model_max_length: 1000`, `config.json` `max_position_embeddings: 1002` and `vocab_size: 4105` = 4⁶ + 9
+specials, which is what confirms the 6-mer.) Longer than that → HyenaDNA/Enformer; **don't escalate at
+1 kb** — NT handles that natively, with ~167 tokens to spare.
 
 ## DNABERT-2
 BPE tokenizer (variable-length). HuggingFace `zhihan1996/DNABERT-2-117M`. Good for promoter/enhancer classification.

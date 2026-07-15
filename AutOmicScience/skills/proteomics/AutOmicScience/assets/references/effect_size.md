@@ -1,5 +1,7 @@
 # Reference — Effect-Size Ranking vs P-Value Ranking
 
+**Maturity: REFERENCE** — a ranking rule, not a computation; applies to any DE table this skill produces.
+
 When a question asks "which proteins change *most*," rank by effect size (magnitude), not by p-value (evidence strength). A subtle but important distinction.
 
 ## The two axes are orthogonal
@@ -55,15 +57,26 @@ merged = merged[
     (merged.padj_rna < 0.05) &
     (merged.padj_metab < 0.05)
 ]
+# Standardize BEFORE combining. Proteomic log2FC, RNA log2FC and a metabolite effect are on
+# different scales with different spreads, so multiplying the raw magnitudes silently lets whichever
+# assay happens to have the widest dynamic range dominate the ranking — the "combined" score is then
+# mostly one omic wearing a trenchcoat. Rank-transform within each omic first (rank is robust to the
+# heavy tails these distributions have; a z-score is the alternative if you prefer magnitudes).
+for col in ["log2FC_prot", "log2FC_rna", "effect_metab"]:
+    merged[f"r_{col}"] = merged[col].abs().rank(pct=True)      # 0..1 within this omic
+
 merged["combined_effect"] = (
-    merged.log2FC_prot.abs() *
-    merged.log2FC_rna.abs() *
-    merged.effect_metab.abs()
+    merged.r_log2FC_prot *
+    merged.r_log2FC_rna *
+    merged.r_effect_metab
 )
 top = merged.sort_values("combined_effect", ascending=False).head(10)
 ```
 
 Document the combination rule (product, sum, min) — each has different semantics. Product rewards consistency across omics; min rewards the weakest-link being strong.
+
+Report the standardization alongside the rule: "product of within-omic percentile ranks" and "product of
+raw |log2FC|" produce different top-10s, and only the first is comparable across assays.
 
 ## Pitfalls
 

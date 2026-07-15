@@ -3,7 +3,6 @@ name: clinical-survival
 description: Survival analysis — Kaplan-Meier curves, log-rank test, Cox proportional-hazards regression for time-to-event clinical outcomes (overall survival, progression-free survival, any censored endpoint). Use when the user has survival data (time, event) and asks to test survival differences, stratify by a biomarker, compute hazard ratios, or generate KM plots.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [clinical, survival, kaplan-meier, log-rank, cox-ph, hazard-ratio, censoring, time-to-event]
-extends: omics-shared
 ---
 
 # Clinical Survival Analysis — KM, Log-Rank, Cox PH
@@ -18,11 +17,26 @@ This is **NOT** competing-risks analysis, **NOT** recurrent-event models, **NOT*
 
 1. **Data format**: time-to-event table with `time` (numeric, follow-up duration) and `event` (binary: 1=event, 0=censored)
 2. **Context**: grouping variable (treatment, biomarker high/low) or continuous covariates (age, expression) for stratification/adjustment
-3. **Library**: `lifelines` (standard Python survival package)
+3. **Library**: `lifelines` (standard Python survival package) — **not in `task1–4`; provision it first**
+
+```toml
+# tools/omics-environment/pixi.toml
+[feature.survival.dependencies]
+lifelines = "*"
+
+[environments]
+survival = { features = ["core", "singlecell", "survival"], solve-group = "survival" }
+```
 
 ```bash
-pip install lifelines
+pixi install --manifest-path tools/omics-environment/pixi.toml -e survival
+pixi lock    --manifest-path tools/omics-environment/pixi.toml
 ```
+
+`["core", "singlecell", ...]`, not `["core", ...]` — `core` is only jupyterlab/h5py/mudata; pandas,
+numpy, scipy and matplotlib come in via `singlecell`, which is why every `task1–4` composes both. Never
+a bare `pip install lifelines` (it can land in `base`). Full protocol: `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md`.
 
 ---
 
@@ -30,62 +44,62 @@ pip install lifelines
 
 | Capability | Maturity | Tool/Method | Reference Doc |
 |------------|----------|-------------|---------------|
-| Kaplan-Meier survival curves | **REFERENCE** | lifelines.KaplanMeierFitter | `assets/references/km_logrank.md` |
-| Log-rank test (two-group comparison) | **REFERENCE** | lifelines.statistics.logrank_test | `assets/references/km_logrank.md` |
-| Cox proportional-hazards regression | **REFERENCE** | lifelines.CoxPHFitter | `assets/references/cox_ph.md` |
-| PH assumption check (Schoenfeld residuals) | **REFERENCE** | CoxPHFitter.check_assumptions | `assets/references/cox_ph.md` |
-| Hazard ratio + 95% CI | **REFERENCE** | Cox model summary | `assets/references/cox_ph.md` |
+| Kaplan-Meier survival curves | **PARTIAL** | lifelines.KaplanMeierFitter — not pinned | `assets/references/km_logrank.md` |
+| Log-rank test (two-group comparison) | **PARTIAL** | lifelines.statistics.logrank_test — not pinned | `assets/references/km_logrank.md` |
+| Cox proportional-hazards regression | **PARTIAL** | lifelines.CoxPHFitter — not pinned | `assets/references/cox_ph.md` |
+| PH assumption check (Schoenfeld residuals) | **PARTIAL** | CoxPHFitter.check_assumptions — not pinned | `assets/references/cox_ph.md` |
+| Hazard ratio + 95% CI | **PARTIAL** | Cox model summary — not pinned | `assets/references/cox_ph.md` |
 
-All capabilities are **REFERENCE** because survival analysis requires study-specific judgment: censoring interpretation, PH violation handling, covariate selection, stratification cutoffs.
+Everything here is **PARTIAL** for one reason only: `lifelines` is in no pinned env, so provision it
+before planning a run (above). The *methods* are unambiguous — what still needs study-specific judgment
+is censoring interpretation, PH-violation handling, covariate selection, and stratification cutoffs.
+`omics_preflight` only validates `task1–4`, so check the import yourself and record the env + version
+in the `report`.
+
+Other skills route survival work here — `microbiome`'s per-taxon Cox capability points at
+`cox_ph.md` — and they already label it PARTIAL. If a workflow needs both this and a pinned method,
+provision **one** env composing the pinned stack plus `lifelines` and run the whole thing there rather
+than splitting it across two interpreters.
 
 ---
 
 ## Standard Workflow
 
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step. All of it needs the provisioned
+`survival` env (Prerequisites).
+
 ### 1. Kaplan-Meier curves
 
-```python
-from lifelines import KaplanMeierFitter
-import matplotlib.pyplot as plt
+Per-group survival curves, with a risk table.
 
-kmf = KaplanMeierFitter()
-# Group 1
-kmf.fit(durations=df[df.group==1].time, event_observed=df[df.group==1].event, label="Group 1")
-kmf.plot_survival_function()
-# Group 2
-kmf.fit(durations=df[df.group==2].time, event_observed=df[df.group==2].event, label="Group 2")
-kmf.plot_survival_function()
-plt.ylabel("Survival probability")
-plt.xlabel("Time (months)")
-plt.savefig("km_curve.pdf", dpi=300, bbox_inches="tight")
-```
-
-Inspect the figure before citing.
+- **Censoring is data, not missingness.** `event=0` means "alive at last follow-up", and dropping
+  those rows is the classic way to manufacture a survival difference
+- Report median survival **with its CI** — an un-reached median (curve never crosses 0.5) is `inf`,
+  which is a real answer, not a failure
+- Always show numbers-at-risk; a separation driven by three patients in the tail is not a finding
 
 ### 2. Log-rank test
 
-```python
-from lifelines.statistics import logrank_test
-results = logrank_test(
-    durations_A=df[df.group==1].time, durations_B=df[df.group==2].time,
-    event_observed_A=df[df.group==1].event, event_observed_B=df[df.group==2].event
-)
-print(f"Log-rank p={results.p_value:.3e}")
-```
+Compare two curves.
 
-### 3. Cox proportional-hazards
+- Log-rank tests the **whole curve**, not survival at one timepoint
+- It assumes **proportional hazards**. Crossing curves violate it and the test loses power exactly
+  where the biology is most interesting — look at the KM plot before trusting the p-value
 
-```python
-from lifelines import CoxPHFitter
-cph = CoxPHFitter()
-cph.fit(df, duration_col="time", event_col="event")
-cph.print_summary()
-# Hazard ratio for a covariate:
-hr = cph.hazard_ratios_["biomarker"]
-ci = cph.confidence_intervals_.loc["biomarker"]
-```
+→ `assets/references/km_logrank.md`
 
-See `assets/references/cox_ph.md`.
+### 3. Cox proportional-hazards regression
+
+Multivariable HR with covariate adjustment.
+
+- **Check the PH assumption** (`check_assumptions`, Schoenfeld residuals). A violated PH makes the HR
+  a weighted average over follow-up time — a number that describes no actual period
+- Covariate selection is a **design decision**, not a search: pre-specify it
+- Report **HR + 95% CI**, not just p. An HR of 1.02 with p<0.001 in a large cohort is not clinically
+  interesting, and the CI is what shows that
+
+→ `assets/references/cox_ph.md`
 
 ---
 
@@ -101,12 +115,12 @@ State the time unit (days, months, years) explicitly. Median survival = 12 (mont
 
 ### 3. Median survival with CI
 
-Report median survival (time at which survival = 50%) with 95% CI:
+Report median survival (the time at which survival = 50%) **with its 95% CI, in time units**.
 
-```python
-kmf.median_survival_time_
-kmf.confidence_interval_survival_function_.loc[kmf.median_survival_time_]
-```
+The CI must come from `median_survival_times`, which inverts the confidence band to get time bounds.
+`confidence_interval_survival_function_` looks like the same thing and returns **survival
+probabilities** instead — they sit near 0.5 for any dataset, so "median 19.2 months, 95% CI
+[0.42, 0.57]" is nonsense in the wrong units that never raises. See `assets/references/km_logrank.md`.
 
 ### 4. Hazard ratio interpretation
 

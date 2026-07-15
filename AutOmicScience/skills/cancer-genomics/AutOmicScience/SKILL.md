@@ -3,7 +3,6 @@ name: cancer-genomics
 description: Tabular cancer genomics analysis — MAF/CNA somatic mutation and copy-number alteration parsing, variant classification (pathogenic/LoF vs benign), per-patient gene recurrence, tumor mutational burden (TMB), copy-number burden, pathway-alteration gene-set analysis, hotspot/protein-domain filtering, mutation×phenotype association (Fisher exact + FDR), oncoplots (maftools-style). Use when the user has MAF files, CNA segment files, or asks to analyze somatic mutations, identify recurrently altered genes, compute TMB, test mutation-phenotype associations, or generate oncoplots.
 requiredTools: [run_python, bash, read, write, observe_figure, omics_preflight, omics_compute]
 tags: [omics, cancer, genomics, maf, cna, somatic-mutations, tmb, oncoplot, variant-classification, fisher-test]
-extends: omics-shared
 ---
 
 # Cancer Genomics — Tabular Somatic Mutation & CNA Analysis
@@ -20,7 +19,15 @@ This is **NOT** germline GWAS, **NOT** WGS/WES alignment/calling (assumes MAF al
 2. **Context**: `omics_compute summarize` on the MAF to thread sample counts + cancer types forward
 3. **Clinical annotation**: patient metadata table (response, stage, survival) if testing associations
 
-Standard MAF columns: `Hugo_Symbol`, `Chromosome`, `Start_Position`, `End_Position`, `Variant_Classification`, `Variant_Type`, `Tumor_Sample_Barcode`, `Protein_Change`, `HGVSp_Short`.
+Standard GDC MAF columns: `Hugo_Symbol` (1), `Chromosome` (5), `Start_Position` (6), `End_Position`
+(7), `Variant_Classification` (9), `Variant_Type` (10), `Tumor_Sample_Barcode` (16), `HGVSp_Short`
+(37), `Protein_position` (55). There is **no `Protein_Change` column** in a GDC MAF — that name is
+cBioPortal's; check the header rather than assuming it.
+
+> **The cohort is not "the samples in the MAF".** Filtering to pathogenic variants drops every patient
+> whose calls were all silent, and a tumour with zero calls never appears in the MAF at all. Pin
+> `cohort` **before** filtering and reindex onto it — otherwise recurrence frequencies, TMB medians and
+> Fisher tables are all computed over "mutated patients" instead of the cohort. See `recurrence.md`.
 
 ---
 
@@ -30,7 +37,7 @@ Standard MAF columns: `Hugo_Symbol`, `Chromosome`, `Start_Position`, `End_Positi
 |------------|----------|-------------|---------------|
 | **Data loading & context** | | | |
 | Load MAF → count variants, samples, genes | **READY** | `omics_compute load_dataset` | `assets/references/file_formats.md` |
-| Summarize dataset (n_samples, n_variants, cancer distribution) | **READY** | `omics_compute summarize` | `../omics-shared/assets/references/data_context.md` |
+| Summarize dataset (n_samples, n_variants, cancer distribution) | **READY** | `omics_compute summarize` | `../../omics-shared/AutOmicScience/assets/references/data_context.md` |
 | **Variant classification** | | | |
 | Pathogenic variant filtering (CGC tiers 1/2, LoF, activating-mut) | **REFERENCE** | Python | `assets/references/variant_classification.md` |
 | Silent/benign exclusion | **REFERENCE** | Python | `assets/references/variant_classification.md` |
@@ -52,90 +59,101 @@ Standard MAF columns: `Hugo_Symbol`, `Chromosome`, `Start_Position`, `End_Positi
 | **Association testing** | | | |
 | Mutation×phenotype Fisher exact + FDR | **REFERENCE** | Python | `assets/references/association.md` |
 | One-sided vs two-sided test selection | **REFERENCE** | Python | `assets/references/association.md` |
-| Minimum cell-count gate (expected ≥5) | **REFERENCE** | Python | `assets/references/association.md` |
+| Minimum-support gate (drop singleton-mutated genes) | **REFERENCE** | Python | `assets/references/association.md` |
 | **Visualization** | | | |
-| Oncoplot (maftools-style heatmap) | **REFERENCE** | Python (comut or custom matplotlib) | `assets/references/oncoplot.md` |
-| TMB distribution histogram | **REFERENCE** | Python | `../omics-shared/assets/references/visualization.md` |
+| Oncoplot — via `comut` | **PARTIAL** | `comut` — **not pinned**, provision first | `assets/references/oncoplot.md` |
+| Oncoplot — hand-rolled matplotlib | **REFERENCE** | `matplotlib` — pinned | `assets/references/oncoplot.md` |
+| TMB distribution histogram | **REFERENCE** | Python | `../../omics-shared/AutOmicScience/assets/references/visualization.md` |
 
-**All capabilities are REFERENCE** (hand-rolled Python) because mutation analysis requires study-specific judgment: which variants are pathogenic (CGC tiers, LoF rules), which genes belong to a pathway, which protein domains matter, Fisher test sidedness, FDR method. These are deliberate design decisions (like DE contrasts in bulk-RNA), not black-box automation.
+Everything except the `comut` oncoplot is **REFERENCE** (hand-rolled Python on the pinned stack)
+because mutation analysis requires study-specific judgment: which variants are pathogenic (CGC tiers,
+LoF rules), which genes belong to a pathway, which protein domains matter, Fisher sidedness, FDR
+method. These are deliberate design decisions (like DE contrasts in bulk-RNA), not black-box
+automation.
+
+**`comut` is PARTIAL** — it is in no `task1–4` env, so provision it per `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md` before use, or take the matplotlib route in
+`oncoplot.md`. (Its API is verified against v0.0.3: import the **submodule**, `from comut import
+comut` — `comut/__init__.py` is empty, so `from comut import CoMut` raises `ImportError`.)
 
 ---
 
 ## Standard Workflow
 
-### 1. Load & summarize
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
 
-```python
-import pandas as pd
-maf = pd.read_csv("data.maf", sep="\t", comment="#")
-print(f"Loaded {len(maf)} variants from {maf.Tumor_Sample_Barcode.nunique()} samples")
-# omics_compute summarize → thread context forward
-```
+### 1. Load & pin the cohort
+
+Read the MAF, then capture the sample list **before any filtering**. Everything downstream divides by
+it. `omics_compute summarize` threads the counts forward.
+
+- The cohort is *not* "the samples left after filtering" — see the callout in Prerequisites
+- A tumour with zero calls is absent from the MAF entirely; take the cohort from the sample manifest
+  or clinical table when one exists
+
+→ `assets/references/file_formats.md`, and `assets/references/recurrence.md` for the cohort rule
 
 ### 2. Variant classification
 
-Filter to pathogenic mutations. See `assets/references/variant_classification.md` for the CGC-based recipe and LoF rules.
+Filter to pathogenic mutations. **This is a design decision, not a default** — state which rule you used.
 
-```python
-pathogenic = maf[maf.Variant_Classification.isin([
-    "Missense_Mutation", "Nonsense_Mutation", "Frame_Shift_Del", 
-    "Frame_Shift_Ins", "Splice_Site", "In_Frame_Del", "In_Frame_Ins"
-])]
-# Exclude Silent, Intron, 3'UTR, 5'UTR, IGR
-```
+- Baseline: keep the protein-altering classes, drop Silent / Intron / UTR / IGR
+- Grounded: CGC tier 1/2 gene-context rules — any LoF in a TSG, but only *hotspot* missense in an
+  oncogene. "All missense is pathogenic" inflates every oncogene's recurrence
+- Sources: Cancer Gene Census, COSMIC hotspots, ClinVar — name the one you used
+
+→ `assets/references/variant_classification.md`
 
 ### 3. Gene recurrence
 
-Per-patient binary alteration matrix (gene × sample):
+Collapse to a **per-patient binary** alteration matrix, then reindex onto the cohort.
 
-```python
-recurrence = pathogenic.groupby(["Tumor_Sample_Barcode", "Hugo_Symbol"]).size().unstack(fill_value=0)
-recurrence = (recurrence > 0).astype(int)  # binarize
-gene_freq = recurrence.sum(axis=0) / len(recurrence)
-top_genes = gene_freq.sort_values(ascending=False).head(20)
-```
+- Per-patient, not per-mutation: one hypermutator otherwise dominates every gene's frequency
+- **Reindex, or every frequency is inflated by the same factor.** `groupby` emits no row for a
+  mutation-free patient, so `len(altered)` counts *mutated* patients. The ranking still looks right —
+  that is what makes it survive review. Measured: TP53 reads 66.7% where the truth is 40%
+- Report `n_altered/n_total`, never the percentage alone
 
-### 4. TMB computation
+→ `assets/references/recurrence.md`
 
-See `assets/references/tmb.md`:
+### 4. TMB
 
-```python
-tmb = pathogenic.groupby("Tumor_Sample_Barcode").size() / 38  # 38 Mb = typical exome size
-median_tmb = tmb.median()
-iqr_tmb = tmb.quantile(0.75) - tmb.quantile(0.25)
-print(f"TMB: median {median_tmb:.2f}, IQR {iqr_tmb:.2f} variants/Mb")
-```
+Count **non-synonymous** variants per sample, normalise per Mb.
+
+- The class set is *broader* than step 2's pathogenic filter — it adds `Nonstop_Mutation` and
+  `Translation_Start_Site`. Two different questions, two different sets
+- Panel size is yours to state: MSK-IMPACT ≈ 1.2 Mb, WES ≈ 30–50 Mb
+- **Median + IQR, never mean±SD** — hypermutators make the distribution right-skewed
+- Same reindex trap as step 3: a zero-TMB tumour is a data point, not a gap. Dropped, the median
+  reads 1.4× high and the IQR loses its lower tail — exactly the tail a TMB-high split turns on
+
+→ `assets/references/tmb.md`
 
 ### 5. Association testing
 
-Mutation×response Fisher exact:
+Fisher exact per recurrent gene, then BH-FDR.
 
-```python
-from scipy.stats import fisher_exact
-gene_mut = recurrence["TP53"]  # binary
-response = clinical["response"]  # "R" or "NR"
-cont_table = pd.crosstab(gene_mut, response)
-odds, p = fisher_exact(cont_table, alternative="two-sided")
-print(f"TP53 vs response: OR={odds:.2f}, p={p:.3e}")
-```
+- Sidedness is a choice: two-sided for "is it associated", one-sided `less` for mutual exclusivity
+- Gate on **minimum support** (≥5 altered patients) *before* FDR — it shrinks the family and buys power
+- **The 2×2 must sum to the cohort.** `is_altered & pheno` aligns and fills, so `a`/`b` come out right;
+  `~is_altered` does *not* align, so `c`/`d` quietly lose every mutation-free patient. Measured: a
+  table summing to 80 instead of 120 turned p = 0.0001 into p = 0.078. `assert` the total — the bug
+  has no other symptom
 
-Apply FDR correction across all genes (Benjamini-Hochberg). See `assets/references/association.md`.
+→ `assets/references/association.md`
 
 ### 6. Oncoplot
 
-```python
-import matplotlib.pyplot as plt
-from comut import CoMut  # or custom heatmap
+Genes × patients, coloured by alteration type, memo-sorted.
 
-# Top 20 genes × all samples, sorted by recurrence
-top20 = recurrence[top_genes.index[:20]]
-comat = CoMut()
-comat.add_categorical_data(top20.T, name="Mutations", category_order=["TP53", "KRAS", ...])
-comat.plot_comut(figsize=(12, 6))
-plt.savefig("oncoplot.pdf", dpi=300, bbox_inches="tight")
-```
+- `comut` is **not pinned** — provision it, or take the matplotlib route in the ref doc
+- It wants **tidy long** data (one row per sample × gene × alteration type). A binarised 0/1 matrix
+  cannot make an oncoplot at all: there is no alteration type to colour
+- Import the **submodule** (`from comut import comut`) — `comut/__init__.py` is empty
+- Render and **inspect** it before it backs any claim
 
-Inspect the figure before citing it.
+→ `assets/references/oncoplot.md`
 
 ---
 
@@ -179,13 +197,18 @@ Never cite an oncoplot you didn't render and inspect.
 ## Pitfalls & fixes
 
 | Symptom / mistake | Cause | Fix |
-|-------------------|-------|-----|
+|-------------------|-------------------|-----|
+| Every gene's frequency looks high (ranking still plausible) | Denominator is mutated patients, not the cohort — `groupby` never emits a row for a mutation-free patient | Pin `cohort` before filtering; `.reindex(cohort, fill_value=False)`; divide by `len(cohort)` |
+| TMB median too high, IQR has no low tail | Zero-TMB samples dropped by `groupby().size()` | `.reindex(cohort, fill_value=0)`; report `n` beside the median |
+| `KeyError: "[...] not in index"` on `tmb[sample_list]` | A sequenced sample had zero non-syn calls | `.reindex(...)` — and note this is the *loud* version of the bug above |
+| Fisher 2×2 doesn't sum to the cohort | `~is_altered` evaluated on an unaligned Series — `a`/`b` align, `c`/`d` don't | Reindex `is_altered` onto the phenotype index, then `assert` the total |
+| `ImportError: cannot import name 'CoMut'` | `comut/__init__.py` is empty | `from comut import comut` (the submodule), then `comut.CoMut()` |
 | Recurrence / TMB looks wrong | Silent variants counted | Count only non-silent; filter to pathogenic (`variant_classification.md`) |
 | Ungrounded pathogenicity | All Missense treated pathogenic, or Nonsense excluded | Use CGC / COSMIC / ClinVar tiers; document the rule |
 | TMB outliers dominate | Mean ± SD on a right-skewed distribution | Report median + IQR |
 | Pathway frequency > 100% | Summing hits instead of any-hit | `.any()` per gene set, not `.sum()` (one patient counts once) |
 | Fisher p-values all 1.0, or exclusivity missed | Wrong contingency orientation, or two-sided test for exclusivity | Check crosstab / binary `gene_mut`; use `alternative="less"` for exclusivity |
-| Inflated FDR family | No minimum-support gate (singleton-mutated genes) | Require expected ≥5 per 2×2 cell; drop singletons before FDR |
+| Inflated FDR family | No minimum-support gate (singleton-mutated genes) | Require a stated **minimum support** (e.g. ≥5 mutated samples) and drop singletons **before** FDR. Do *not* gate on "expected ≥5 per cell" — that is the **chi-squared** validity rule; Fisher exact is valid at small counts, which is exactly why it's the test here, so that gate would discard valid tests |
 | Lost power / leakage in clinical association | Uncollapsed substages, or "Discrepancy" / mixed PATH+CLIN rows | Collapse T1a/b→T1, N0/Nx→N0; prefer PATH_; drop Discrepancy |
 | Oncoplot shows "?" or is uncited | Gene-name mismatch (HGNC vs alias), or figure not inspected | Standardize to HGNC; render + inspect before citing |
 

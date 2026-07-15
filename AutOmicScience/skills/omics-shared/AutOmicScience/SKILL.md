@@ -1,13 +1,13 @@
 ---
 name: omics-shared
-description: Cross-modality scverse foundations — data containers, dataset summary, standard preprocessing, evidence grounding, figure inspection. Load first for any omics task.
+description: Foundational layer for every omics modality — the omics_compute contract, maturity legend, global rules (preflight, evidence grounding, anti-circular), scverse data conventions, and the index/routing to every modality skill. Read first for any omics task.
 requiredTools: [run_python, create_notebook, add_cell, observe_figure, omics_preflight, omics_compute]
 tags: [omics, scverse, shared, anndata, mudata, spatialdata]
 ---
 
-# Omics Shared — Cross-Modality Foundations
+# Omics Shared — AOSE Operating Guide & Skill Index
 
-The shared substrate every omics modality (scRNA-seq, spatial, scATAC-seq, multiome) builds on. This skill is loaded automatically for omics analysis; read the modality playbook next.
+This skill is AOSE's operating guide and the index to every modality skill — read it first for any omics task. It is the shared substrate every modality builds on (single-cell, spatial, bulk, proteomics, metabolomics, microbiome, genomics, and more): it defines **how to run compute**, the **rules every analysis follows**, and **which modality skill to route to**. Its catalog entry is always present; read it, then the relevant modality skill.
 
 ## How to run compute
 
@@ -31,10 +31,12 @@ omics_compute(
 Each capability is tagged so you know what actually runs:
 
 - **READY** — backed by a tested `omics_compute` subcommand. Call the tool.
-- **PARTIAL** — compute subcommand exists but needs heavier deps/GPU, or is newer; verify preflight, then call the tool.
-- **REFERENCE** — no compute subcommand yet; the method doc gives one opinionated, hand-written recipe you run directly.
+- **PARTIAL** — runnable but gated by an extra install or GPU: either an `omics_compute` subcommand that needs heavier deps/GPU, or a well-defined method whose package is not in the default env. Verify preflight / install the dependency first, then run.
+- **REFERENCE** — no compute subcommand and no baseline; the method doc gives one opinionated, hand-written recipe you run by hand (in the installed env, or a dedicated env when the package version-conflicts).
 
-## Modality playbooks (read after preflight)
+To provision any PARTIAL / REFERENCE method (or a user-named package) whose package is **not** in `task1–4`, follow `assets/references/AOSE_nonStandard_env.md`.
+
+## Skill index — route to the right modality (read after preflight)
 
 After `omics_preflight` confirms the modality, read its skill and the specific method doc you need. Skills are grouped by three orthogonal axes — pick by **what data you have** (resolution or molecule), then optionally add a **cross-cutting** skill for downstream statistics or ML engineering.
 
@@ -42,36 +44,36 @@ After `omics_preflight` confirms the modality, read its skill and the specific m
 
 | Modality | Skill | Method docs |
 |----------|-------|-------------|
-| Single-cell (scRNA / scATAC / multiome) | `skills/single-cell/SKILL.md` | routes to `rna/`, `atac/`, `multiome/` subskills |
-| Spatial transcriptomics | `skills/spatial/SKILL.md` | `skills/spatial/assets/references/*.md` |
-| Bulk (RNA-seq / epigenomics) | `skills/bulk/SKILL.md` | routes to `rna/`, `epigenomics/` subskills |
+| Single-cell (scRNA / scATAC / multiome) | `../../single-cell/AutOmicScience/SKILL.md` | routes to `rna/`, `atac/`, `multiome/` subskills |
+| Spatial transcriptomics | `../../spatial/AutOmicScience/SKILL.md` | `../../spatial/AutOmicScience/assets/references/*.md` |
+| Bulk (RNA-seq / epigenomics) | `../../bulk/AutOmicScience/SKILL.md` | routes to `rna/`, `epigenomics/` subskills |
 
 **By molecule / assay (beyond transcriptomics):**
 
 | Modality | Skill | Method docs |
 |----------|-------|-------------|
-| Cancer genomics — DNA variants only (MAF / CNA) | `skills/cancer-genomics/SKILL.md` | `skills/cancer-genomics/assets/references/*.md` |
-| Proteomics (Olink / MS) | `skills/proteomics/SKILL.md` | `skills/proteomics/assets/references/*.md` |
-| Metabolomics / lipidomics | `skills/metabolomics/SKILL.md` | `skills/metabolomics/assets/references/*.md` |
-| Microbiome (16S / metagenomics) | `skills/microbiome/SKILL.md` | `skills/microbiome/assets/references/*.md` |
-| Cancer dependency (DepMap / CCLE CRISPR screens) | `skills/cancer-dependency/SKILL.md` | `skills/cancer-dependency/assets/references/*.md` |
-| Statistical / population genetics — GWAS, heritability, fine-mapping, colocalization | `skills/statistical-genetics/SKILL.md` | `skills/statistical-genetics/assets/references/*.md` |
-| Immune repertoire — TCR / BCR clonotypes (AIRR-seq) | `skills/immune-repertoire/SKILL.md` | `skills/immune-repertoire/assets/references/*.md` |
-| Biomolecular phase separation / condensates (sequence & biophysical properties) | `skills/phase-separation/SKILL.md` | `skills/phase-separation/assets/references/*.md` |
+| Cancer genomics — DNA variants only (MAF / CNA) | `../../cancer-genomics/AutOmicScience/SKILL.md` | `../../cancer-genomics/AutOmicScience/assets/references/*.md` |
+| Proteomics (Olink / MS) | `../../proteomics/AutOmicScience/SKILL.md` | `../../proteomics/AutOmicScience/assets/references/*.md` |
+| Metabolomics / lipidomics | `../../metabolomics/AutOmicScience/SKILL.md` | `../../metabolomics/AutOmicScience/assets/references/*.md` |
+| Microbiome (16S / metagenomics) | `../../microbiome/AutOmicScience/SKILL.md` | `../../microbiome/AutOmicScience/assets/references/*.md` |
+| Cancer dependency (DepMap / CCLE CRISPR screens) | `../../cancer-dependency/AutOmicScience/SKILL.md` | `../../cancer-dependency/AutOmicScience/assets/references/*.md` |
+| Statistical / population genetics — GWAS, heritability, fine-mapping, colocalization | `../../statistical-genetics/AutOmicScience/SKILL.md` | `../../statistical-genetics/AutOmicScience/assets/references/*.md` |
+| Immune repertoire — TCR / BCR clonotypes (AIRR-seq) | `../../immune-repertoire/AutOmicScience/SKILL.md` | `../../immune-repertoire/AutOmicScience/assets/references/*.md` |
+| Biomolecular phase separation / condensates (sequence & biophysical properties) | `../../phase-separation/AutOmicScience/SKILL.md` | `../../phase-separation/AutOmicScience/assets/references/*.md` |
 
 **Cross-cutting layers (combine with any data skill above):**
 
 | Layer | Skill | Method docs |
 |-------|-------|-------------|
-| Survival analysis (KM / Cox on features from any modality) | `skills/clinical-survival/SKILL.md` | `skills/clinical-survival/assets/references/*.md` |
-| ML engineering / deep models (reproduce DL methods, foundation models) | `skills/bioml/SKILL.md` | routes to `repro/`, `deep-models/`, `sequence-fm/`, `coding/`, `figure-check/` subskills |
+| Survival analysis (KM / Cox on features from any modality) | `../../clinical-survival/AutOmicScience/SKILL.md` | `../../clinical-survival/AutOmicScience/assets/references/*.md` |
+| ML engineering / deep models (reproduce DL methods, foundation models) | `../../bioml/AutOmicScience/SKILL.md` | routes to `repro/`, `deep-models/`, `sequence-fm/`, `coding/`, `figure-check/` subskills |
 
 Routing notes for ambiguous cases:
 - **Tumor bulk/single-cell RNA-seq** → the resolution skill (`bulk` / `single-cell`), not `cancer-genomics`. `cancer-genomics` handles somatic DNA variants (MAF/CNA) only, not expression.
 - **"Associate features with patient survival"** → first the data skill to derive features, then `clinical-survival` for the KM/Cox step.
 - **Foundation-model application (scGPT, Geneformer, UCE, perturbation prediction)** → `bioml`, not the resolution skill.
 
-The shared method docs (`skills/omics-shared/assets/references/*.md`) cover containers, data context, preprocessing, grounding, visualization, and data acquisition — read them on demand.
+The shared method docs (`assets/references/*.md`) cover containers, data context, preprocessing, grounding, visualization, and data acquisition — read them on demand.
 
 ## Global rules (always follow)
 
@@ -99,9 +101,3 @@ implementation_dir = os.environ.get("AOSE_OMICS_PYTHON_DIR") or "tools/omics-com
 sys.path.insert(0, implementation_dir)
 from aose_omics_runtime.shared import conventions, io as omics_io, summarize, preprocess
 ```
-
-## Judgment this guides
-
-- **Frozen subcommand vs. hand-rolled** — use `omics_compute` subcommands when the data fits their assumptions (fast, standardized). Hand-roll only when the data is unusual or the method is `REFERENCE`.
-- **What counts as evidence** — any quantitative claim (cluster count, expression value, QC threshold, metric) must trace to a real computation you ran, not to memory or to a pre-existing label.
-- **Honesty boundaries** — if the study says "healthy + disease" but no obs column distinguishes them, flag the mismatch; don't invent a split.

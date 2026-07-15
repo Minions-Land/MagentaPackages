@@ -121,3 +121,43 @@ def test_gpu_probe_included_only_when_requested(capsys, monkeypatch):
         capsys, _args(modality="scrna", check_gpu=True), monkeypatch, gpu=False
     )
     assert no_gpu["gpuAvailable"] is False
+
+
+# --- Regression: preflight must cover the exact request, not just the modality (S08/R01) ---
+
+def test_requirements_narrow_to_subcommand_and_method():
+    from aose_omics_runtime.shared.preflight import _requirements_for
+
+    # A method's dependency is only required when that method is chosen.
+    pkgs, _ = _requirements_for("scrna", "integrate", "scanorama")
+    assert "scanorama" in pkgs
+    pkgs, _ = _requirements_for("scrna", "integrate", "harmony")
+    assert "harmonypy" in pkgs and "scanorama" not in pkgs
+
+    # peak_calling drives MACS3 through snapATAC2 as a library, so the requirement is the
+    # importable package — an env with MACS3 installed but no `macs3` on PATH is ready.
+    pkgs, exes = _requirements_for("scatac", "peak_calling", None)
+    assert "MACS3" in pkgs and exes == []
+
+    # Modality-only stays the baseline (no method/executable requirements invented).
+    pkgs, exes = _requirements_for("scrna", None, None)
+    assert exes == [] and "scanorama" not in pkgs
+    assert set(preflight.MODALITY_REQUIREMENTS["scrna"]).issubset(pkgs)
+
+
+def test_missing_method_dependency_makes_preflight_red(monkeypatch):
+    import argparse
+
+    # scanorama absent, everything else present -> modality-only would be green,
+    # but the scanorama request must be red.
+    monkeypatch.setattr(preflight, "_module_importable", lambda n: n != "scanorama")
+    monkeypatch.setattr(preflight, "_executable_available", lambda n: True)
+
+    out = []
+    monkeypatch.setattr("builtins.print", lambda s: out.append(s))
+    preflight.main(argparse.Namespace(modality="scrna", for_subcommand="integrate",
+                                      method="scanorama", check_gpu=False))
+    import json
+    report = json.loads(out[-1])
+    assert report["ready"] is False
+    assert report["missingPackages"] == ["scanorama"]

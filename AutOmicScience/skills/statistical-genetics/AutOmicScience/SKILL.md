@@ -3,7 +3,6 @@ name: statistical-genetics
 description: Statistical genetics on GWAS / molecular-QTL summary statistics using gwaslab (Python) and coloc (R) — summary-statistics ingestion (60+ formats), QC, effect-allele/strand harmonization, statistic completion, genome-build liftover, fixed/random-effects inverse-variance meta-analysis across cohorts, lead-variant / locus extraction, and Bayesian colocalization (coloc.abf single-causal + coloc.susie multi-signal → posterior probabilities PP.H0–H4). Use when you have GWAS or eQTL/pQTL summary statistics (beta/SE or p-values, effect allele, allele frequency, sample size) and need to harmonize/QC them, meta-analyze cohorts, call loci, or test whether two traits (or a GWAS and a QTL) share a causal variant.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [statistical-genetics, gwas, eqtl, qtl, meta-analysis, colocalization, coloc, fine-mapping, summary-statistics, gwaslab]
-extends: omics-shared
 ---
 
 # Statistical Genetics — gwaslab (Python) + coloc (R)
@@ -41,26 +40,63 @@ summary-statistic level: no raw-genotype calling/imputation.
 
 1. **Summary statistics** with, per variant: an id (`chr:pos:ref:alt` or rsID), EA + NEA,
    `beta`+`SE` (preferred) or `p`, `EAF`/MAF, `N`.
-2. **Python** `gwaslab`; **R** with `coloc` (+ `susieR`) for colocalization.
+2. **Python** `gwaslab`; **R** with `coloc` (+ `susieR`) for colocalization. **Neither is pinned** —
+   this whole skill is PARTIAL on provisioning (see the Capability Menu).
+
+Provision both into **one** env per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — the
+workflow crosses the Python/R line in a single run (gwaslab harmonises, then orchestrates `coloc`), so
+splitting it across two envs means round-tripping through disk:
+
+```toml
+# tools/omics-environment/pixi.toml
+[feature.statgen.dependencies]
+r-base = "*"
+r-coloc = "*"
+r-susier = "*"
+rpy2 = "*"
+[feature.statgen.pypi-dependencies]
+gwaslab = "*"
+
+[environments]
+statgen = { features = ["core", "singlecell", "statgen"], solve-group = "statgen" }
+```
 
 ```bash
-pip install gwaslab                                  
-
-conda install -c conda-forge r-coloc r-susier
-# or, inside R:  install.packages("coloc")
+pixi install --manifest-path tools/omics-environment/pixi.toml -e statgen
+pixi lock    --manifest-path tools/omics-environment/pixi.toml
+pixi run     --manifest-path tools/omics-environment/pixi.toml -e statgen python -c "import gwaslab"
 ```
+
+> **Never `pip install gwaslab` or `conda install` without `-n`.** A bare `pip` resolves against
+> whatever `python` leads `$PATH` — often conda `base` — and `conda install -c conda-forge r-coloc`
+> with no `-n <env>` installs into the **currently active** environment, which is `base` unless you
+> arranged otherwise. Both are the exact failure `AOSE_nonStandard_env.md` exists to prevent. If Pixi
+> cannot solve the R stack, fall back to §B — a **named** conda env (`conda create -n aose-statgen
+> ...`), never `base`.
+
+`omics_preflight` does not cover this env; check the imports yourself and record the env + the
+`gwaslab`/`coloc` versions in the `report`.
+
+---
+
 ---
 
 ## Capability Menu
 
-| Capability | Tool | Method / function | Reference Doc |
-|------------|------|-------------------|---------------|
-| Load 60+ sumstats formats, column mapping | gwaslab | `gl.Sumstats(...)` | `assets/references/gwaslab_sumstats.md` |
-| QC / sanity / harmonize / fill / liftover | gwaslab | `.basic_check` `.harmonize` `.fill_data` `.liftover` | `assets/references/gwaslab_sumstats.md` |
-| Lead variants / loci / clumping / plots | gwaslab | `.get_lead` `.clump` `.plot_mqq` `.plot_region` | `assets/references/gwaslab_sumstats.md` |
-| Fixed/random-effects IV meta-analysis | gwaslab | `SumstatsPair/Multi.run_meta_analysis` | `assets/references/meta_analysis.md` |
-| Colocalization (single-causal) | coloc (R) | `coloc.abf(dataset1, dataset2)` | `assets/references/colocalization.md` |
-| Colocalization (multi-signal) | coloc (R) | `runsusie()` + `coloc.susie()` | `assets/references/colocalization.md` |
+| Capability | Maturity | Tool | Method / function | Reference Doc |
+|------------|----------|------|-------------------|---------------|
+| Load 60+ sumstats formats, column mapping | **PARTIAL** | gwaslab | `gl.Sumstats(...)` | `assets/references/gwaslab_sumstats.md` |
+| QC / sanity / harmonize / fill / liftover | **PARTIAL** | gwaslab | `.basic_check` `.harmonize` `.fill_data` `.liftover` | `assets/references/gwaslab_sumstats.md` |
+| Genomic inflation (λ GC) | **PARTIAL** | gwaslab | `.get_gc()` → also `meta["Genomic inflation factor"]` | `assets/references/gwaslab_sumstats.md` |
+| Lead variants / loci / clumping / plots | **PARTIAL** | gwaslab | `.get_lead` `.clump` `.plot_mqq` `.plot_region` | `assets/references/gwaslab_sumstats.md` |
+| Fixed/random-effects IV meta-analysis | **PARTIAL** | gwaslab | `SumstatsMulti.run_meta_analysis` (**not** `SumstatsPair` — it has no such method) | `assets/references/meta_analysis.md` |
+| Colocalization (single-causal) | **PARTIAL** | coloc (R) | `coloc.abf(dataset1, dataset2)` | `assets/references/colocalization.md` |
+| Colocalization (multi-signal) | **PARTIAL** | coloc (R) | `runsusie()` + `coloc.susie()` | `assets/references/colocalization.md` |
+| Interpreting PP.H0–H4, choosing abf vs susie | **REFERENCE** | — | domain knowledge — no dependency | `assets/references/colocalization.md` |
+
+Every computational capability is **PARTIAL** for one reason: neither `gwaslab` nor R `coloc` is in
+`task1–4`. Provision them first (Prerequisites). If they can be neither imported nor provisioned, that
+is a **blocker with the install command** — not a cue to hand-roll a weaker colocalization.
 
 Read the method doc before running each capability.
 
@@ -68,66 +104,67 @@ Read the method doc before running each capability.
 
 ## Standard Workflow
 
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
+
 ### 1. Load & QC & harmonize (gwaslab)
 
-```python
-import gwaslab as gl
-ss = gl.Sumstats("study.tsv.gz", fmt="auto",              # or an explicit format preset
-                 snpid="SNP", chrom="CHR", pos="POS",
-                 ea="ALT", nea="REF", eaf="EAF",
-                 beta="BETA", se="SE", p="P", n="N")
-ss.basic_check()                                          # standardize, sanity-check, dedup
-ss.harmonize(basic_check=False, ref_seq="/path/genome.fa",# align EA/NEA to reference; flag palindromes
-             ref_infer="/path/1kg.vcf.gz", ref_alt_freq="AF")
-ss.fill_data(to_fill=["BETA","SE","P","Z","MAF"])         # complete missing statistics
-# ss.liftover(from_build="19", to_build="38")             # if builds differ
-```
+Load the sumstats, standardise, align alleles to a reference, fill missing statistics.
 
-See `assets/references/gwaslab_sumstats.md`.
+- **Allele order is the analysis.** Effect is of EA vs NEA; harmonising against a reference is what
+  makes two cohorts comparable, and palindromic SNPs are where it goes wrong
+- `varbeta = SE²` — coloc wants the *variance*, not the SE
+- Liftover only if builds differ; state the build either way
+- **Compute λ GC explicitly and gate on it.** Not as a side effect of `plot_mqq()`. Every downstream
+  p-value, lead variant and meta-analysis weight inherits the inflation, so λ decides whether anything
+  below means anything. An inflated λ is a **finding to surface**, not a nuisance to correct away
+
+→ `assets/references/gwaslab_sumstats.md`
 
 ### 2. Meta-analysis across cohorts (gwaslab)
 
-```python
-pair = gl.SumstatsPair(ss_discovery, ss_replication)      # merge + allele-align two studies
-meta = pair.run_meta_analysis(random_effects=False)       # fixed-effects IVW; returns a Sumstats
-# many cohorts: gl.SumstatsMulti([ss1, ss2, ss3, ...]).run_meta_analysis()
-```
+Fixed- or random-effects inverse-variance, plus heterogeneity.
 
-`run_meta_analysis` gives combined BETA/SE/Z/P, sample-size-weighted allele frequency, a per-study
-effect-direction string, and heterogeneity (Q, I², P_HET). See `assets/references/meta_analysis.md`.
+- Fixed vs random effects is your call — state it, and report Q / I² / P_HET beside the combined P
+- All cohorts must be on **one effect allele** first (`match_allele=True`)
+- **Meta-analysis lives on `SumstatsMulti`, not `SumstatsPair`** — the latter has no
+  `run_meta_analysis` and no base class to inherit one; it is for clump/coloc/MR. "Two studies" is
+  just a list of two
+
+→ `assets/references/meta_analysis.md`
 
 ### 3. Lead variants / loci
 
-```python
-leads = ss.get_lead(sig_level=5e-8, windowsizekb=500)     # independent lead SNPs / loci
-```
+Independent lead SNPs at a significance threshold and window.
+
+- Both the threshold (5e-8 conventional) and the window (500 kb) are choices — state them
+
+→ `assets/references/gwaslab_sumstats.md`
 
 ### 4. Colocalization (R coloc)
 
-At a locus where two traits both associate, build one `list` per trait over the **shared** SNPs
-(`beta`, `varbeta = SE²`, `snp`, `type`, and `sdY` or `MAF`+`N`) and call R `coloc.abf` — the
-reference implementation — through a small `Rscript`:
+At a locus where two traits both associate, build one dataset `list` per trait over the **shared** SNPs
+and call R `coloc` — the reference implementation — via `rpy2` or a small `Rscript`.
 
-```python
-import subprocess, pandas as pd
-subprocess.run(["Rscript", "run_coloc.R", "trait1.tsv", "trait2.tsv", "out.tsv"], check=True)
-pp = pd.read_csv("out.tsv", sep="\t")     # PP.H0..PP.H4 (+ top shared SNP)
-```
+- **`coloc.abf` vs `coloc.susie` is the modelling decision.** `abf` assumes **≤1 causal variant** per
+  region and needs no LD; `susie` allows multiple signals but needs an **LD matrix per trait**. Using
+  `abf` where two independent causals exist is how a real H4 gets read as H3, and vice versa
+- The dataset spec is exact: `beta`, `varbeta = SE²`, `snp`, `type`, plus `sdY` (quantitative) or
+  `MAF`+`N`. Wrong `varbeta` silently rescales every Bayes factor
+- **PP.H4 high (commonly > 0.8) *and* > PP.H3** ⇒ shared causal. Reporting PP.H4 alone hides the
+  case where both are middling and the locus is simply underpowered
 
-`$summary` holds PP.H0–H4; PP.H4 high (commonly > 0.8, and > PP.H3) ⇒ a shared causal variant. See
-`assets/references/colocalization.md` for the dataset spec and the R script. When a locus has
-multiple signals and an LD matrix is available, use `coloc.susie` instead (same doc; gwaslab's
-`SumstatsPair.run_coloc_susie` can orchestrate that LD-based path).
+→ `assets/references/colocalization.md`
 
 ### 5. Visualize & ground
 
-```python
-ss.plot_mqq()                 # Manhattan + QQ
-ss.plot_region(region=...)    # regional/locuszoom-style
-```
+Manhattan/QQ and regional plots.
 
-Inspect any plot before it backs a claim; cite gwaslab and coloc (Giambartolomei 2014;
-Wallace 2020/2021).
+- The QQ plot is where λ becomes visible — read it against the λ you computed in step 1
+- Inspect any plot before it backs a claim
+- Cite gwaslab and coloc (Giambartolomei 2014; Wallace 2020/2021)
+
+→ `assets/references/gwaslab_sumstats.md`
 
 ---
 

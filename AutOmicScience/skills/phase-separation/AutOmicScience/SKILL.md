@@ -3,7 +3,6 @@ name: phase-separation
 description: Biomolecular condensate & liquid-liquid phase separation (LLPS) sequence analysis — amino-acid composition profiling and fold-change versus non-phase-separating controls, intrinsically disordered region (IDR) restricted composition, sticker-spacer and prion-like / low-complexity domain features, and benchmarking phase-separation predictors (PScore, PLAAC, catGRANULE, FuzDrop, and composite SaPS/PdPS feature-model scores) by ROC-AUC. Use when you have protein sequences and/or precomputed phase-separation propensity scores with condensate-related labels (self-assembling vs partner-dependent vs non-PS, or membraneless-organelle participants vs membrane-bound controls) and need to compare sequence composition or evaluate how well predictors discriminate phase-separating proteins.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [protein, phase-separation, llps, condensate, idr, prion-like, sticker-spacer, roc-auc, sequence-biophysics]
-extends: omics-shared
 ---
 
 # Biomolecular Condensate / LLPS Sequence Analysis
@@ -54,11 +53,20 @@ encode different biology, evaluate each **separately** and per PS-type.
    condensate/MLO participant set) and a negative/background set (NoPS or a membrane-bound control).
 3. **(Optional) IDR ranges** — per-protein disordered-region coordinates (from IUPred2A / MobiDB /
    D2P2) to restrict composition to IDRs.
-4. **Library** — `numpy`, `pandas`, `scikit-learn` (ROC-AUC), `scipy` (paired tests). All standard.
+4. **Library** — `numpy`, `pandas`, `scikit-learn` (ROC-AUC), `scipy` (paired tests). **All four are
+   already pinned** in `task1–4` (numpy 2.4, pandas 2.3, scikit-learn 1.9, scipy 1.17) — select the env
+   with `modality="scrna"` (an environment selector, not a claim about your data) and import them.
+   Nothing to install.
 
-```bash
-pip install numpy pandas scikit-learn scipy openpyxl   # openpyxl only if inputs are .xlsx
-```
+Only `openpyxl` is missing, and only if your inputs are `.xlsx`. Provision it per `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md` — or sidestep it by exporting the sheet to CSV, which is
+usually the cheaper move for a one-off table.
+
+> **Do not `pip install numpy pandas scikit-learn scipy`.** They are already here. A bare `pip`
+> resolves against whatever `python` leads `$PATH` — frequently conda `base` — and reinstalling these
+> four is the single most effective way to downgrade the versions `task1–4` are locked to and break
+> every other skill in the package. If you need a package that genuinely is missing, it goes in a
+> named env with its own solve-group. Never `base`, never a bare `pip`.
 
 ---
 
@@ -81,91 +89,50 @@ orientation. Read the method doc before running each capability.
 
 ## Standard Workflow
 
-### 1. Define positive and negative sets (leakage-free)
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
 
-- Build each comparison as **positive vs a clean negative**: SaPS-vs-NoPS and PdPS-vs-NoPS are
-  **separate** comparisons.
-- Positives and negatives must be **mutually exclusive** (no protein in both). If SaPS and PdPS
-  overlap, keep them separate — do not merge into one "PS" bucket that leaks across comparisons.
-- Use a **single fixed negative background** across all comparisons so AUCs are comparable.
-- Report the size of every set.
+### 1. Sequence composition / biophysics
 
-### 2. Pooled amino-acid composition
+Per-protein amino-acid composition, charge, hydropathy, aromatics.
 
-Compute composition at the **set level by pooling residues**, not by averaging per-protein
-fractions (per-protein averaging biases toward short sequences):
+- Composition is only meaningful against a **matched background** — a whole-proteome baseline is not
+  the same comparison as a length-matched or localisation-matched control. State which
+- Report the **feature definition**, not just the number: "aromatic fraction" means nothing without
+  the residue set
 
-```python
-from collections import Counter
-AA = "ACDEFGHIKLMNPQRSTVWY"
+→ `assets/references/sequence_biophysics.md`
 
-def pooled_composition(seqs):
-    c = Counter()
-    total = 0
-    for s in seqs:
-        s = "".join(ch for ch in str(s).upper() if ch in AA)  # drop X/B/Z/gaps
-        c.update(s); total += len(s)
-    return {a: c.get(a, 0) / total for a in AA}, total   # fractions sum to ~1.0
-```
+### 2. Restrict to IDRs (optional)
 
-See `assets/references/composition_analysis.md`.
+Slice the sequence to disordered regions from UniProt / MobiDB / IUPred2A / D2P2.
 
-### 3. Fold-change vs the non-PS reference
+- **The coordinates are 1-based inclusive.** Python slicing is 0-based half-open, so you subtract 1
+  from **START only** — the END is already exclusive-correct. An off-by-one here shifts every residue
+  and silently changes every composition number downstream
+- Whether to restrict at all is a design decision: IDR-only sharpens the signal but discards folded
+  domains that may genuinely contribute
 
-```python
-import numpy as np
-def fold_change(pos_comp, neg_comp, eps=1e-9):
-    return {a: (pos_comp[a] + eps) / (neg_comp[a] + eps) for a in AA}   # ratio, not difference
-```
+→ `assets/references/composition_analysis.md`
 
-Report fold-change (or log2 fold-change) per amino acid; a value >1 means enrichment in the
-positive set. **Fold-change is a ratio** — never a subtraction.
+### 3. Compare positive vs background sets
 
-### 4. Property-based ordering
+Composition of a condensate/MLO participant set against a negative set.
 
-Order the 20 amino acids by a **defensible physicochemical scale** (IDR/disorder propensity,
-charge, hydrophobicity, aromaticity) and apply the **same order** to every set so patterns are
-comparable. Motivate the choice biologically (aromatics/Arg = stickers; Q/N = prion-like; G/S/P =
-low-complexity spacers). You may also derive an ordering **empirically** from IDR frequencies
-(step 5). See the reference doc.
+- The **negative set defines the result**. NoPS vs a membrane-bound control answer different questions
+- Paired vs unpaired test follows from the design, not from convenience
 
-### 5. IDR-restricted composition (if IDR ranges available)
+→ `assets/references/composition_analysis.md`
 
-IDR coordinates from UniProt/MobiDB/IUPred are almost always **1-based inclusive**. Convert to
-Python slicing carefully:
+### 4. Benchmark a predictor
 
-```python
-# start,end are 1-based inclusive residue positions
-idr_segment = full_sequence[start - 1 : end]   # subtract 1 from START only
-```
+ROC-AUC of a predictor's scores against the labels.
 
-Concatenate IDR segments per set, recompute pooled composition, and compare — differences are
-usually sharper inside IDRs. Report proteins dropped for missing IDR annotation or sequence.
+- **ROC-AUC is misleading on heavy class imbalance** — condensate positives are rare. Report AUPRC
+  beside it, and the positive rate, or a 0.9 AUC can mean nothing
+- Never benchmark on sequences the predictor trained on; state the overlap you checked
 
-### 6. Predictor benchmarking (ROC-AUC)
-
-For **each predictor separately** and **each PS-type separately**, score positives vs the fixed
-negative:
-
-```python
-from sklearn.metrics import roc_auc_score
-# per (predictor, comparison): drop NaN in THIS predictor's column, keep both classes
-mask = df[[pred_col]].notna().all(axis=1)
-auc = roc_auc_score(df.loc[mask, "label"], df.loc[mask, pred_col])
-```
-
-- **Handle NaN per predictor-comparison pair** (different predictors miss different proteins).
-- **Verify score orientation** — higher score should mean more PS-prone; if a predictor is
-  reverse-scored, negate it. AUC ≈ 0.5 is random; < 0.5 usually means flipped orientation.
-- For **multiple positive datasets vs a control group** (e.g. MLO participants vs membrane-bound
-  controls): compute AUC for every dataset×predictor, then compare groups with a **paired test**
-  across predictors (e.g. one-sided Wilcoxon) and aggregate. See `predictor_benchmarking.md`.
-
-### 7. Interpret & ground
-
-Tie composition and AUC patterns back to sticker-spacer / prion-like biology, cite the predictor
-papers, and state which predictor discriminates which PS-type best. Inspect any ROC or
-composition plot before it backs a claim.
+→ `assets/references/predictor_benchmarking.md`
 
 ---
 

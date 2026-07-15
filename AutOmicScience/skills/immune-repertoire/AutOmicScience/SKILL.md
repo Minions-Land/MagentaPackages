@@ -3,7 +3,6 @@ name: immune-repertoire
 description: Single-cell immune repertoire (AIRR-seq) analysis with dandelion + scirpy — raw 10x V(D)J contig preprocessing/reannotation (IgBLAST/TIgGER), contig QC, paired scTCR/scBCR clonotype definition from CDR3 + V/J across both chains, clonal expansion, public / shared clonotype discovery across donors, BCR somatic-hypermutation / isotype / clonal-lineage analysis, and linkage of clonality to GEX cell state. Use when you have T-cell or B-cell receptor data (10x VDJ contigs, AIRR rearrangement tables, or per-cell paired-chain annotations) and need to reannotate/QC it, define clonotypes, quantify expansion, find clonotypes shared across patients, analyze BCR mutation/lineage, or connect receptor clonality to cell phenotype.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [immune-repertoire, airr, sctcr, scbcr, tcr, bcr, clonotype, clonal-expansion, public-clonotype, shm, dandelion, scirpy, single-cell]
-extends: omics-shared
 ---
 
 # Immune Repertoire (AIRR-seq) Analysis — dandelion + scirpy
@@ -46,31 +45,39 @@ Builds on `omics-shared` (loaded automatically). This is **repertoire** analysis
 1. **Receptor data**: raw 10x V(D)J (`filtered_contig_annotations.csv`+`.fasta`), an AIRR
    rearrangement `.tsv`, or a per-cell table already annotated with both chains' V/J/CDR3.
 2. **Cell metadata**: at minimum a donor/patient column; ideally a GEX cell-type/state column.
-3. **Libraries** — `pip install scirpy sc-dandelion` (scirpy ≥ 0.21, Python ≥ 3.12). Set dandelion's
-   mature backend once: `ddl.set_backend("base")` (default is `auto`→polars). Raw-contig
-   **reannotation** additionally needs dandelion's **Singularity/Docker container** (IgBLAST, BLAST,
-   changeo, TIgGER, R/SHazaM, germline DBs); all **downstream** steps are pure-Python.
+3. **Libraries** — neither `scirpy` nor `sc-dandelion` is in a pinned env; provision them per
+   `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A, specs `scirpy` + `sc-dandelion`;
+   scirpy ≥ 0.21, Python ≥ 3.12). Never a bare `pip install`. dandelion's **reannotation** additionally
+   needs dandelion's **Singularity/Docker container** (IgBLAST, BLAST, changeo, TIgGER, R/SHazaM,
+   germline DBs) — a §B case, and a blocker to report if unavailable; all **downstream** steps are
+   pure-Python.
 
-```python
-import scirpy as ir
-import dandelion as ddl; ddl.set_backend("base")
-```
+> **Pin `sc-dandelion` to 0.5.7 and index accordingly.** The released 0.5.7 exports `to_scirpy`/
+> `from_scirpy`/`concat` at **top level** (`ddl.to_scirpy(...)`); unreleased master moves them under
+> `ddl.tl`. Docs that mix the two eras describe no installable version. Prefer scirpy's version-tolerant
+> `ir.io.from_dandelion(vdj, ...)` where it exists.
 
 ---
 
 ## Capability Menu
 
-| Capability | Tool | Entry point | Reference Doc |
-|------------|------|-------------|---------------|
-| Raw 10x contig reannotation (IgBLAST/TIgGER) | dandelion (container) | `dandelion-preprocess` / `ddl.pp.*` | `assets/references/preprocessing_dandelion.md` |
-| Contig QC / ambiguity filtering | dandelion | `ddl.pp.check_contigs` | `assets/references/preprocessing_dandelion.md` |
-| BCR SHM / isotype / germline / lineage | dandelion | `ddl.pp.quantify_mutations`, `assign_isotypes`, `ddl.tl.generate_network` | `assets/references/preprocessing_dandelion.md` |
-| Load annotated AIRR; tool interop | both | `ir.io.read_airr` / `ddl.read_airr` / `ddl.tl.to_scirpy` ↔ `ir.io.from_dandelion` | `assets/references/data_loading.md` |
-| Paired-chain clonotype definition | scirpy | `ir.pp.ir_dist` + `ir.tl.define_clonotype(_clusters)` | `assets/references/clonotype_definition.md` |
-| Clone calling by junction identity | dandelion | `ddl.tl.find_clones` (`ddl.tl.define_clones` for BCR) | `assets/references/clonotype_definition.md` |
-| Clonal expansion / clone size | both | `ir.tl.clonal_expansion` / `ddl.tl.clone_size` | `assets/references/clonal_and_public.md` |
-| Public / shared clonotypes across donors | scirpy + pandas | groupby `clone_id` × donor | `assets/references/clonal_and_public.md` |
-| Clonality → GEX phenotype linkage | both | `ddl.tl.transfer` / `ir.get.airr_context` | `assets/references/clonal_and_public.md` |
+| Capability | Maturity | Tool | Entry point | Reference Doc |
+|------------|----------|------|-------------|---------------|
+| Raw 10x contig reannotation (IgBLAST/TIgGER) | **PARTIAL** — container | dandelion (container) | `dandelion-preprocess` / `ddl.pp.*` | `assets/references/preprocessing_dandelion.md` |
+| Contig QC / ambiguity filtering | **PARTIAL** — not pinned | dandelion | `ddl.pp.check_contigs` | `assets/references/preprocessing_dandelion.md` |
+| BCR SHM / isotype / germline / lineage | **PARTIAL** — not pinned | dandelion | `ddl.pp.quantify_mutations`, `assign_isotypes`, `ddl.tl.generate_network` | `assets/references/preprocessing_dandelion.md` |
+| Load annotated AIRR; tool interop | **PARTIAL** — not pinned | both | `ir.io.read_airr` / `ddl.read_airr` / `ddl.to_scirpy` ↔ `ir.io.from_dandelion` | `assets/references/data_loading.md` |
+| Paired-chain clonotype definition | **PARTIAL** — not pinned | scirpy | `ir.pp.ir_dist` + `ir.tl.define_clonotype(_clusters)` | `assets/references/clonotype_definition.md` |
+| Clone calling by junction identity | **PARTIAL** — not pinned | dandelion | `ddl.tl.find_clones` (`ddl.tl.define_clones` for BCR) | `assets/references/clonotype_definition.md` |
+| Clonal expansion / clone size | **PARTIAL** — not pinned | both | `ir.tl.clonal_expansion` / `ddl.tl.clone_size` | `assets/references/clonal_and_public.md` |
+| Public / shared clonotypes across donors | **PARTIAL** — not pinned | scirpy + pandas | groupby `clone_id` × donor | `assets/references/clonal_and_public.md` |
+| Clonality → GEX phenotype linkage | **PARTIAL** — not pinned | both | `ddl.tl.transfer` / `ir.get.airr_context` | `assets/references/clonal_and_public.md` |
+
+**Everything is PARTIAL** — neither `scirpy` nor `sc-dandelion` is in `task1–4`, so provision before
+planning a run (Prerequisites §3). Reannotation is doubly gated: it also needs dandelion's
+Singularity/Docker container. Every step *downstream* of reannotation is pure Python once the env
+exists. `omics_preflight` covers only `task1–4` — check the imports yourself and record the env +
+versions in the `report`.
 
 Read the method doc before running each capability.
 
@@ -78,65 +85,55 @@ Read the method doc before running each capability.
 
 ## Standard Workflow — pick the entry point
 
-### Path A — raw 10x contigs (or any BCR data): reannotate with dandelion first
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step. Everything here needs the
+provisioned env (Prerequisites §3).
 
-```bash
-# containerized reannotation (IG by default; add --chain TR for TCR incl. gamma/delta)
-singularity run -B $PWD sc-dandelion_latest.sif dandelion-preprocess --file_prefix filtered
-```
+### Entry A — raw 10x contigs (BCR, or any SHM/lineage work)
 
-```python
-import dandelion as ddl; ddl.set_backend("base")
-import scanpy as sc
-vdj = ddl.read_airr("dandelion/filtered_contig_dandelion.tsv")   # reannotated AIRR
-adata = sc.read_h5ad("gex.h5ad")                                  # scanpy-processed GEX
-vdj, adata = ddl.pp.check_contigs(vdj, adata)                    # QC / ambiguity filter
-```
+Reannotate with dandelion's container first. CellRanger output lacks the **IMGT numbering** that SHM
+quantification and phylogenetics need, so this step is not optional for BCR — and it is the one step
+gated on Singularity/Docker. If the container is unavailable, that is a **blocker to report**.
 
-Then either analyze in dandelion (`find_clones`/`generate_network`/SHM) or hand a clean object to
-scirpy via `ddl.tl.to_scirpy(vdj, to_mudata=True, gex_adata=adata)`. See
-`assets/references/preprocessing_dandelion.md`.
+→ `assets/references/preprocessing_dandelion.md`
 
-### Path B — already-annotated per-cell AIRR: straight to scirpy
+### Entry B — an annotated AIRR table
 
-For a per-cell table with both chains' V/J/CDR3 already annotated, load it into scirpy directly (no
-reannotation needed). See `assets/references/data_loading.md` for the wide→long load.
+Read AIRR directly and skip reannotation. Valid for TCR, and for BCR only if the table already carries
+IMGT-numbered alignments.
 
-```python
-import scirpy as ir
-adata = ir.io.read_airr(wide_to_airr(df_cells))   # AIRR AnnData; attach cell-state cols to adata.obs
-# if you also have a GEX count matrix: mdata = mu.MuData({"gex": adata_gex, "airr": adata})
-ir.pp.index_chains(adata)          # -> obsm["airr"]["chain_indices"] (VJ_1/2, VDJ_1/2)
-ir.tl.chain_qc(adata)              # -> receptor_type / chain_pairing
-```
+- scirpy ≥0.13 stores chains in `adata.obsm["airr"]` (awkward array) + `chain_indices`, and operates
+  on a **MuData** `{"gex":…, "airr":…}`, defaulting to the `airr` modality
+- Interop runs through `ddl.to_scirpy` ↔ `ir.io.from_dandelion`
 
-### Define clonotypes (scirpy)
+→ `assets/references/data_loading.md`
 
-```python
-# TCR, exact paired identity:
-ir.pp.ir_dist(adata)                                            # nt identity (default)
-ir.tl.define_clonotypes(adata, receptor_arms="all", dual_ir="primary_only")   # -> clone_id
-# BCR, ~85% similarity with same V+J (SHM-aware):
-ir.pp.ir_dist(adata, metric="normalized_hamming", sequence="nt", cutoff=15)
-ir.tl.define_clonotype_clusters(adata, metric="normalized_hamming", sequence="nt",
-    receptor_arms="all", dual_ir="any", same_v_gene=True, same_j_gene=True,
-    partitions="fastgreedy", key_added="clone_id")
-```
+### 1. Define clonotypes
 
-`sequence`/`metric` must match across `ir_dist`, `define_clonotype_clusters`, and
-`clonotype_network`. See `assets/references/clonotype_definition.md`.
+Distance-based clonotype calling: `ir.pp.ir_dist` then `ir.tl.define_clonotype(_clusters)`.
 
-### Downstream: expansion, public clonotypes, phenotype
+- **Define from the receptor sequence, never a vendor clonotype ID.** A per-sample ID is unique only
+  within that sample, so cross-individual comparison built on it is meaningless
+- Pair the **VJ-arm** (TRA/IGK/IGL) with the **VDJ-arm** (TRB/IGH) — CDR3 + V/J genes
+- **TCR vs BCR is a real fork.** TCR: exact or `tcrdist` matching. BCR: somatic hypermutation makes
+  exact identity meaningless — cluster by *similarity* (~85%) within the same V+J
 
-```python
-ir.tl.clonal_expansion(adata, target_col="clone_id", expanded_in="patient")   # per-donor bins
-donors = adata.obs.groupby("clone_id", observed=True)["patient"].nunique()
-public = donors.index[donors >= 2]                               # shared by >= 2 donors
-```
+→ `assets/references/clonotype_definition.md`
 
-(On a MuData, use `mdata.obs` with `airr:`/`gex:` prefixes.) See
-`assets/references/clonal_and_public.md`. Inspect any expansion/network plot before it backs a
-claim; cite dandelion and scirpy.
+### 2. Clonal expansion and public clonotypes
+
+- **Expansion** = one clonotype occupying many cells **within** a donor
+- **Public** = the same sequence-defined receptor in **≥2 donors**
+- These are different questions; keep them separate. Conflating them turns a big clone in one patient
+  into a "public" response
+
+→ `assets/references/clonal_and_public.md`
+
+### 3. Link clonality to GEX phenotype
+
+`ddl.tl.transfer` / `ir.get.airr_context` to carry receptor annotations onto the expression object.
+
+→ `assets/references/clonal_and_public.md`
 
 ---
 
@@ -148,7 +145,7 @@ claim; cite dandelion and scirpy.
 | BCR SHM %, isotype/class-switch, germline, lineage trees | **dandelion** (no scirpy equivalent for reannotation-grade SHM) |
 | Distance-based clonotype clusters (tcrdist), expansion, public, diversity, overlap, epitope query | **scirpy** |
 | Already-annotated per-cell AIRR, TCR downstream | **scirpy** (fast path) |
-| Move between them | `ddl.tl.to_scirpy` / `ir.io.from_dandelion` (needs `sc-dandelion`) |
+| Move between them | `ddl.to_scirpy` / `ir.io.from_dandelion` (needs `sc-dandelion`) |
 
 ---
 
@@ -162,7 +159,6 @@ claim; cite dandelion and scirpy.
 - **Per-donor granularity** — expansion and any per-donor min-cell filter are within each donor;
   public sharing is across donors (`≥2`). Keep them distinct.
 - **Match `sequence`/`metric`** across `ir_dist` / `define_clonotype_clusters` / `clonotype_network`.
-- **`ddl.set_backend("base")`** once after import (the default backend is not the mature one).
 
 ---
 

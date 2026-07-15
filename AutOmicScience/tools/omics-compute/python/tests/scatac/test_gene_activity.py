@@ -1,189 +1,69 @@
-"""
-Tests for scATAC gene_activity helper.
+"""Tests for the scATAC gene_activity wrapper.
 
-Tests the core contract: takes peak matrix + gene annotation,
-computes gene activity scores, returns report dict, fails loud on bad input.
+gene_activity is a thin wrapper over snapatac2.pp.make_gene_matrix, so these tests
+cover the wiring, the fail-loud guards, and the recorded provenance — not the gene
+matrix's numerics, which are snapATAC2's contract and are tested upstream.
 """
 
+import json
+import types
+
+import anndata as ad
 import pytest
-import numpy as np
-import pandas as pd
-from anndata import AnnData
-import sys
-import os as _os
+import snapatac2 as snap
+
+from aose_omics_runtime.scatac.gene_activity import run_gene_activity
 
 
-from aose_omics_runtime.scatac.gene_activity import (
-    run_gene_activity,
-    load_gene_annotation,
-    get_builtin_gene_annotation,
-)
-
-
-@pytest.fixture
-def peak_adata():
-    """Create minimal AnnData with peak counts."""
-    np.random.seed(42)
-    n_cells = 50
-    n_peaks = 100
-
-    X = np.random.poisson(3, (n_cells, n_peaks)).astype(np.float32)
-    adata = AnnData(X)
-    adata.obs_names = [f"cell_{i}" for i in range(n_cells)]
-    # Peak names as chr:start-end
-    adata.var_names = [f"chr1:{i*1000}-{i*1000+500}" for i in range(n_peaks)]
-    adata.var['chr'] = 'chr1'
-    adata.var['start'] = [i*1000 for i in range(n_peaks)]
-    adata.var['end'] = [i*1000+500 for i in range(n_peaks)]
-
-    return adata
-
-
-@pytest.fixture
-def simple_gene_annotation():
-    """Create minimal gene annotation DataFrame."""
-    genes = pd.DataFrame({
-        'gene_name': ['GENE1', 'GENE2', 'GENE3'],
-        'chr': ['chr1', 'chr1', 'chr2'],
-        'start': [5000, 15000, 10000],
-        'end': [10000, 20000, 15000],
-        'strand': ['+', '-', '+'],
-    })
-    return genes
-
-
-def test_gene_activity_run_basic_contract(peak_adata, simple_gene_annotation, tmp_path):
-    """Test run_gene_activity honors the basic contract."""
-    import argparse
-
-    input_h5ad = tmp_path / "input.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    gene_gtf = tmp_path / "genes.gtf"
-
-    peak_adata.write_h5ad(input_h5ad)
-
-    # Write minimal GTF (gene_activity can parse GTF or accept a DataFrame)
-    with open(gene_gtf, 'w') as f:
-        f.write("chr1\ttest\tgene\t5000\t10000\t.\t+\t.\tgene_name \"GENE1\";\n")
-        f.write("chr1\ttest\tgene\t15000\t20000\t.\t-\t.\tgene_name \"GENE2\";\n")
-
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        gtf_file=str(gene_gtf),
-        organism='human',
-        distance_constraint=500000,
-        method='cicero',
-        promoter_window=2000,
-        upstream=2000,
-        downstream=0,
-        gene_body_weight=0.5,
-        extend_upstream=5000,
-        extend_downstream=0,
-        coaccessibility_cutoff=0.25,
-        weight_by_distance=False,
-        decay_distance=50000,
-        tile_size=500,
+def _args(tmp_path, adata, gtf, **overrides):
+    params = dict(
+        adata=str(adata), output=str(tmp_path / "genes.h5ad"), gtf_file=str(gtf),
+        upstream=2000, downstream=0, include_gene_body=True,
+        id_type="gene", counting_strategy="paired-insertion",
     )
-
-    result = run_gene_activity(args)
-
-    # Contract checks
-    assert isinstance(result, dict), "run_gene_activity must return a dict"
-    assert output_h5ad.exists(), "Output file must be written"
-
-    # Verify output AnnData has gene activity layer
-    import anndata as ad
-    adata_out = ad.read_h5ad(output_h5ad)
-    # Gene activity is typically stored in a new layer or .X
-    assert adata_out.shape[0] == peak_adata.shape[0]  # same n_cells
+    params.update(overrides)
+    return types.SimpleNamespace(**params)
 
 
-def test_gene_activity_fails_on_missing_input():
-    """Test fail-loud on missing input file."""
-    import argparse
+def test_gene_activity_contract(fragments_h5ad, gtf_file, tmp_path):
+    result = run_gene_activity(_args(tmp_path, fragments_h5ad, gtf_file))
+    assert result["success"] is True
+    assert result["n_genes"] == 1
+    assert result["n_cells"] > 0
+    out = ad.read_h5ad(result["output"])
+    assert list(out.var_names) == ["G1"]
+    assert out.X.nnz > 0
 
-    args = argparse.Namespace(
-        adata="/nonexistent/path.h5ad",
-        output="/tmp/output.h5ad",
-        gtf_file=None,
-        organism='human',
-        distance_constraint=500000,
-        method='cicero',
-        promoter_window=2000,
-        upstream=2000,
-        downstream=0,
-        gene_body_weight=0.5,
-        extend_upstream=5000,
-        extend_downstream=0,
-        coaccessibility_cutoff=0.25,
-    )
 
+def test_gene_activity_provenance_names_snapatac2(fragments_h5ad, gtf_file, tmp_path):
+    """The algorithm must be named honestly: this is snapATAC2's, not a look-alike."""
+    result = run_gene_activity(_args(tmp_path, fragments_h5ad, gtf_file))
+    assert result["algorithm"] == "snapatac2.pp.make_gene_matrix"
+    assert result["snapatac2_version"] == snap.__version__
+    uns = ad.read_h5ad(result["output"]).uns["gene_activity"]
+    assert uns["algorithm"] == "snapatac2.pp.make_gene_matrix"
+    assert uns["snapatac2_version"] == snap.__version__
+    assert uns["parameters"]["counting_strategy"] == "paired-insertion"
+
+
+def test_gene_activity_rejects_plain_feature_matrix(plain_feature_matrix, gtf_file, tmp_path):
+    """A peak/tile matrix without obsm fragments cannot be scored — name the missing step."""
+    with pytest.raises(ValueError, match="import_fragments"):
+        run_gene_activity(_args(tmp_path, plain_feature_matrix, gtf_file))
+
+
+def test_gene_activity_chromosome_mismatch_fails_loud(fragments_h5ad, gtf_writer, tmp_path):
+    """'1' vs 'chr1' must name both namespaces, not surface snapATAC2's numpy error."""
+    bad = gtf_writer(tmp_path / 'bad.gtf', chrom='1')
+    with pytest.raises(ValueError, match="Chromosome naming mismatch"):
+        run_gene_activity(_args(tmp_path, fragments_h5ad, bad))
+
+
+def test_gene_activity_report_is_strict_json(fragments_h5ad, gtf_file, tmp_path):
+    result = run_gene_activity(_args(tmp_path, fragments_h5ad, gtf_file))
+    json.dumps(result, allow_nan=False)
+
+
+def test_gene_activity_fails_on_missing_input(gtf_file, tmp_path):
     with pytest.raises((FileNotFoundError, OSError)):
-        run_gene_activity(args)
-
-
-def test_get_builtin_gene_annotation():
-    """Test that builtin gene annotation can be loaded."""
-    # This tests the fallback to builtin annotations
-    genes = get_builtin_gene_annotation(organism='human')
-
-    assert isinstance(genes, pd.DataFrame)
-    assert 'gene_name' in genes.columns or 'gene' in genes.columns
-    assert 'chr' in genes.columns or 'chrom' in genes.columns
-    assert 'start' in genes.columns
-    assert 'end' in genes.columns
-
-
-def test_gene_activity_requires_peak_coordinates(tmp_path):
-    """Test fail-loud when peak coordinates are missing."""
-    import argparse
-
-    # Create adata without peak coordinate columns
-    n_cells = 50
-    n_peaks = 100
-    X = np.random.poisson(3, (n_cells, n_peaks)).astype(np.float32)
-    adata = AnnData(X)
-    adata.obs_names = [f"cell_{i}" for i in range(n_cells)]
-    adata.var_names = [f"peak_{i}" for i in range(n_peaks)]
-    # Missing: var['chr'], var['start'], var['end']
-
-    input_h5ad = tmp_path / "input_no_coords.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    adata.write_h5ad(input_h5ad)
-
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        gtf_file=None,
-        organism='human',
-        distance_constraint=500000,
-        method='cicero',
-        promoter_window=2000,
-        upstream=2000,
-        downstream=0,
-        gene_body_weight=0.5,
-        extend_upstream=5000,
-        extend_downstream=0,
-        coaccessibility_cutoff=0.25,
-    )
-
-    with pytest.raises((KeyError, ValueError)):
-        run_gene_activity(args)
-
-
-def test_load_gene_annotation_from_gtf(tmp_path):
-    """Test loading gene annotation from a GTF file."""
-    gtf_file = tmp_path / "test.gtf"
-
-    # Write a minimal GTF
-    with open(gtf_file, 'w') as f:
-        f.write("chr1\ttest\tgene\t1000\t5000\t.\t+\t.\tgene_name \"TEST1\";\n")
-        f.write("chr2\ttest\tgene\t2000\t6000\t.\t-\t.\tgene_name \"TEST2\";\n")
-
-    genes = load_gene_annotation(gtf_file=str(gtf_file))
-
-    assert isinstance(genes, pd.DataFrame)
-    assert len(genes) == 2
-    assert 'gene_name' in genes.columns or 'gene' in genes.columns
-    assert 'chr' in genes.columns or 'chrom' in genes.columns
+        run_gene_activity(_args(tmp_path, tmp_path / "nope.h5ad", gtf_file))

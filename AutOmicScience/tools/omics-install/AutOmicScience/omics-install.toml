@@ -29,5 +29,8 @@ required = ["environment"]
 
 [parameters.properties.environment]
 type = "string"
+# 'dev' (black/ruff) is developer-only and intentionally omitted — the analysis
+# agent never provisions it. 'all' is one standard-stack superset environment
+# composed from the task1–4 analysis features; it is not Pixi's install-all mode.
 enum = ["default", "task1", "task2", "task3", "task4", "r-env", "all"]
-description = "Pixi environment id to install. Map a modality with metadata.environments_by_modality (scrna->task1, spatial->task2, scatac->task4, multiome->task3). Use 'all' to install every environment."
+description = "Pixi environment id to install. Map a modality with metadata.environments_by_modality (scrna->task1, spatial->task2, scatac->task4, multiome->task3). 'all' provisions the single standard-stack superset environment composed from the task1–4 features; it does not install every named Pixi environment."

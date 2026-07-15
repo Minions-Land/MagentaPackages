@@ -1,5 +1,7 @@
 # Reference — MAF & CNA File Formats
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Parsing conventions for cancer genomics tabular files: MAF (Mutation Annotation Format), CNA matrices, and cBioPortal/MSK-IMPACT exports.
 
 ## MAF (Mutation Annotation Format)

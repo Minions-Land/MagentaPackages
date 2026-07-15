@@ -1,5 +1,7 @@
 # Amino-acid composition & fold-change for LLPS
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Goal: quantify how the residue composition of phase-separating proteins differs from non-PS
 controls, at whole-sequence and IDR resolution, in a way that is comparable across sets.
 

@@ -16,10 +16,10 @@ env_lock = "pixi.lock"
 compute_tool = "omics_compute"
 
 [metadata.environments_by_modality]
-rna = "task1"
+scrna = "task1"
 spatial = "task2"
-multi_omics = "task3"
 scatac = "task4"
+multiome = "task3"
 
 [parameters]
 type = "object"

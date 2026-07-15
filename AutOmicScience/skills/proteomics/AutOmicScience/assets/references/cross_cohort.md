@@ -1,5 +1,8 @@
 # Reference — Cross-Cohort Hypergeometric Enrichment
 
+**Maturity: REFERENCE** — hand-rolled in a Python script with `scipy.stats.hypergeom` (pinned).
+The universe definition is the whole analysis; no library can pick it for you.
+
 Testing whether upregulated proteins in cohort A are enriched among upregulated proteins in cohort B — the key test for replication across independent studies.
 
 ## The hypergeometric setup
@@ -25,13 +28,28 @@ up_B = set(de_B[(de_B.padj < 0.05) & (de_B.log2FC > 0.5)].protein)
 # Universe = proteins measured in BOTH cohorts (intersection of tested sets)
 universe = set(de_A.protein) & set(de_B.protein)
 M = len(universe)
-N = len(up_A & universe)  # up in A, and in the shared universe
+N = len(up_A & universe)  # up in A, and in the shared universe — the `& universe` is load-bearing
 n = len(up_B & universe)  # up in B, and in the shared universe
 k = len(up_A & up_B)      # overlap
 
 p = hypergeom.sf(k - 1, M, N, n)  # P(X ≥ k), sf(k-1) = 1 - cdf(k-1)
 print(f"Overlap: {k} / {n} (p={p:.3e})")
 ```
+
+> ### Intersect with the universe *before* counting, not after
+>
+> `N = len(up_A)` is the tempting shortcut and it is wrong — not conservative, wrong. It counts
+> proteins cohort B never measured, so they are not in the urn and the hypergeometric no longer
+> describes anything.
+>
+> The failure is silent and can be enormous. On a whole-proteome cohort A against an Olink panel B,
+> `len(up_A)` can exceed `M` outright — and `hypergeom.sf(k-1, M, N, n)` with `N > M` returns
+> **`nan` without raising**. `nan` prints as a number, formats as a p-value, and lands in the report.
+> Measured on a realistic pair, the un-intersected form was off by ~16 orders of magnitude before it
+> tipped over into `nan`.
+>
+> (`k = len(up_A & up_B)` needs no `& universe`: `up_A ⊆ de_A.protein` and `up_B ⊆ de_B.protein`, so
+> their intersection is already inside it. `N` and `n` are the ones that escape.)
 
 ## Critical: the universe must be the measured proteins
 

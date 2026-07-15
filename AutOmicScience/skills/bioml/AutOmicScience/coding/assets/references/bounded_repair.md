@@ -1,5 +1,7 @@
 # Reference — Bounded Repair Loop
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 The controlled way to iterate on a failing local check: bounded, observable, never open-ended.
 
 ## When to use

@@ -270,3 +270,59 @@ class TestStandardPreprocess:
     def test_neighbors_graph(self, raw_counts_adata):
         adata_proc, _ = standard_preprocess(raw_counts_adata)
         assert "neighbors" in adata_proc.uns
+
+
+class TestStandardPreprocessAuditFixes:
+    """Regressions for the counts-source (S05), mt-annotation (S06) and MAD=0 (S07) fixes."""
+
+    def test_counts_layer_is_authoritative_no_double_normalization(self):
+        # Canonical state (normalized X + raw counts layer) must yield the same
+        # result as feeding raw counts directly: the counts layer is authoritative,
+        # so X is reset from it and never normalized twice.
+        import scanpy as sc
+
+        raw = _make_counts_adata(n_vars=300)
+        out_raw, _ = standard_preprocess(raw.copy(), run_doublets=False, n_hvg=100,
+                                         n_pcs=30, n_neighbors=10)
+
+        canon = raw.copy()
+        canon.layers[LAYER_COUNTS] = canon.X.copy()
+        sc.pp.normalize_total(canon, target_sum=1e4)
+        sc.pp.log1p(canon)
+        out_canon, _ = standard_preprocess(canon, run_doublets=False, n_hvg=100,
+                                           n_pcs=30, n_neighbors=10)
+
+        assert out_raw.n_obs == out_canon.n_obs
+        x1 = out_raw.X.toarray() if hasattr(out_raw.X, "toarray") else out_raw.X
+        x2 = out_canon.X.toarray() if hasattr(out_canon.X, "toarray") else out_canon.X
+        assert np.allclose(x1, x2)
+        assert np.allclose(out_raw.obs["total_counts"].to_numpy(),
+                           out_canon.obs["total_counts"].to_numpy())
+
+    def test_existing_mt_annotation_is_preserved(self):
+        a = _make_counts_adata(n_vars=300)
+        a.var_names = [f"ENSG{i:05d}" for i in range(a.n_vars)]  # Ensembl IDs, no MT- prefix
+        mt_mask = [True] * 5 + [False] * (a.n_vars - 5)
+        a.var["mt"] = mt_mask
+        out, _ = standard_preprocess(a, run_doublets=False, n_hvg=100, n_pcs=30, n_neighbors=10,
+                                     max_pct_mt=100)
+        assert int(out.var["mt"].sum()) == 5  # not clobbered to all-False
+
+    def test_mad_flags_zero_inflated_outlier(self):
+        # 20 clean cells + 1 with 90% MT: pct_counts_mt MAD is 0, must still flag.
+        rng = np.random.default_rng(0)
+        X = rng.poisson(20, size=(21, 60)).astype(np.float32)
+        X[:, :2] = 0.0
+        X[0, :2] = 900.0
+        names = [f"MT-{i}" for i in range(2)] + [f"GENE{i}" for i in range(58)]
+        a = AnnData(X=csr_matrix(X), var=pd.DataFrame(index=names),
+                    obs=pd.DataFrame(index=[f"C{i}" for i in range(21)]))
+        out, report = standard_preprocess(a, qc_mode="mad", run_doublets=False, min_cells=0,
+                                          n_hvg=40, n_pcs=10, n_neighbors=5)
+        assert report["cells_flagged_mad"] >= 1
+        assert "C0" not in list(out.obs_names)
+
+    def test_inplace_parameter_removed(self):
+        import inspect
+
+        assert "inplace" not in inspect.signature(standard_preprocess).parameters

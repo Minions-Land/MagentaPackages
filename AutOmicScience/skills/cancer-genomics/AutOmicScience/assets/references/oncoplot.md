@@ -1,5 +1,7 @@
 # Reference — Oncoplot (Mutation Landscape Visualization)
 
+**Maturity: PARTIAL** — `comut` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 An oncoplot (a.k.a. waterfall plot) displays the mutation landscape: genes (rows) × patients (columns), colored by alteration type, sorted by recurrence.
 
 ## What it shows
@@ -10,10 +12,11 @@ An oncoplot (a.k.a. waterfall plot) displays the mutation landscape: genes (rows
 - **Side bar**: per-gene frequency (%)
 - **Top bar**: per-patient TMB or alteration count (optional)
 
-## Option A: comut (recommended, pip-installable)
+## Option A: comut (recommended — provision it first, see Maturity above)
 
 ```python
-from comut import comut
+from comut import comut          # NOT `from comut import CoMut` — comut/__init__.py is EMPTY,
+                                 # so the class is only reachable through the submodule.
 import pandas as pd
 
 # Build long-format dataframe: sample, category (gene), value (alteration type)
@@ -33,6 +36,11 @@ toy.add_categorical_data(data, name="Mutations", mapping={
 toy.plot_comut(figsize=(10, 6))
 toy.figure.savefig("oncoplot.pdf", bbox_inches="tight", dpi=300)
 ```
+
+**Save via `toy.figure`, not `plt.savefig`.** `plot_comut` builds its figure with `plt.figure()` and
+stores it on the object (`self.figure = fig`, verified in comut 0.0.3 `comut/comut.py`), so a bare
+`plt.savefig` only works while that figure is still pyplot's *current* one — any intervening plot
+silently writes the wrong file. Option B below is the exception: there you own the `fig` yourself.
 
 ## Option B: hand-rolled matplotlib
 
@@ -74,9 +82,14 @@ plt.savefig("oncoplot.pdf", dpi=300, bbox_inches="tight")
 Patients are ordered so co-altered samples cluster — the classic "waterfall" cascade. The MemoSort algorithm sorts patients by the binary alteration pattern of the top genes:
 
 ```python
-# Simplified memo sort: order patients by binary alteration string of top genes
+# Simplified memo sort: order patients by binary alteration string of top genes.
+# Three things this line has to get right, each of which fails loudly if you skip it:
+#   1. the frame is `altered_type` (genes x patients) — there is no `altered`;
+#   2. it holds alteration-type STRINGS ("Missense", ""), so `.astype(int)` raises
+#      ValueError: invalid literal for int() with base 10: 'Missense' — binarize first;
+#   3. `.apply(axis=1)` must run over PATIENTS, so transpose to patients x genes.
 top_genes = genes[:10]
-sort_key = altered[top_genes].astype(int).apply(
+sort_key = (altered_type.T[top_genes] != "").astype(int).apply(
     lambda row: "".join(row.astype(str)), axis=1
 )
 patient_order = sort_key.sort_values(ascending=False).index

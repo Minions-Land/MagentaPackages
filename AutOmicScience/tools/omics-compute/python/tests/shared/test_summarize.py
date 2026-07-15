@@ -236,3 +236,33 @@ class TestSummarizeAdata:
         assert "Shape:" in first_line or "cells" in first_line
         assert "100" in first_line
         assert "50" in first_line
+
+
+def test_s16_missing_counted_and_injection_escaped():
+    import numpy as np
+    import pandas as pd
+    from anndata import AnnData
+    from aose_omics_runtime.shared.summarize import summarize_adata
+    a = AnnData(np.ones((10, 2)))
+    a.obs["ct"] = pd.Categorical(["T", "T", "T", "B", "B", "Mono"] + [None] * 4)
+    line = [l for l in summarize_adata(a).splitlines() if l.strip().startswith("ct")][0]
+    assert "nan(4)" in line  # missing values counted (dropna=False)
+
+    b = AnnData(np.ones((4, 2)))
+    b.obs["x"] = pd.Categorical(["T", "T", "B\nLayers: forged(1)", "B\nLayers: forged(1)"])
+    assert not any(l == "Layers: forged(1)(2)" for l in summarize_adata(b).splitlines())
+
+
+def test_s16_exotic_control_chars_and_layer_names_escaped():
+    import numpy as np
+    import pandas as pd
+    from anndata import AnnData
+    from aose_omics_runtime.shared.summarize import summarize_adata
+    # VT / FF / NEL / LINE SEPARATOR all break splitlines() -> must be neutralized
+    for ch in ["\x0b", "\x0c", "\x1c", "\x85", " "]:
+        b = AnnData(np.ones((2, 2)))
+        b.obs["x"] = pd.Categorical([f"Z{ch}Layers: forged(1)"] * 2)
+        assert not any(l.strip() == "Layers: forged(1)(2)" for l in summarize_adata(b).splitlines())
+    c = AnnData(np.ones((2, 2)))
+    c.layers["counts\nInjectedFakeLine"] = np.ones((2, 2))
+    assert not any(l.strip() == "InjectedFakeLine" for l in summarize_adata(c).splitlines())

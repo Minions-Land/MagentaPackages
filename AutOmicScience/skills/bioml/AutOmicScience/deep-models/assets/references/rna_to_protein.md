@@ -1,5 +1,7 @@
 # Reference — scRNA → Protein Translation (CITE-seq Prediction)
 
+**Maturity: PARTIAL** — `sciPENN` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 Predicting surface-protein abundance from RNA-only single-cell data. The task: given scRNA-seq, output a protein-abundance matrix matching a CITE-seq panel.
 
 ## The task & output contract
@@ -36,19 +38,52 @@ scvi.model.TOTALVI.setup_anndata(
 model = scvi.model.TOTALVI(adata)
 model.train(max_epochs=400)
 
-# Impute protein for query cells (RNA-only)
+# Impute protein for query cells (RNA-only).
+# totalVI's setup is transferred to the query on the fly, and that setup REQUIRES the registered
+# protein obsm — so a genuinely RNA-only query dies with
+#   KeyError: 'protein_expression not found in adata.obsm.'
+# You must supply a placeholder yourself. `prepare_query_anndata` does NOT do this: it pads/reorders
+# query *vars* (genes) only and never touches obsm (there is no protein logic in it at all).
+adata_query.obsm["protein_expression"] = np.zeros(
+    (adata_query.n_obs, adata.obsm["protein_expression"].shape[1]), dtype="float32"
+)
 _, protein_pred = model.get_normalized_expression(
     adata_query, n_samples=25, return_mean=True
 )
 # protein_pred: (n_cells, n_proteins)
 ```
 
+The placeholder is an **input the decoder ignores for imputation**, not data — but it does mean the
+query's protein library size is zero, so treat the output as relative abundance across cells, not as a
+calibrated count. For a query from a different batch/chemistry, go through scArches surgery instead
+(`load_query_data` + fine-tune) — it needs the same placeholder first:
+
+```python
+q_model = scvi.model.TOTALVI.load_query_data(adata_query, model)   # placeholder must already be set
+q_model.train(max_epochs=200, plan_kwargs={"weight_decay": 0.0})
+_, protein_pred = q_model.get_normalized_expression(adata_query, n_samples=25, return_mean=True)
+```
+
+Both paths verified on scvi-tools 1.4.3 (each → `protein_pred (20, 12)`).
+
 ## sciPENN
 
-sciPENN is purpose-built for RNA→protein transfer across datasets:
+sciPENN is purpose-built for RNA→protein transfer across datasets. Provision it into a named env per
+the Maturity note above — never bare (`pip install sciPENN` on a bare `$PATH` resolves against conda
+`base`):
+
+```toml
+# tools/omics-environment/pixi.toml
+[feature.scipenn.pypi-dependencies]
+sciPENN = "*"
+
+[environments]
+scipenn = { features = ["core", "singlecell", "scipenn"], solve-group = "scipenn" }
+```
 
 ```bash
-pip install sciPENN
+pixi install --manifest-path tools/omics-environment/pixi.toml -e scipenn
+pixi run     --manifest-path tools/omics-environment/pixi.toml -e scipenn python -c "import sciPENN"
 ```
 
 ```python

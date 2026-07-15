@@ -301,3 +301,47 @@ class TestValidateProcessedAdata:
         assert len(report["embeddings"]) == 4  # X_pca, X_pca_harmony, X_umap, X_tsne
         assert "X_pca" in report["embeddings"]
         assert "spatial" not in report["embeddings"]  # Not an X_ embedding
+
+
+# --- Regression S03: a failed overwrite must not destroy the existing valid file ---
+
+def test_s03_failed_overwrite_leaves_original_bytes_unchanged(tmp_path):
+    import hashlib
+    import anndata as ad
+    import numpy as np
+    from aose_omics_runtime.shared import io
+
+    path = tmp_path / "out.h5ad"
+    good = ad.AnnData(np.eye(2))
+    good.uns["provenance"] = "ORIGINAL-VALID-2x2"
+    io.save_h5ad(adata=good, path=path)
+    before = hashlib.md5(path.read_bytes()).hexdigest()
+
+    # 3x3 whose uns cannot be serialized: the write fails midway through.
+    bad = ad.AnnData(np.ones((3, 3)))
+    bad.uns["boom"] = object()
+    with pytest.raises(Exception):
+        io.save_h5ad(adata=bad, path=path)
+
+    assert hashlib.md5(path.read_bytes()).hexdigest() == before  # byte-for-byte intact
+    reread = ad.read_h5ad(path)
+    assert reread.shape == (2, 2)
+    assert reread.uns["provenance"] == "ORIGINAL-VALID-2x2"
+    assert not list(tmp_path.glob(".out.h5ad.*"))  # no temp litter left behind
+
+
+def test_s03_atomic_write_is_reused_by_every_final_output():
+    # Guard against a new final output being added with a bare direct write.
+    import pathlib
+    root = pathlib.Path(__file__).resolve().parents[2] / "aose_omics_runtime"
+    offenders = []
+    for py in root.rglob("*.py"):
+        if "ipynb_checkpoints" in str(py) or py.name == "io.py":
+            continue
+        for i, line in enumerate(py.read_text().splitlines(), 1):
+            s = line.strip()
+            if s.startswith("#"):
+                continue
+            if ".write_h5ad(" in s or ".write_h5mu(" in s:
+                offenders.append(f"{py.name}:{i}: {s}")
+    assert not offenders, "final writes must go through io.save_h5ad/save_h5mu:\n" + "\n".join(offenders)

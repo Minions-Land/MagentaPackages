@@ -1,88 +1,165 @@
 # Reference — DepMap Data Loading & Context
 
-DepMap (Dependency Map) is a large-scale CRISPR knockout screen across ~1,000 cancer cell lines. Understanding the data structure and lineage metadata.
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
 
-## DepMap file structure
+DepMap (Dependency Map) is a genome-wide CRISPR knockout screen across ~1,100 cancer cell lines. This
+doc pins down the two things every downstream script depends on: **the matrix orientation** and **the
+current file/column names**.
 
-DepMap releases (quarterly at depmap.org) include:
+## The matrix is cell lines × genes
 
-| File | Content |
-|------|---------|
-| `CRISPR_gene_effect.csv` | Gene-effect scores (genes × cell lines), Chronos/CERES algorithm |
-| `sample_info.csv` | Cell-line metadata (lineage, cancer type, sex, primary/metastatic) |
-| `CCLE_mutations.csv` | MAF-like somatic mutations |
-| `CCLE_expression.csv` | RNA-seq TPM (genes × cell lines) |
-| `Achilles_gene_dependency.csv` | Legacy (pre-Chronos), same structure |
+`CRISPRGeneEffect.csv` has **one row per cell line and one column per gene** — not the other way
+round. Verified against the released file (26Q1 / 24Q4):
 
-## Gene-effect matrix
+```
+,A1BG (1),A1CF (29974),A2M (2),A2ML1 (144568),...      <- 18,531 gene columns
+ACH-000001,-0.0363...,0.2986...,0.1898...,...          <- one row per model
+```
 
 ```python
 import pandas as pd
-gene_effect = pd.read_csv("CRISPR_gene_effect.csv", index_col=0)
-# Shape: ~18,000 genes × ~1,000 cell lines
-# Values: gene-effect scores, typically −2 to +0.5
+gene_effect = pd.read_csv("CRISPRGeneEffect.csv", index_col=0)
+# index = ModelID (ACH-######) ; columns = "SYMBOL (EntrezID)" ; values ≈ −2 .. +0.5
 ```
 
-**Sign convention:**
-- **Negative = lethal** (CRISPR knockout reduces fitness)
-- **0 = no effect** (knockout is neutral)
-- **Positive = beneficial** (rare; knockout enhances growth)
+Everything follows from this:
 
-A score of −1.0 ≈ complete lethality (like a known essential gene). A score of −0.5 is the standard "dependency" threshold.
+| You want | Correct | Wrong (transposed) |
+|---|---|---|
+| One gene across lines | `gene_effect[gene]` | `gene_effect.loc[gene]` |
+| A gene in chosen lines | `gene_effect.loc[lines, gene]` | `gene_effect.loc[gene, lines]` |
+| Subset to a lineage | `gene_effect.loc[lines]` | `gene_effect[lines]` |
+| Fraction of **lines** dependent, per gene | `(gene_effect < -0.5).mean(axis=0)` | `.mean(axis=1)` |
+
+`.mean(axis=1)` on the real file averages **each cell line over all 18k genes** — it returns one
+number per line, indexed by `ACH-######`, and every downstream `[gene]` lookup then raises `KeyError`.
+That is the good case; a transposed `.loc` that happens to hit a valid label fails silently instead.
+
+## Gene columns carry an Entrez suffix — always
+
+Every column is `SYMBOL (EntrezID)`: `A1BG (1)`, `A1CF (29974)`. This is not an occasional
+paralog disambiguator — DepMap's pipeline builds every name that way, falling back to
+`SYMBOL (Unknown)` when no Entrez ID maps
+([`depmap_omics/depmapomics/dm_omics.py`](https://github.com/broadinstitute/depmap_omics)). So a bare
+`gene_effect["EGFR"]` raises `KeyError`.
+
+```python
+# Map bare HGNC symbol -> the release's column label; build once, reuse.
+symbol_to_col = {c.split(" (")[0]: c for c in gene_effect.columns}
+egfr = gene_effect[symbol_to_col["EGFR"]]
+```
+
+Strip the suffix only if you have a reason to; the Entrez ID is what disambiguates symbols that HGNC
+has since merged or retired. Never strip it off `.index` — the index is cell lines.
+
+## Current file names (and the legacy ones they replaced)
+
+DepMap renamed most files across 22Q2–23Q2. Code written against the old names fails on any modern
+release:
+
+| Current file | Holds | Legacy name (≤22Q4) |
+|---|---|---|
+| `CRISPRGeneEffect.csv` | Chronos gene-effect, lines × genes | `CRISPR_gene_effect.csv` |
+| `CRISPRGeneDependency.csv` | Dependency probability 0–1, lines × genes | `CRISPR_gene_dependency.csv` |
+| `Model.csv` | Cell-line metadata | `sample_info.csv` |
+| `OmicsSomaticMutations.csv` | Somatic mutations | `CCLE_mutations.csv` |
+| `OmicsExpressionProteinCodingGenesTPMLogp1.csv` | RNA log2(TPM+1) | `CCLE_expression.csv` |
+
+Column renames that bite just as hard — `DepMap_ID` became `ModelID` **at 23Q2**
+(`depmap_omics/depmapomics/qc/test_compare_to_ref_release.py` still carries the
+`# 23Q2 only: rename DepMap_ID -> ModelID` shim):
+
+| Current column | Legacy |
+|---|---|
+| `ModelID` | `DepMap_ID` |
+| `OncotreeLineage` | `lineage` |
+| `OncotreePrimaryDisease` | `primary_disease` |
+| `HugoSymbol` (in `OmicsSomaticMutations.csv`) | `Hugo_Symbol` |
+
+`Hugo_Symbol` (with the underscore) is **not** wrong everywhere — it is the column name in DepMap's
+MAF-format export, consumed by tools like maftools. The released `OmicsSomaticMutations.csv` uses
+`HugoSymbol` (`depmapomics/constants.py`: `HUGO_COL = "HugoSymbol"`).
+
+Always state the release you used (`26Q1`, `24Q4`, …) in the `report`; file and column names are
+release-scoped, not stable.
 
 ## Cell-line metadata
 
 ```python
-meta = pd.read_csv("sample_info.csv")
-# Key columns: DepMap_ID, stripped_cell_line_name, lineage, primary_disease, sex
+model = pd.read_csv("Model.csv", index_col="ModelID")
+# Key columns: OncotreeLineage, OncotreePrimaryDisease, OncotreeSubtype, SampleCollectionSite
+breast_lines = model.index[model.OncotreeLineage == "Breast"]
+breast_effect = gene_effect.loc[gene_effect.index.intersection(breast_lines)]
 ```
 
-**Lineage** is the tissue/organ of origin: lung, breast, pancreas, hematopoietic_and_lymphoid_tissue, …
+Intersect rather than index directly: `Model.csv` lists models that have *any* data type, and only a
+subset were CRISPR-screened, so `gene_effect.loc[breast_lines]` raises `KeyError` on the ones without
+a screen.
 
-**DepMap_ID** (e.g., `ACH-000001`) is the join key to gene-effect columns.
+`OncotreeLineage` is the tissue of origin; `OncotreePrimaryDisease` is finer (e.g. "Lung
+Adenocarcinoma" vs "Lung Squamous Cell Carcinoma"). Note that lineage lives in the Oncotree columns —
+tissue words also appear in `SampleCollectionSite`, which is the collection site, not the lineage.
 
-## Mapping cell lines to cancer types
+## Getting the data: the portal blocks scripts
+
+`https://depmap.org/portal/...` sits behind a browser verification challenge that answers **HTTP 200
+with an HTML challenge page**. A `requests.get(...)` + `if r.ok` check passes, then `read_csv` chokes
+on HTML — or worse, an "offline fallback" reports it as a network flake. It is not a flake; the
+portal is gated.
+
+Use the figshare release instead, which serves the same files unauthenticated and supports range
+requests (handy: the header alone tells you the orientation without a 400 MB download):
 
 ```python
-# Subset to a cancer type
-breast_lines = meta[meta.lineage == "breast"].DepMap_ID
-breast_gene_effect = gene_effect[breast_lines]
+# DepMap 24Q4 Public = figshare article 27993248; list files via the figshare API:
+#   https://api.figshare.com/v2/articles/27993248/files
+# then GET the download_url. Record the article id + release in the report.
 ```
 
-Or by `primary_disease` for finer granularity (e.g., "Lung Adenocarcinoma" vs "Lung Squamous Cell Carcinoma").
+## Use DepMap's own essentiality calls
 
-## Context threading
+DepMap ships its common-essential and non-essential gene lists — do not re-derive them with a
+hand-rolled frequency threshold (see `dependency_analysis.md`):
 
-Use `omics_compute summarize` on the gene-effect matrix to emit counts:
+| File | Content | Column |
+|---|---|---|
+| `CRISPRInferredCommonEssentials.csv` | ~1,537 genes inferred common-essential in this release | `Essentials` |
+| `AchillesCommonEssentialControls.csv` | ~1,247 curated common-essential controls | `Gene` |
+| `AchillesNonessentialControls.csv` | ~781 curated non-essential controls | `Gene` |
 
-```python
-# report: n_genes, n_lines, n_lineages, top lineages by line count
-```
-
-Thread forward: "DepMap 24Q2, 18,333 genes × 1,086 cell lines, 38 lineages."
-
-## Gene naming
-
-DepMap uses **HGNC gene symbols**. Some rows have `(id)` suffixes for paralogs (e.g., `HLA-A (id)` vs `HLA-A`). Strip or disambiguate:
+All three use the same `SYMBOL (EntrezID)` labels as the gene-effect columns, so they join directly:
 
 ```python
-gene_effect.index = gene_effect.index.str.replace(r" \(.*\)", "", regex=True)
+common_essential = set(pd.read_csv("CRISPRInferredCommonEssentials.csv").Essentials)
+selective_candidates = [c for c in gene_effect.columns if c not in common_essential]
 ```
 
 ## Chronos vs CERES
 
-- **Chronos** (current, 21Q2+): improved algorithm, corrects copy-number confounds
-- **CERES** (legacy): older algorithm, still in `Achilles_gene_dependency.csv`
+- **Chronos** (current, 21Q2+): corrects copy-number and screen-quality confounds
+- **CERES** (legacy): older algorithm; amplified regions look falsely essential
 
-Prefer Chronos (`CRISPR_gene_effect.csv`) for new analyses.
+Prefer Chronos (`CRISPRGeneEffect.csv`).
+
+## Sign convention
+
+- **Negative = lethal** (knockout reduces fitness); −1.0 ≈ the median common-essential gene
+- **0 = no effect**; **positive = knockout enhances growth** (rare)
+
+The −1.0 anchor is by construction: Chronos scales scores so common essentials centre near −1 and
+non-essentials near 0. That is why the control lists above are the right reference point.
 
 ## Pitfalls
 
-- **Sign confusion** — positive = beneficial (rare), negative = lethal
-- **Not joining on DepMap_ID** — cell-line names have aliases; use the canonical ID
-- **Lineage too coarse** — "blood" includes ALL leukemias/lymphomas; use `primary_disease` if finer resolution needed
-- **Not filtering unmapped genes** — some rows are retired symbols; validate against HGNC
+- **Assuming genes × cell lines** — the file is lines × genes; a transposed `.loc` either `KeyError`s
+  or silently reads the wrong axis
+- **Bare gene symbols** — columns are `SYMBOL (EntrezID)`; build a symbol→column map
+- **Legacy names** — `CRISPR_gene_effect.csv` / `sample_info.csv` / `DepMap_ID` are pre-23Q2
+- **Scripting depmap.org** — challenge-gated, returns HTTP 200 + HTML; use figshare
+- **Indexing `gene_effect` with all of `Model.csv`** — not every model was CRISPR-screened; intersect
+- **Sign confusion** — negative = lethal, positive = growth advantage
 
 ## Grounding
 
-`report`: DepMap version (e.g., 24Q2), n_genes, n_lines, lineage distribution, any subsetting applied.
+`report`: DepMap release (e.g. 24Q4) and where it came from (figshare article id), n_models, n_genes,
+lineage distribution, any subsetting applied.

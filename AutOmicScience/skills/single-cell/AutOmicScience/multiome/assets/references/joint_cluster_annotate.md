@@ -1,6 +1,6 @@
 # Joint Clustering & Annotation
 
-**Maturity: REFERENCE** — cluster on the joint representation, then annotate via two routes (same as scRNA). Hand-rolled `muon` + the scRNA marker path.
+**Maturity: mixed.** **Clustering is REFERENCE** — you write a Python script that calls `muon` (`mu.pp.neighbors` / `mu.tl.leiden`); `muon` is pinned in `task3`, nothing to install, and "hand-rolled" means *you* make the calls, not that you implement Leiden. **Annotation is READY** — the markers come from the scRNA `marker_table` subcommand, which records evidence for you, and you label from the marker patterns.
 
 ## Goal / When to Use
 
@@ -12,7 +12,7 @@ After joint embedding, cluster cells on the joint space and assign biological la
   - **WNN** produces a joint **graph** (not an `X_wnn` embedding) — cluster directly on it: `mu.tl.leiden(mdata)` after `mu.pp.neighbors(mdata)`.
   - **MultiVI** produces `obsm["X_multivi"]` — cluster via `mu.pp.neighbors(mdata, use_rep="X_multivi")` → `mu.tl.leiden`.
   - Resolution by marker support, not an arbitrary number.
-- **Annotate via two routes (same as scRNA):** Route 1 = marker + LLM (default); Route 2 = reference pipeline (`run_annotation_pipeline`).
+- **Annotate from markers (same as scRNA):** cluster → marker table → label from the marker patterns + tissue context; abstain to "unknown" when ambiguous (see `rna`: `annotation.md`).
 
 ## How-to
 
@@ -24,7 +24,7 @@ mu.tl.leiden(mdata, resolution=1.0, key_added="leiden")
 mu.tl.umap(mdata)
 ```
 
-**Annotation — Route 1 (marker + LLM, default):** markers come from the **RNA** modality via the scRNA marker subcommand; write the RNA modality out and run:
+**Annotation — marker + LLM:** markers come from the **RNA** modality via the scRNA marker subcommand; write the RNA modality out and run:
 ```python
 omics_compute(subcommand="marker_table", modality="scrna",
               args={"input": "rna.h5ad", "output": "markers.csv", "groupby": "leiden"})
@@ -32,7 +32,6 @@ omics_compute(subcommand="marker_table", modality="scrna",
 ```
 Validate each call against **both** modalities — RNA expression *and* ATAC accessibility at the marker genes.
 
-**Route 2 (reference pipeline):** call `run_annotation_pipeline` when a labeled reference exists.
 
 ## Failure Modes
 

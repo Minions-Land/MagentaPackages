@@ -1,5 +1,7 @@
 # Transductive node classification (+ hetero, imbalance, scale)
 
+**Maturity: PARTIAL** — `torch-geometric` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 Predict a label per node from node features + graph structure. **Transductive** = the whole graph
 (all nodes/edges) is present at train time; boolean masks decide which nodes contribute to the loss.
 
@@ -22,7 +24,9 @@ class GNN(torch.nn.Module):
 ```
 
 Conv choice: **GCN** (fast baseline), **GAT/GATv2** (attention, `heads=`, set `edge_dim=` to use edge
-features), **SAGE** (`aggr="mean"|"lstm"`, inductive-friendly), **GIN** (wraps your MLP, expressive).
+features), **SAGE** (`aggr="mean"`, or `aggr="lstm"` — which **requires a destination-sorted
+`edge_index`**: `sort_edge_index(edge_index, sort_by_row=False)`, else
+`ValueError: ... 'index' tensor is not sorted`), **GIN** (wraps your MLP, expressive).
 `in_channels=-1` enables lazy dim inference.
 
 ## Training loop (full-batch transductive)
@@ -72,16 +76,36 @@ full-batch loop.)
 Write a homogeneous model with **lazy `-1`** channels, then lift it:
 
 ```python
-from torch_geometric.nn import SAGEConv, Linear, Sequential, to_hetero
-from torch.nn import ReLU
-model = Sequential('x, edge_index', [
-    (SAGEConv((-1, -1), 64), 'x, edge_index -> x'), ReLU(inplace=True),
-    (SAGEConv((-1, -1), 64), 'x, edge_index -> x'), ReLU(inplace=True),
-    (Linear(-1, num_classes), 'x -> x'),
-])
-model = to_hetero(model, data.metadata(), aggr='sum')      # per-edge-type replicas, aggr over dst
-model(data.x_dict, data.edge_index_dict)                    # one dummy forward first (lazy init)
+import torch
+from torch_geometric.nn import SAGEConv, Linear, to_hetero
+
+# to_hetero fx-traces the module, and PyG's own `Sequential` is NOT traceable: its forward is
+# `forward(self, *args, **kwargs)`, and PyG's fx pass treats only `torch.nn.Sequential` as a leaf
+# (nn/fx.py:287), so it traces into PyG's and dies unpacking *args:
+#   TraceError: Proxy object cannot be iterated.
+# Verified on 2.8.0. Write a plain nn.Module instead — upstream's own to_hetero tests do the same.
+class GNN(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv1 = SAGEConv((-1, -1), 64)
+        self.conv2 = SAGEConv((-1, -1), 64)
+        self.lin = Linear(-1, num_classes)     # PyG's Linear — torch.nn.Linear rejects -1
+
+    def forward(self, x, edge_index):          # the ARG NAMES are load-bearing (see below)
+        x = self.conv1(x, edge_index).relu()
+        x = self.conv2(x, edge_index).relu()
+        return self.lin(x)
+
+model = to_hetero(GNN(), data.metadata(), aggr='sum')      # per-edge-type replicas, aggr over dst
+out = model(data.x_dict, data.edge_index_dict)             # -> {'gene': (N, num_classes)}
+# ^ this first call also materializes the lazy (-1) dims; do it before building the optimizer.
 ```
+
+> **`to_hetero` reads your `forward` argument NAMES**, not positions — it decides what is a node
+> feature vs an edge index from them. Rename `edge_index` to `ei` and it still traces, then fails at
+> runtime with `ValueError: MessagePassing.propagate only supports integer tensors of shape
+> [2, num_messages]` — a confusing error a long way from the cause. Keep the names `x` and `edge_index`.
+> (Both behaviours reproduced on PyG 2.8.0.)
 
 ## Scaling: never build a dense `[N, N]`
 

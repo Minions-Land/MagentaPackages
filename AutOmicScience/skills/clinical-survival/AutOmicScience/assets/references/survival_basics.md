@@ -1,5 +1,7 @@
 # Reference — Survival Analysis Basics
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Core concepts for time-to-event analysis.
 
 ## Data structure

@@ -1,9 +1,6 @@
 ---
-name: multi-omics
-description: Single-cell multiome (paired RNA + ATAC) — MuData assembly, per-modality preprocess, joint embedding (WNN / MultiVI), joint clustering & annotation, chromatin-aware velocity (MultiVelo), eGRN (SCENIC+), cross-modal interpretation.
-requiredTools: [run_python, create_notebook, add_cell, observe_figure, omics_preflight, omics_compute]
-tags: [multiome, multimodal, rna, atac, scverse, mudata, muon, single-cell]
-extends: omics-shared
+name: single-cell-multiome
+disable-model-invocation: true
 ---
 
 # Single-Cell Multiome (RNA + ATAC) Analysis
@@ -19,15 +16,20 @@ Paired RNA + ATAC from the same nuclei. Reuses the scRNA and scATAC per-modality
 
 ## Capability Menu
 
-| Capability | When to Use | Documentation |
-|------------|-------------|---------------|
-| **Load & Assemble** | Build validated paired MuData from various sources | `assets/references/load_multiome.md` |
-| **Per-Modality Preprocess** | Reuse P1/P3 recipes on each modality before joining | `assets/references/per_modality_preprocess.md` |
-| **Joint Embedding** | Combine modalities into one cell representation (WNN/MultiVI) | `assets/references/joint_embedding.md` |
-| **Joint Cluster & Annotate** | Cluster on joint rep; label via two routes (marker+LLM / reference) | `assets/references/joint_cluster_annotate.md` |
-| **Multiome Velocity** | Chromatin-informed RNA velocity (MultiVelo, external env) | `assets/references/multiome_velocity.md` |
-| **eGRN & Regulation** | TF→region→gene eGRN + region-gene linkage (SCENIC+, external pipeline) | `assets/references/regulation.md` |
-| **Cross-Modal Interpretation** | Modality weights (which modality drives a population); peak-gene & eGRN → `regulation.md` | `assets/references/cross_modality.md` |
+| Capability | Maturity | How | Method doc |
+|------------|----------|-----|------------|
+| Load & assemble paired MuData | **READY** | `omics_compute load_multiome` (`--rna --atac --output`) | `assets/references/load_multiome.md` |
+| Per-modality preprocess — RNA | **READY** | `omics_compute preprocess` (modality=scrna); write the modality out, run, read back | `assets/references/per_modality_preprocess.md` |
+| Per-modality preprocess — ATAC | **REFERENCE** | hand-rolled `snapatac2` — pinned in `task3`; peak matrix in, so `select_features` + `spectral` only — **TSSE/FRiP/tiles need fragments, not reachable here** | `assets/references/per_modality_preprocess.md` |
+| Joint embedding — **WNN** (default) | **REFERENCE** | hand-rolled `muon` `mu.pp.neighbors` — pinned in `task3` (no `joint_embed` subcommand: deliberately excluded pending migration) | `assets/references/joint_embedding.md` |
+| Joint embedding — **MultiVI** | **PARTIAL** | `scvi-tools` `MULTIVI` — pinned in `task3` but **needs a GPU**; verify preflight | `assets/references/joint_embedding.md` |
+| Joint clustering (Leiden on the joint rep) | **REFERENCE** | hand-rolled `muon` `mu.tl.leiden` — pinned in `task3` | `assets/references/joint_cluster_annotate.md` |
+| Annotation (marker + LLM) | **READY** | `omics_compute marker_table` (modality=scrna) → LLM labeling | `assets/references/joint_cluster_annotate.md` |
+| Chromatin-informed RNA velocity | **REFERENCE** | MultiVelo — **isolated env, cannot share `task3`** (pins `pandas<=1.4.4`); needs spliced/unspliced | `assets/references/multiome_velocity.md` |
+| eGRN / regulation (TF→region→gene) | **REFERENCE** | SCENIC+ — **external Snakemake pipeline in its own env**; needs pycisTopic + Mallet/Java + MACS2 + motif DBs | `assets/references/regulation.md` |
+| Cross-modal interpretation (modality weights) | **REFERENCE** | hand-rolled — read WNN's per-cell weights off `mdata.obs` | `assets/references/cross_modality.md` |
+
+**"hand-rolled" = you write the Python script that calls the library** (muon, snapATAC2, …) — *not* that you implement the algorithm. `mu.pp.neighbors` is the real WNN. The only thing REFERENCE costs you versus READY is that no subcommand records evidence for you, so you `print(report)` yourself.
 
 ## Global Rules
 
@@ -53,19 +55,24 @@ Per conventions (§6): counts in `layers["counts"]`, embeddings in `obsm["X_*"]`
 
 ## Standard Workflow
 
-1. **Load/Assemble** → validated MuData with shared barcodes
-2. **Per-Modality Preprocess** → RNA (QC/norm/HVG/PCA), ATAC (QC/features/embedding)
-3. **Joint Embedding** → WNN or MultiVI latent space
-4. **Joint Cluster** → Leiden on joint representation
-5. **Annotate** → marker+LLM or FM pipeline
-6. **Cross-Modal Analysis** → peak-gene links, TF activity, regulatory interpretation
+1. **Load/Assemble** → validated MuData with shared barcodes (`load_multiome`, READY)
+2. **Per-Modality Preprocess** → RNA: QC/norm/HVG/PCA via the `preprocess` subcommand (modality=scrna). ATAC: feature selection + spectral embedding on the peak matrix — **TSSE-grade QC is not reachable here**; it needs the fragments route (`per_modality_preprocess.md`)
+3. **Joint Embedding** → WNN (default) or MultiVI (PARTIAL — GPU) latent space
+4. **Joint Cluster** → Leiden on the joint representation
+5. **Annotate** → marker + LLM (markers via the `marker_table` subcommand) on the RNA modality (`joint_cluster_annotate.md`)
+6. **Cross-Modal Interpretation** → modality weights: which populations are RNA- vs ATAC-driven (`cross_modality.md`). Peak→gene links, TF→target and eGRN are **not** here — they come from the SCENIC+ pipeline (`regulation.md`)
 
 ## Compute Dispatch
 
 Run compute through the **`omics_compute`** tool with `modality="multiome"`:
 ```python
-# Available subcommands:
-#   - load_multiome: Assemble/validate paired MuData
+# Available subcommands under modality="multiome":
+#   - load_multiome: Assemble/validate paired MuData   (flags: --rna --atac --output)
 ```
 
-Joint embedding (WNN / MultiVI) is hand-rolled `muon` in a Python script; velocity (MultiVelo) and eGRN (SCENIC+) run as external pipelines in isolated envs — see the method docs.
+`load_multiome` is the **only** multiome-modality subcommand. The per-modality READY paths dispatch under a **different** modality — write the modality out of the MuData, run it there, read it back:
+
+- RNA preprocess / marker table → `modality="scrna"` (task1)
+- ATAC QC / peak calling / gene activity → `modality="scatac"` (task4) — **but only on a `snapatac2.pp.import_fragments` object.** They cannot run on `mdata["atac"]`, which is a peak matrix with no insertions; see `per_modality_preprocess.md`.
+
+Joint embedding (WNN / MultiVI) is a `muon` / `scvi-tools` script — both pinned in `task3`. Velocity (MultiVelo) and eGRN (SCENIC+) run as external pipelines in **isolated envs** — see their method docs.

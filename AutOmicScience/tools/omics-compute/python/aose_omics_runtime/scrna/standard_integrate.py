@@ -10,6 +10,7 @@ This is the single source of truth for batch correction in scRNA-seq analysis.
 from typing import Optional, Literal
 from datetime import datetime, UTC
 import numpy as np
+import pandas as pd
 import scanpy as sc
 from anndata import AnnData
 
@@ -97,6 +98,18 @@ def standard_integrate(
             f"Available embeddings: {list(adata.obsm.keys())}"
         )
 
+    # Clean the batch column: reject missing labels (a cell in no batch silently
+    # under-counts and gets a zero one-hot) and drop unused categorical levels
+    # (harmonypy sizes its tensors from the observed count, so a ghost level crashes).
+    batch = adata.obs[batch_key]
+    if batch.isna().any():
+        raise ValueError(
+            f"batch_key '{batch_key}' has {int(batch.isna().sum())} missing values; "
+            "assign every cell a batch (or subset the data) before integration."
+        )
+    if isinstance(batch.dtype, pd.CategoricalDtype):
+        adata.obs[batch_key] = batch.cat.remove_unused_categories()
+
     n_batches = adata.obs[batch_key].nunique()
     if n_batches < 2:
         raise ValueError(
@@ -105,6 +118,7 @@ def standard_integrate(
         )
 
     # Apply integration method
+    effective_n_pcs = None
     if method == "harmony":
         # Call harmonypy DIRECTLY rather than through scanpy.external's
         # harmony_integrate. scanpy 1.11's wrapper does `Z_corr.T`, which assumes
@@ -116,17 +130,25 @@ def standard_integrate(
             import harmonypy
         except ImportError as e:
             raise ImportError(
-                "Harmony integration requires 'harmonypy' package. "
-                "Install with: pip install harmonypy"
+                "Harmony integration requires 'harmonypy', which is pinned in task1-4 — "
+                "seeing this means you are not running in a pinned env. Select one "
+                "(modality='scrna') rather than installing into the current interpreter."
             ) from e
 
+        # Record the effective PC count actually used (numpy silently returns
+        # fewer columns when n_pcs exceeds what PCA produced).
+        effective_n_pcs = min(n_pcs, adata.obsm[OBSM_PCA].shape[1])
+        # nclust must be >= 2: harmonypy's default nclust=round(N/30) collapses to
+        # <=1 for small N, leaving sigma a scalar and crashing on len(sigma).
+        nclust = int(min(max(round(adata.n_obs / 30.0), 2), 100, adata.n_obs))
         ho = harmonypy.run_harmony(
-            adata.obsm[OBSM_PCA],
+            adata.obsm[OBSM_PCA][:, :effective_n_pcs],
             adata.obs,
             [batch_key],
             max_iter_harmony=max_iter_harmony,
             sigma=sigma,
             theta=theta,
+            nclust=nclust,
         )
         Z = np.asarray(ho.Z_corr)
         # Orient to (n_cells, n_pcs) regardless of harmonypy version.
@@ -135,13 +157,19 @@ def standard_integrate(
         adata.obsm[target_key] = Z
 
     elif method == "scanorama":
+        # scanpy.external imports fine even when scanorama is absent (scanorama is
+        # imported lazily inside the call), so probe scanorama directly to raise an
+        # accurate, actionable error at the real dependency boundary.
         try:
-            import scanpy.external as sce
+            import scanorama  # noqa: F401
         except ImportError as e:
             raise ImportError(
-                "Scanorama integration requires 'scanorama' package. "
-                "Install with: pip install scanorama"
+                "Scanorama integration requires the 'scanorama' package, which is in no "
+                "pinned environment. Provision it into a named env with its own solve-group "
+                "(see omics-shared's AOSE_nonStandard_env.md); a bare `pip install` can land "
+                "in the base env and downgrade the pinned stack."
             ) from e
+        import scanpy.external as sce
 
         sce.pp.scanorama_integrate(
             adata,
@@ -171,7 +199,8 @@ def standard_integrate(
             "batch_sizes": adata.obs[batch_key].value_counts().to_dict(),
             "parameters": {
                 "batch_key": batch_key,
-                "n_pcs": n_pcs,
+                "n_pcs_requested": n_pcs if method == "harmony" else None,
+                "n_pcs_effective": effective_n_pcs if method == "harmony" else None,
                 "max_iter_harmony": max_iter_harmony if method == "harmony" else None,
                 "sigma": sigma if method == "harmony" else None,
                 "theta": theta if method == "harmony" else None,
@@ -258,8 +287,8 @@ def main(args):
     report["output"] = args.output
     report["batch_key"] = args.batch_key
     report["method"] = args.method
-    report["saved_bytes"] = save_meta.get("bytes")
-    print(json.dumps(report, indent=2, default=str))
+    report["saved_bytes"] = save_meta.get("size_bytes")
+    print(json.dumps(report, indent=2, default=str, allow_nan=False))
 
 
 if __name__ == '__main__':

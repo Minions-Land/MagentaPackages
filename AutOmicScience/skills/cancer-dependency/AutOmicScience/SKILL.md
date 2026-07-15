@@ -3,7 +3,6 @@ name: cancer-dependency
 description: Cancer functional genomics & dependency analysis — DepMap/CCLE CRISPR gene-effect screens (dependency scoring, normLRT selective-dependency test), Pharos druggability annotations (Tclin/Tchem/Tbio/Tdark tiers), therapeutic-window prioritization, synthetic lethality discovery (mutual-exclusivity Fisher test, paralog/PPI priors, BRCA-PARP canonical pairs), multi-omic integration (dependency + phosphoproteomics/expression/MAF). Use when the user has DepMap data, asks to identify druggable dependencies, selective vulnerabilities, synthetic-lethal gene pairs, or integrate dependency screens with other omics.
 requiredTools: [run_python, bash, read, write]
 tags: [omics, cancer, dependency, depmap, ccle, crispr, druggability, pharos, synthetic-lethality, normLRT]
-extends: omics-shared
 ---
 
 # Cancer Dependency — DepMap & Druggability Analysis
@@ -16,11 +15,19 @@ This is **NOT** GWAS, **NOT** germline genetics, **NOT** ML training on dependen
 
 ## Prerequisites
 
-1. **Data format**: DepMap CRISPR gene-effect matrix (genes × cell lines, Chronos/CERES scores), or pre-computed dependency calls
+1. **Data format**: DepMap CRISPR gene-effect matrix (**cell lines × genes**, Chronos scores), or pre-computed dependency calls
 2. **Context**: cell-line metadata (cancer type, lineage, mutation status) if testing selective dependencies
-3. **Druggability sources**: Pharos (API or download), Therapeutic Target Database (TTD), or DrugBank
+3. **Druggability sources**: Pharos (GraphQL API or TCRD download), Therapeutic Target Database (TTD), or DrugBank
 
-DepMap releases quarterly at depmap.org. Standard file: `CRISPR_gene_effect.csv` (genes × cell lines, values ≈ −1 to +0.5).
+DepMap releases quarterly. The current file is **`CRISPRGeneEffect.csv`**: rows = `ModelID`
+(`ACH-######`), columns = `SYMBOL (EntrezID)` (e.g. `A1BG (1)`), values ≈ −2 to +0.5.
+
+> **Two things break every script written from memory.** The matrix is **cell lines × genes**, not
+> genes × cell lines. And the names changed: `CRISPR_gene_effect.csv` → `CRISPRGeneEffect.csv`,
+> `sample_info.csv` → `Model.csv`, `DepMap_ID` → `ModelID` (at 23Q2), `lineage` → `OncotreeLineage`.
+> Scripting depmap.org does not work either — it is behind a browser challenge that answers HTTP 200
+> with an HTML page. `assets/references/depmap_loading.md` has the current names and the figshare
+> route.
 
 ---
 
@@ -31,9 +38,10 @@ DepMap releases quarterly at depmap.org. Standard file: `CRISPR_gene_effect.csv`
 | **Dependency scoring** | | | |
 | Load DepMap gene-effect matrix | **REFERENCE** | `pandas` | `assets/references/depmap_loading.md` |
 | Binary dependency call (< −0.5 threshold) | **REFERENCE** | Python | `assets/references/dependency_analysis.md` |
-| Pan-essentiality filtering (≥90% lines dependent) | **REFERENCE** | Python | `assets/references/dependency_analysis.md` |
+| Common-essential filtering | **REFERENCE** | DepMap's own `CRISPRInferredCommonEssentials.csv` | `assets/references/dependency_analysis.md` |
 | **Selective dependency** | | | |
-| normLRT selective-dependency test | **REFERENCE** | `scipy.stats` | `assets/references/dependency_analysis.md` |
+| normLRT score (published, skew-t vs normal) | **PARTIAL** | R `sn::st.mple` + `MASS::fitdistr` — not pinned, no Python equivalent | `assets/references/dependency_analysis.md` |
+| Group-comparison selective dependency | **REFERENCE** | `scipy.stats.mannwhitneyu` — pinned | `assets/references/dependency_analysis.md` |
 | Per-cancer-type dependency frequency | **REFERENCE** | Python | `assets/references/dependency_analysis.md` |
 | **Druggability** | | | |
 | Pharos target annotation (Tclin/Tchem/Tbio/Tdark) | **REFERENCE** | Pharos API / download | `assets/references/druggability.md` |
@@ -48,148 +56,164 @@ DepMap releases quarterly at depmap.org. Standard file: `CRISPR_gene_effect.csv`
 | Dependency + expression (overexpressed + dependent) | **REFERENCE** | Python | `assets/references/integration.md` |
 | Dependency + MAF (mutated + paralog-dependent) | **REFERENCE** | Python | `assets/references/integration.md` |
 
-**All capabilities are REFERENCE** because dependency analysis requires study-specific judgment: dependency threshold (−0.5 vs −0.6), which cancer types to test, which druggability tier is "actionable," which priors to apply for synthetic lethality. These are design decisions.
+Everything except normLRT is **REFERENCE** — the libraries are pinned, but dependency analysis
+requires study-specific judgment: the threshold (−0.5 vs −0.6), which cancer types to test, which
+druggability tier counts as "actionable", which priors to apply for synthetic lethality. These are
+design decisions, not a missing tool.
+
+**normLRT is PARTIAL** for a different reason: the published score is a normal-vs-**skew-t**
+likelihood ratio, and no Python package fits Azzalini's skew-t (`scipy.stats.skewnorm` is a different
+family; `scipy.stats.jf_skew_t` is Jones–Faddy; PyPI's `SkewT` is a meteorology plotting tool). It
+needs R (`sn`, `MASS`) provisioned per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`.
+If you can name the group you care about, the pinned group-comparison test answers that question
+without R — see the reference doc.
 
 ---
 
 ## Standard Workflow
 
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
+
 ### 1. Load DepMap gene-effect
 
-```python
-import pandas as pd
-gene_effect = pd.read_csv("CRISPR_gene_effect.csv", index_col=0)
-# genes × cell lines, lower = more dependent (negative = lethal)
-```
+Read `CRISPRGeneEffect.csv` and build a symbol→column map.
+
+- **Rows are cell lines, columns are genes.** Not the other way round. A transposed `.loc` that lands
+  on a valid label fails *silently*
+- Every column is `SYMBOL (EntrezID)`, so a bare `gene_effect["EGFR"]` raises `KeyError`
+- Get the file from figshare — scripting depmap.org returns HTTP 200 and an HTML challenge page
+
+→ `assets/references/depmap_loading.md`
 
 ### 2. Binary dependency calls
 
-Threshold = −0.5 (DepMap standard for "likely essential"):
+Threshold at −0.5 (the conventional "likely essential"), then take the per-gene frequency.
 
-```python
-dependent = (gene_effect < -0.5).astype(int)
-# genes × cell lines boolean matrix
-```
+- State the threshold; −0.6 is more conservative, −0.3 inflates false positives
+- **`axis=0`, not `axis=1`.** Rows are cell lines, so `axis=1` averages each *line* across 18k genes
+  and returns one number per `ACH-######` — a Series, so it fails downstream rather than here
 
-### 3. Pan-essentiality filter
+→ `assets/references/dependency_analysis.md`
 
-Remove genes essential in ≥90% of lines (housekeeping, not targetable):
+### 3. Common-essential filter
 
-```python
-pan_essential_freq = dependent.mean(axis=1)
-selective_genes = pan_essential_freq[pan_essential_freq < 0.9].index
-```
+Drop the genes that are essential everywhere — ribosome, proteasome, RNA Pol. They kill normal cells
+too, so they have no therapeutic window.
 
-### 4. Selective-dependency test (normLRT)
+- **DepMap ships the call** (`CRISPRInferredCommonEssentials.csv`, ~1,537 genes). Use it
+- A hand-rolled `frequency >= 0.9` gate is a *different* set: it drifts with which lines you subset
+  and knows nothing about screen quality. If you want that, say so and call it something else
 
-Is gene X more essential in cancer type A than in others?
+→ `assets/references/dependency_analysis.md`
 
-```python
-from scipy.stats import norm
-import numpy as np
+### 4. Selective-dependency test — two different questions
 
-def normLRT(gene, cancer_lines, other_lines):
-    scores_cancer = gene_effect.loc[gene, cancer_lines].dropna()
-    scores_other = gene_effect.loc[gene, other_lines].dropna()
-    # Likelihood ratio: cancer-specific mean vs pooled mean
-    mu_c = scores_cancer.mean()
-    mu_o = scores_other.mean()
-    mu_pooled = pd.concat([scores_cancer, scores_other]).mean()
-    var_pooled = pd.concat([scores_cancer, scores_other]).var()
-    # LRT statistic
-    lrt = (
-        -2 * (
-            norm.logpdf(scores_cancer, mu_pooled, np.sqrt(var_pooled)).sum() +
-            norm.logpdf(scores_other, mu_pooled, np.sqrt(var_pooled)).sum()
-        ) +
-        2 * (
-            norm.logpdf(scores_cancer, mu_c, np.sqrt(var_pooled)).sum() +
-            norm.logpdf(scores_other, mu_o, np.sqrt(var_pooled)).sum()
-        )
-    )
-    p = 1 - chi2.cdf(lrt, df=1)
-    return {"gene": gene, "mean_cancer": mu_c, "mean_other": mu_o, "lrt": lrt, "p": p}
-```
+Pick the one you are actually asking; they are not interchangeable.
 
-Apply across genes, FDR-correct. See `assets/references/dependency_analysis.md`.
+- **"Selective in *some* unnamed subset?"** → the published **normLRT**: normal vs **skew-t**, ≥100,
+  *plus* `mean < median` (without it you rank growth-suppressors as vulnerabilities), *plus* excluding
+  common/non-essentials. **PARTIAL** — needs R (`sn`); no Python package fits Azzalini's skew-t, and
+  `skewnorm` is a different family that the ≥100 threshold is not calibrated to
+- **"More essential in cancer type A than elsewhere?"** → a directional Mann-Whitney (`alternative
+  ="less"`), in the pinned stack. FDR-correct, and report group sizes — a "significant" delta over six
+  lines is noise
+
+→ `assets/references/dependency_analysis.md`
 
 ### 5. Druggability annotation
 
-```python
-import requests
-# Pharos API
-def pharos_tier(gene):
-    url = f"https://pharos-api.ncats.io/targets/{gene}"
-    r = requests.get(url)
-    if r.status_code == 200:
-        data = r.json()
-        return data.get("tdl", "Tdark")  # Tclin/Tchem/Tbio/Tdark
-    return "Tdark"
+Pharos TDL tier per gene. **GraphQL only** — `GET /targets/{gene}` 404s.
 
-selective["pharos_tier"] = selective.gene.apply(pharos_tier)
-```
+- Query on **HGNC approved symbols**; an alias returns `None` indistinguishably from a real miss
+  (`GLUT1` → use `SLC2A1`). Strip the Entrez suffix first
+- `raise_for_status()`, then check for `errors` — a 400 body still parses as JSON, so without it a
+  failed query yields `None`, the same value as "Pharos has never heard of this gene"
+- Batch via the bulk TCRD dump, not per-gene calls
+
+> **Never default a failed lookup to `Tdark`.** `Tdark` is the substantive conclusion "nothing is
+> known to bind this target", so swallowing a 404 into `Tdark` turns every network failure into
+> "no druggable targets" — a plausible-looking result that is entirely an artifact. Let the lookup
+> fail, and report how many genes went unannotated.
+
+→ `assets/references/druggability.md`
 
 ### 6. Therapeutic-window prioritization
 
-Dependent + druggable (Tclin/Tchem) + not pan-essential:
+Selectively dependent + Tclin/Tchem + not common-essential, ranked by effect.
 
-```python
-actionable = selective[
-    (selective.mean_cancer < -0.5) &
-    (selective.pharos_tier.isin(["Tclin", "Tchem"])) &
-    (selective.pan_essential_freq < 0.9)
-].sort_values("mean_cancer")
-```
+- `isin(["Tclin","Tchem"])` silently drops the unannotated rows — **report `n_unannotated`** beside
+  the list, or a shrunken candidate set reads as a clean negative
+- DepMap screens **cancer lines only**. "Not common-essential" *infers* a window; it does not measure
+  one. Say which it is
 
-### 7. Synthetic lethality (mutual-exclusivity)
+→ `assets/references/druggability.md`
 
-```python
-from scipy.stats import fisher_exact
-# Gene A and gene B: are they mutually exclusive in dependency?
-dep_A = (gene_effect.loc["BRCA1"] < -0.5)
-dep_B = (gene_effect.loc["PARP1"] < -0.5)
-both = (dep_A & dep_B).sum()
-only_A = (dep_A & ~dep_B).sum()
-only_B = (~dep_A & dep_B).sum()
-neither = (~dep_A & ~dep_B).sum()
-odds, p = fisher_exact([[both, only_A], [only_B, neither]], alternative="less")
-# alternative="less" tests for depletion of "both" (mutual exclusivity)
-```
+### 7. Synthetic lethality (mutual exclusivity)
 
-See `assets/references/synthetic_lethality.md` for paralog/PPI priors.
+Fisher exact on the 2×2, one-sided for depletion of the double-altered cell, then FDR across pairs.
+
+- `alternative="less"` — SL predicts depletion; a two-sided test dilutes the directional signal
+- Priors are what separate signal from thousands of pairs — but a prior that outlives its evidence
+  *creates* confident false positives. `KRAS`–`STK33` was refuted in 2011; `VHL`–`CDK6` needs CDK4
+  *and* CDK6, which no pairwise prior can express
+- STRING's `limit` defaults to **10** — BRCA1 has 373 partners at score > 700 and PARP1 is not in the
+  top 10, so the default call misses the canonical pair
+
+→ `assets/references/synthetic_lethality.md`
 
 ---
 
 ## Cancer-Dependency Best Practice (on top of omics-shared)
 
+### 0. The matrix is cell lines × genes
+
+Rows are `ModelID`, columns are `SYMBOL (EntrezID)`. This is the single most common way the analysis
+goes wrong, and a transposed `.loc` that happens to hit a valid label fails *silently*.
+
 ### 1. Gene-effect sign convention
 
-DepMap Chronos/CERES: **negative = lethal** (CRISPR knockout reduces fitness). A score of −1.0 ≈ complete lethality; 0 ≈ no effect. Don't flip signs.
+Chronos: **negative = lethal** (knockout reduces fitness); 0 ≈ no effect; positive = knockout enhances
+growth (rare). −1.0 is not "complete lethality" in the abstract — Chronos *scales* scores so the
+median common-essential sits near −1 and non-essentials near 0. That is why DepMap's control lists are
+the right reference point. Don't flip signs.
 
 ### 2. Dependency threshold = −0.5
 
-The DepMap standard. Lower (−0.6) is more conservative; higher (−0.3) inflates false positives. State the threshold.
+The conventional cutoff. Lower (−0.6) is more conservative; higher (−0.3) inflates false positives.
+State the threshold.
 
-### 3. Pan-essentiality gate
+### 3. Common-essentiality gate — use DepMap's list
 
-Genes essential in ≥90% of lines (ribosomal proteins, core metabolic enzymes) are not therapeutic targets — they'd kill normal cells too. Filter them before druggability prioritization.
+Common-essential genes (ribosome, proteasome, RNA Pol) are not therapeutic targets; filter them before
+druggability prioritization. Take `CRISPRInferredCommonEssentials.csv` rather than re-deriving with a
+≥90% frequency cutoff: the cutoff drifts with which lines are in your subset and has no notion of
+screen quality, so it is not the same set and not what "common essential" means.
 
-### 4. normLRT tests *selective* dependency
+### 4. normLRT and the group test answer different questions
 
-A gene can be essential in many cancers but still be *more* essential in one (selective). normLRT compares cancer-specific vs background essentiality.
+**normLRT** asks "is this gene selective in *some* subset?" — it fits the gene's distribution across
+*all* lines (skew-t vs normal) and never sees a group label. The **group comparison** asks "is this
+gene more essential in cancer type A?" — you supply the subset. If you can name the group, use the
+group test; it runs in the pinned stack, while normLRT needs R.
 
 ### 5. Therapeutic window = dependent in cancer, tolerated in normal
 
-A perfect target: lethal in the tumor, spares healthy tissue. DepMap (cancer lines) doesn't directly measure normal-cell toxicity — infer it from pan-essentiality frequency (low = likely tolerated).
+A perfect target is lethal in the tumour and spares healthy tissue. DepMap screens **cancer lines
+only** — it never measures normal-cell toxicity. "Not common-essential" is an *inference* that a
+window exists, not a measurement of one. Say which it is in the `report`.
 
 ### 6. Synthetic lethality priors
 
 Not all gene pairs are plausible SL candidates. Apply priors:
 - **Paralog pairs** (duplicate genes, one compensates for the other)
 - **PPI neighbors** (proteins in the same complex)
-- **Canonical pairs** (BRCA1/2–PARP1, ATM–ATR, …)
+- **Canonical pairs** (BRCA1/2–PARP1, ATM–ATR, MTAP–PRMT5, …)
 
-Raw mutual-exclusivity without priors gives thousands of false positives.
+Raw mutual-exclusivity without priors gives thousands of false positives. But a prior that outlives
+its evidence *creates* false positives with a confident label on them — `KRAS`–`STK33` was refuted in
+2011, and `VHL`–`CDK6` requires losing CDK4 *and* CDK6, which no pairwise prior can express. Curate
+the list against replication, and use **HGNC approved symbols** so entries actually match.
 
 ### 7. Multi-omic integration amplifies candidates
 
@@ -201,12 +225,17 @@ Dependency alone: "this gene is essential in cancer X." Dependency + phospho upr
 
 | Symptom / mistake | Cause | Fix |
 |-------------------|-------|-----|
-| All genes look "dependent" | Threshold too high, or sign flipped (negative read as "no effect") | Use −0.5 (DepMap standard); negative = lethal, keep the sign |
+| `KeyError` on a gene symbol | Columns are `SYMBOL (EntrezID)`; or the matrix was read as genes × lines | Build `symbol_to_col`; rows are `ModelID` |
+| Dependency frequency is one number per `ACH-######` | `mean(axis=1)` — averaged each line over 18k genes | `axis=0`: rows are cell lines |
+| `read_csv` chokes on HTML from depmap.org | The portal is challenge-gated; it answers 200 with a challenge page | Use the figshare release (`depmap_loading.md`) |
+| Everything is `Tdark`, or no druggable targets | A failed Pharos lookup defaulted to `Tdark` | Let it fail; `Tdark` is a conclusion, not a null |
+| Pharos returns `None` for a real gene | Alias, not an HGNC symbol (`GLUT1` vs `SLC2A1`) | Standardize to HGNC; strip the Entrez suffix before querying |
+| All genes look "dependent" | Threshold too high, or sign flipped | Use −0.5; negative = lethal, keep the sign |
 | Inconsistent dependency calls | Threshold switched mid-analysis (−0.5 vs −0.3) | Fix one threshold and state it |
-| No selective dependencies | normLRT not applied (used mean) | Run normLRT per cancer type |
-| Therapeutic-window list is housekeeping genes | No pan-essentiality gate | Filter to genes essential in <90% of lines |
-| SL pairs look random | No priors + two-sided test + no FDR | Filter to paralog / PPI / canonical, one-sided Fisher, apply FDR |
-| Pharos 404, or Tdark cited as a target | Gene-symbol mismatch; Tdark = no tool compound | Standardize to HGNC / UniProt; don't treat Tdark as druggable |
+| normLRT ranks growth-suppressors as targets | No left-skew check (`mean < median`) | normLRT is two-sided non-normality; add the check |
+| Therapeutic-window list is housekeeping genes | No common-essential gate | Filter with `CRISPRInferredCommonEssentials.csv` |
+| SL pairs look random | No priors + two-sided test + no FDR | Paralog / PPI / canonical priors, one-sided Fisher, FDR |
+| PPI prior misses the obvious partner | STRING's `limit` defaults to 10 | Pass `limit` explicitly (`synthetic_lethality.md`) |
 
 ---
 

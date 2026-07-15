@@ -1,5 +1,7 @@
 # Building graphs for PyG
 
+**Maturity: PARTIAL** — `torch-geometric` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 Everything downstream consumes a PyG `Data`/`HeteroData` with a **sparse `edge_index [2, E]`** (COO;
 `edge_index[0]`=source, `edge_index[1]`=target). Never build a dense `[N, N]` adjacency — it is O(N²)
 and infeasible for large biological networks.
@@ -44,12 +46,26 @@ Transforms read `data.pos` and write `data.edge_index`:
 
 ```python
 import torch_geometric.transforms as T
-data = T.KNNGraph(k=6)(Data(pos=coords))                   # k-NN graph
-data = T.RadiusGraph(r=150.0)(Data(pos=coords))            # radius graph (spatial, µm units)
+# force_undirected defaults to False -> a k-NN graph is DIRECTED: each node gets exactly k in-edges,
+# so a hub influences many nodes and receives from none. Almost never what you want for a spatial or
+# co-expression graph. Set it, or call to_undirected(edge_index) after.
+data = T.KNNGraph(k=6, force_undirected=True)(Data(pos=coords))   # k-NN graph
+data = T.RadiusGraph(r=150.0)(Data(pos=coords))            # radius graph (spatial, µm units) — symmetric by construction
 data = T.Compose([T.Delaunay(), T.FaceToEdge()])(Data(pos=xy))  # Delaunay triangulation → edges
 ```
 
-Functional form (needs `pyg-lib` in PyG 2.9; `batch` keeps edges within one sample):
+Neither builder adds **self-loops** (`loop=False`). That is fine for GCN/GraphSAGE, which fold in the
+root feature themselves — but a conv constructed with `add_self_loops=False` (e.g. `GATConv`) will then
+output **exactly zero** for any node with no in-edges. Either leave `add_self_loops=True` (the default),
+or add them explicitly:
+
+```python
+from torch_geometric.utils import add_self_loops
+data.edge_index, _ = add_self_loops(data.edge_index, num_nodes=data.num_nodes)
+```
+
+Needs `pyg-lib` in PyG 2.8 — **both** the functional form below and the `T.KNNGraph`/`T.RadiusGraph`
+transforms above, which delegate to it (`batch` keeps edges within one sample):
 
 ```python
 from torch_geometric.nn import knn_graph, radius_graph

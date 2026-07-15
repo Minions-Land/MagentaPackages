@@ -1,5 +1,7 @@
 # Reference — SATURN Cross-Species / Cross-Modality Matching
 
+**Maturity: PARTIAL** — `saturn` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 SATURN aligns cells across species (human / mouse) or modalities (scRNA / scATAC) via a macrogene abstraction + VAE architecture. Use when simpler methods (scVI/scArches on shared genes) fail due to namespace mismatch.
 
 ## When SATURN justifies complexity
@@ -23,29 +25,42 @@ A macrogene = a stable functional unit (pathway/complex) that exists in both spe
 ## Workflow (high-level)
 
 ```python
-# 1. Build macrogene maps (from SATURN repo's preprocessing scripts)
-# Requires: gene expression matrices for both species + ortholog table
-# Output: macrogene × cell matrices for each species
+# SATURN has NO importable Python API. There is no `saturn` module, no `SATURN` class, no
+# `get_latent_representation()`, and no `species_key` anywhere in the repo (all 0 hits at rev 6906abf).
+# It is a CLI. Do not write `from saturn import SATURN` — it will not import.
 
-# 2. Train SATURN VAE
-from saturn import SATURN
-model = SATURN(
-    input_dim=n_macrogenes,
-    latent_dim=30,
-    species_key="species",
-)
-model.train(adata_combined, max_epochs=400)
+# 1. Build the input CSV: one row per species, columns `path,species,embedding_path`
+#    (`path` -> that species' .h5ad; `embedding_path` -> its protein-embedding .pt)
 
-# 3. Embed both species in shared latent
-adata_combined.obsm["X_saturn"] = model.get_latent_representation()
+# 2. Train — this is the whole entry point
+```
+```bash
+python train-saturn.py \
+  --in_data species_map.csv \
+  --in_label_col cell_type \
+  --ref_label_col cell_type \
+  --num_macrogenes 2000 \
+  --epochs 50 \
+  --work_dir ./saturn_out
+```
+```python
+# 3. SATURN writes its shared embedding to an .h5ad under --work_dir; read it back with scanpy
+#    and use obsm["X_saturn"] from there. Verify the key in the output file — do not assume it.
+import scanpy as sc
+adata_combined = sc.read_h5ad("saturn_out/<run>_saturn_seed_0.h5ad")
 
 # 4. Transfer labels via kNN in the shared space
 from sklearn.neighbors import KNeighborsClassifier
+ref = adata_combined[adata_combined.obs.species == "human"]
 knn = KNeighborsClassifier(n_neighbors=15)
-knn.fit(adata_combined[adata_combined.obs.species=="human"].obsm["X_saturn"],
-        adata_combined[adata_combined.obs.species=="human"].obs["cell_type"])
+knn.fit(ref.obsm["X_saturn"], ref.obs["cell_type"])
 adata_combined.obs["predicted_type"] = knn.predict(adata_combined.obsm["X_saturn"])
 ```
+
+Real flags (verified from `train-saturn.py` at rev `6906abf`): `--in_data --in_label_col --ref_label_col
+--num_macrogenes --epochs --work_dir --hv_genes --pretrain --pretrain_epochs --embedding_model --device
+--seed --vae --score_adatas` and others. `Vignettes/frog_zebrafish_embryogenesis/Train SATURN.ipynb`
+upstream is the worked example.
 
 ## Output contract
 
@@ -57,12 +72,16 @@ Verify the exact required metric — some score ARI, some accuracy, some cosine 
 
 ## Installation
 
-SATURN is a research repo (not on PyPI). Clone and install:
+SATURN is a research repo (not on PyPI) and **has no `setup.py` or `pyproject.toml`**, so
+`pip install -e .` fails — there is nothing to install. Clone it and run the script in place, from an env
+provisioned per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A a Pixi env with its own
+solve-group for its torch stack; §B a named conda env if CUDA needs pinning):
 
 ```bash
 git clone https://github.com/snap-stanford/SATURN.git
 cd SATURN
-pip install -e .
+pip install -r requirements.txt      # into the provisioned env — never base
+python train-saturn.py --in_data ... # run in place; there is no installed package to import
 ```
 
 Document the commit SHA + dependencies in your environment lockfile.

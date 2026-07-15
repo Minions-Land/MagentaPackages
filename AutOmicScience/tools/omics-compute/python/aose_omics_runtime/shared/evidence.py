@@ -2,7 +2,16 @@
 Evidence record shaping for omics analysis.
 
 Converts a helper/analysis report dict into the exact trailing-JSON row
-that the Rust analyst harness harvests into an EvidenceRecord.
+that a host analyst harness can harvest into an EvidenceRecord.
+
+Current status (verified against Magenta core): the host runs each omics_compute
+subcommand as a process and returns its stdout verbatim to the agent (see
+ProcessToolMagnet — "read stdout as the tool result"). There is no
+evidence-harvesting step yet; the agent reads the printed report dict directly
+with its own reasoning. These helpers therefore define the canonical evidence-row
+format for a *future* host harvester — subcommands currently print their report
+dict as-is. Treat the lack of callers as an as-yet-unconnected contract (like the
+assumed host tools), not dead code.
 
 Functions:
 - shape_row(): Canonicalize report dict into evidence JSON structure
@@ -14,8 +23,26 @@ Constants:
 """
 
 import json
+import math
 from datetime import datetime, timezone
 from typing import Any
+
+
+def _find_non_finite(obj: Any, path: str = "") -> str | None:
+    """Dotted path of the first NaN/Inf float in a nested report, else None."""
+    if isinstance(obj, float) and not math.isfinite(obj):
+        return path or "<root>"
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            found = _find_non_finite(value, f"{path}.{key}" if path else str(key))
+            if found:
+                return found
+    elif isinstance(obj, (list, tuple)):
+        for i, value in enumerate(obj):
+            found = _find_non_finite(value, f"{path}[{i}]")
+            if found:
+                return found
+    return None
 
 
 # Constants (single source of truth for evidence format)
@@ -67,11 +94,14 @@ def shape_row(
     if not identifier or not identifier.strip():
         raise ValueError("identifier must be a non-empty string")
 
-    # Test JSON serializability
+    # Test strict JSON serializability (allow_nan=False rejects NaN/Infinity, which
+    # a spec-strict consumer — Rust serde_json / JS JSON.parse — cannot read).
     try:
-        json.dumps(report)
+        json.dumps(report, allow_nan=False)
     except (TypeError, ValueError) as e:
-        raise ValueError(f"report must be JSON-serializable: {e}")
+        field = _find_non_finite(report)
+        where = f" at field '{field}'" if field else ""
+        raise ValueError(f"report must be strict-JSON-serializable (no NaN/Inf){where}: {e}")
 
     # Generate summary if not provided
     if summary is None:
@@ -127,7 +157,7 @@ def emit(
         JSON string ready to print()
     """
     row = shape_row(report, analysis=analysis, identifier=identifier, summary=summary)
-    return json.dumps(row, ensure_ascii=False)
+    return json.dumps(row, ensure_ascii=False, allow_nan=False)
 
 
 def emit_compact(
@@ -143,4 +173,4 @@ def emit_compact(
     Useful for large reports to reduce output size.
     """
     row = shape_row(report, analysis=analysis, identifier=identifier, summary=summary)
-    return json.dumps(row, ensure_ascii=False, separators=(',', ':'))
+    return json.dumps(row, ensure_ascii=False, separators=(',', ':'), allow_nan=False)

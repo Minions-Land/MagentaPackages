@@ -38,69 +38,71 @@ def run_decoupler_enrichment(args):
         elif resource_name == "collectri":
             net = dc.op.collectri(organism=organism)
         else:
-            # Try generic resource loader
-            net = dc.op.resource(resource_name, organism=organism)
+            raise ValueError(
+                f"Unsupported resource '{resource_name}'; supported resources are "
+                "msigdb/hallmark, progeny, dorothea, collectri"
+            )
     except Exception as e:
         raise ValueError(f"Failed to load resource '{resource_name}': {e}")
 
     # Run enrichment analysis
     method = args.method.lower()
 
-    if method == "ora":
-        # Over-representation analysis
-        # Create a simple AnnData object with gene list
-        import anndata as ad
-        gene_df = pd.DataFrame(index=gene_list)
-        gene_df['present'] = 1
-
-        enrich_results = dc.mt.ora(
-            gene_df,
-            net,
-            source='source',
-            target='target',
-            min_n=3
+    if method == "gsea":
+        # GSEA needs a ranked (gene, score) list, which this gene-list subcommand
+        # does not accept. Fail loud rather than silently degrade.
+        raise ValueError(
+            "GSEA needs a ranked gene list (gene, score pairs), which the "
+            "'enrichment' subcommand does not accept; use method='ora'."
         )
-
-        # If result is AnnData, extract the data
-        if hasattr(enrich_results, 'obsm'):
-            key = 'ora_estimate'
-            if key in enrich_results.obsm:
-                enrich_results = pd.DataFrame(enrich_results.obsm[key])
-            else:
-                # Find the right key
-                possible_keys = [k for k in enrich_results.obsm.keys() if 'ora' in k.lower()]
-                if possible_keys:
-                    enrich_results = pd.DataFrame(enrich_results.obsm[possible_keys[0]])
-                else:
-                    raise ValueError("Could not extract ORA results")
-
-        # Convert to DataFrame if needed
-        if not isinstance(enrich_results, pd.DataFrame):
-            enrich_results = pd.DataFrame(enrich_results)
-
-    elif method == "gsea":
-        # For GSEA, we would need ranked genes, not just a list
-        raise ValueError("GSEA method requires ranked gene list (gene_name, score pairs)")
-    else:
+    if method != "ora":
         raise ValueError(f"Unknown enrichment method: {method}")
 
-    # Filter by p-value threshold
-    # Handle different column names that decoupler might use
-    pval_col = None
-    for col in ['FDR p-value', 'pval', 'p_value', 'padj', 'FDR']:
-        if col in enrich_results.columns:
-            pval_col = col
-            break
+    # Over-representation analysis: the classic one-tailed hypergeometric (Fisher)
+    # test of the query gene set against each source in the network. The gene sets
+    # come from decoupler 2.x (dc.op.* above); dc.mt.ora itself is a per-observation
+    # matrix method (top-n_up features per cell) and a poor fit for a single explicit
+    # gene list, so the standard ORA test is run directly over the sets.
+    import numpy as np
+    from scipy.stats import hypergeom
 
-    if pval_col is None:
-        # If no p-value column, use all results
-        significant = enrich_results.copy()
-    else:
-        significant = enrich_results[enrich_results[pval_col] < args.padj_threshold]
+    sets = net.groupby("source")["target"].apply(lambda s: set(s))
+    universe = set().union(*sets.to_list()) if len(sets) else set()
+    query_all = set(gene_list)
+    # Background (universe) is the resource, independent of the query. Folding the
+    # query in would inflate N/n and make the "no input genes present" check dead.
+    query = query_all & universe
+    N, n = len(universe), len(query)
+    n_query_unmapped = len(query_all) - n
+    if n == 0:
+        raise ValueError(
+            f"None of the {len(query_all)} input genes are present in the resource background "
+            f"(universe size {N}); cannot run ORA."
+        )
 
-    # Sort by significance if we have p-values
-    if pval_col:
-        significant = significant.sort_values(pval_col)
+    rows = []
+    for source, targets in sets.items():
+        K = len(targets)  # targets are within the universe by construction
+        k = len(query & targets)
+        rows.append({
+            "source": source,
+            "overlap": k,
+            "pathway_size": K,
+            "pval": float(hypergeom.sf(k - 1, N, K, n)),   # P(overlap >= k)
+        })
+    enrich_results = pd.DataFrame(rows)
+
+    # Benjamini-Hochberg FDR across sources.
+    pv = enrich_results["pval"].to_numpy()
+    m = len(pv)
+    order = np.argsort(pv)
+    adj = np.empty(m)
+    adj[order] = np.minimum.accumulate((pv[order] * m / (np.arange(m) + 1))[::-1])[::-1]
+    enrich_results["padj"] = np.clip(adj, 0.0, 1.0)
+
+    # Filter by adjusted p-value and rank by significance.
+    significant = enrich_results[enrich_results["padj"] < args.padj_threshold].copy()
+    significant = significant.sort_values("padj")
 
     top_pathways = significant.head(args.top_n)
 
@@ -109,7 +111,13 @@ def run_decoupler_enrichment(args):
         'method': method,
         'resource': resource_name,
         'organism': organism,
+        # n_input_genes counts the raw list; the unique count is what maps, so
+        # n_input_unique == n_query_mapped + n_query_unmapped always reconciles.
         'n_input_genes': len(gene_list),
+        'n_input_unique': len(query_all),
+        'n_query_mapped': n,
+        'n_query_unmapped': n_query_unmapped,
+        'universe_size': N,
         'n_pathways_tested': len(enrich_results),
         'n_significant_pathways': len(significant),
         'padj_threshold': args.padj_threshold,
@@ -118,11 +126,12 @@ def run_decoupler_enrichment(args):
         'timestamp': datetime.now(UTC).isoformat(),
     }
 
-    # Save output
-    output_path = Path(args.output).resolve()
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(output_path, 'w') as f:
-        json.dump(enrichment_data, f, indent=2)
+    # Save output (atomic; creates parent dir)
+    from ..shared.io import atomic_write
+    output_path = atomic_write(
+        args.output,
+        lambda tmp: tmp.write_text(json.dumps(enrichment_data, indent=2, allow_nan=False)),
+    )
 
     end_time = datetime.now(UTC)
     elapsed_ms = int((end_time - start_time).total_seconds() * 1000)
@@ -168,8 +177,8 @@ def run_decoupler_enrichment(args):
     top_5_pathways = []
     for idx, row in top_pathways.head(5).iterrows():
         pathway_info = {
-            'name': str(idx) if isinstance(idx, str) else row.get('source', row.get('Term', 'Unknown')),
-            'pvalue': float(row.get(pval_col, 1.0)) if pval_col else None,
+            'name': row['source'],
+            'pvalue': float(row.get('padj', 1.0)),
         }
         # Try to get overlap/gene count
         for col in ['Overlap', 'n_genes', 'size', 'overlap']:
@@ -183,6 +192,10 @@ def run_decoupler_enrichment(args):
         "success": True,
         "output": str(output_path),
         "n_input_genes": len(gene_list),
+        "n_input_unique": len(query_all),
+        "n_query_mapped": n,
+        "n_query_unmapped": n_query_unmapped,
+        "universe_size": N,
         "n_pathways_tested": len(enrich_results),
         "n_significant_pathways": len(significant),
         "method": method,
@@ -204,7 +217,7 @@ def main(args):
     result = run_decoupler_enrichment(args)
 
     # Print summary
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result, indent=2, allow_nan=False))
 
 
 if __name__ == '__main__':
@@ -213,9 +226,10 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, help='Output JSON file')
     parser.add_argument('--gene-list', required=True, help='Comma-separated gene list')
     parser.add_argument('--resource', default='msigdb', help='Gene set resource (msigdb, hallmark, progeny, dorothea, collectri)')
-    parser.add_argument('--method', default='ora', choices=['ora', 'gsea'], help='Enrichment method')
+    parser.add_argument('--method', default='ora', choices=['ora'],
+                        help='Enrichment method (ORA; GSEA needs ranked scores, not supported here)')
     parser.add_argument('--organism', default='human', help='Organism (human, mouse)')
     parser.add_argument('--padj-threshold', type=float, default=0.05, help='Adjusted p-value threshold')
-    parser.add_argument('--top-n', type=int, default=20, help='Number of top pathways to report')
+    parser.add_argument('--top-n', type=int, default=50, help='Number of top pathways to report')
     args = parser.parse_args()
     main(args)

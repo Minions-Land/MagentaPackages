@@ -18,12 +18,11 @@ Assign cell-type labels to ATAC clusters using a labeled scRNA reference (the co
 
 - **Gene activity is noisy**, so **treat transferred labels as hypotheses** confirmed by marker peaks / motifs in the target ATAC data. Do not blindly trust the transfer.
 
-- **This is Route-1 interpretation support** — the reference annotation pipeline (`run_annotation_pipeline`) remains a separate callable instrument for reference-based consensus when desired.
+- **Transferred labels feed the marker + LLM call, they do not replace it** — the scRNA skill annotates from markers and abstains when ambiguous (see `rna`: `annotation.md`); treat a transferred label as one more piece of evidence for that call.
 
 ## Method Menu
 
 - **Gene-activity bridge** (`gene_activity.md`) + **scRNA integration/label-transfer** (`rna`: `integration.md` + `annotation.md`)
-- **Reference annotation pipeline** (`run_annotation_pipeline`) — for reference-based consensus
 
 ## How-to
 

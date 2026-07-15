@@ -72,13 +72,13 @@ def test_load_csv_default(temp_dir, sample_counts_matrix):
     assert report["success"] is True
     assert report["n_obs"] == 100
     assert report["n_vars"] == 50
-    assert "counts" in report["layers"]
+    assert "counts" not in report["layers"]
 
     # Verify h5ad file
     adata = ad.read_h5ad(output_path)
     assert adata.n_obs == 100
     assert adata.n_vars == 50
-    assert "counts" in adata.layers
+    assert "counts" not in adata.layers
     np.testing.assert_array_equal(adata.X, X)
 
 
@@ -246,3 +246,25 @@ def test_custom_separator(temp_dir, sample_counts_matrix):
 if __name__ == "__main__":
     # Run tests with pytest
     pytest.main([__file__, "-v"])
+
+
+# --- Regressions for audited defects S01 (zarr) and S02 (transpose truthfulness) ---
+
+def test_s01_zarr_roundtrip(tmp_path):
+    import anndata as ad
+    from aose_omics_runtime.shared.load_dataset import load_dataset
+    a = ad.AnnData(np.eye(3))
+    zpath = tmp_path / "x.zarr"
+    a.write_zarr(zpath)
+    report = load_dataset(str(zpath), str(tmp_path / "out.h5ad"), format="zarr")
+    assert report["success"] and report["n_obs"] == 3 and report["n_vars"] == 3
+
+
+def test_s02_transpose_applied_for_h5ad(tmp_path):
+    import anndata as ad
+    from aose_omics_runtime.shared.load_dataset import load_dataset
+    ad.AnnData(np.zeros((2, 3))).write_h5ad(tmp_path / "in.h5ad")
+    out = tmp_path / "out.h5ad"
+    report = load_dataset(str(tmp_path / "in.h5ad"), str(out), format="h5ad", transpose=True)
+    assert report["transpose_applied"] is True
+    assert ad.read_h5ad(out).shape == (3, 2)  # actually transposed, not just reported

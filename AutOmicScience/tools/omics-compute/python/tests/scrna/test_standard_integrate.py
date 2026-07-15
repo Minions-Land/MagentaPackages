@@ -165,3 +165,28 @@ def test_invalid_method(adata_with_batch):
             adata_with_batch,
             method="invalid_method",
         )
+
+
+# --- Regressions for audited defects R05 (NA batch) and R07 (small-N harmony) ---
+
+def test_r05_na_batch_fails_loud():
+    import pandas as pd
+    from aose_omics_runtime.scrna.standard_integrate import standard_integrate
+    rng = np.random.default_rng(0)
+    a = AnnData(rng.normal(size=(6, 5)))
+    a.obsm["X_pca"] = rng.normal(size=(6, 5))
+    a.obs["batch"] = pd.Categorical(["a", "a", "b", "b", None, "b"])
+    with pytest.raises(ValueError, match="missing values"):
+        standard_integrate(a, batch_key="batch", method="harmony")
+
+
+def test_r07_small_n_harmony_does_not_crash():
+    from aose_omics_runtime.scrna.standard_integrate import standard_integrate
+    rng = np.random.default_rng(0)
+    a = AnnData(rng.normal(size=(10, 20)))
+    a.obsm["X_pca"] = rng.normal(size=(10, 15))
+    a.obs["batch"] = ["a"] * 5 + ["b"] * 5
+    a, report = standard_integrate(a, batch_key="batch", method="harmony", n_pcs=50)
+    assert "X_pca_harmony" in a.obsm
+    assert report["parameters"]["n_pcs_requested"] == 50
+    assert report["parameters"]["n_pcs_effective"] == 15

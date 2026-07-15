@@ -1,5 +1,9 @@
 # Reference — Olink NPX QC & Differential Expression
 
+**Maturity: REFERENCE** — hand-rolled in a Python script with `pandas` / `scipy.stats`, both pinned.
+Olink's own **`OlinkAnalyze` is an R/CRAN package with no Python port**, so there is no library to
+defer to here; the recipes below are the analysis, not a stand-in for one.
+
 Olink is a targeted, antibody-based proteomics platform reporting NPX (Normalized Protein eXpression). Handling QC flags, LOD, and paired DE correctly.
 
 ## NPX scale
@@ -85,8 +89,8 @@ for protein in npx_matrix.columns:
     mask = ~(np.isnan(a) | np.isnan(b))
     if mask.sum() < 3:  # need enough pairs
         continue
-    stat, p = ttest_rel(a[mask], b[mask])
-    log2fc = (b[mask] - a[mask]).mean()   # NPX already log2
+    stat, p = ttest_rel(b[mask], a[mask])   # (b, a): t then has the same sign as log2FC
+    log2fc = (b[mask] - a[mask]).mean()     # NPX already log2
     results.append({"protein": protein, "log2FC": log2fc, "t": stat, "p": p, "n_pairs": mask.sum()})
 
 de = pd.DataFrame(results)
@@ -94,6 +98,26 @@ de["padj"] = multipletests(de.p, method="fdr_bh")[1]
 ```
 
 **Paired t-test (`ttest_rel`), NOT independent (`ttest_ind`)** — the within-subject design removes between-subject variance, giving much more power.
+
+> ### Pair on SUBJECT, never on SampleID
+>
+> The `[s+"_baseline" for s in subjects]` label lists above are not stylistic: they force both frames
+> into the same subject order. The obvious alternative is the trap.
+>
+> `npx_matrix` is indexed by **SampleID**, so `npx_matrix.loc[samples_t1]` and
+> `npx_matrix.loc[samples_t2]` hold **disjoint** indices. pandas aligns on index, so
+> `npx_t2[protein] - npx_t1[protein]` is `NaN` for every protein — and `ttest_rel` *still* returns a t
+> and a p, because numpy pairs positionally and ignores the index. The results table therefore looks
+> like it ran, every `log2FC` is `NaN`, and `de[de.log2FC > 0.5]` silently returns nothing. The whole
+> analysis empties out with no error anywhere.
+>
+> If your SampleIDs don't follow a `subject_timepoint` convention, re-index both frames by subject and
+> `align(join="inner")` before subtracting. Either way the pairing key must be the subject.
+
+**Argument order sets the sign of `t`.** `ttest_rel(a, b)` returns a statistic for `a - b`, so
+pairing it with `log2FC = b - a` puts a negative `t` next to a positive `log2FC` in the same row —
+and ranking by `t` then orders the table the opposite way from ranking by `log2FC`. Pass the same
+direction to both.
 
 ## Unpaired two-group DE
 

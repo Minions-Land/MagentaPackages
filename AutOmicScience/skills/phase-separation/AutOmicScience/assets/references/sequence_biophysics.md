@@ -1,5 +1,7 @@
 # Sticker-spacer & prion-like sequence biophysics
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Interpretive background for reading composition/predictor results in terms of the sequence grammar
 of phase separation. Use it to justify a property-based amino-acid ordering and to narrate why a
 PS-type looks the way it does. This is domain knowledge for interpretation — not a tool to run.

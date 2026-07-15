@@ -53,6 +53,52 @@ def simple_atac_adata():
     return adata
 
 
+def test_load_multiome_realigns_shuffled_inputs(tmp_path):
+    """RNA and ATAC given in different cell orders must still QC-filter the
+    correct cells (regression for the positional-mask misalignment bug).
+
+    Cell A expresses too few genes (fails RNA QC); cell B is accessible in too
+    few peaks (fails ATAC QC); the two modalities are supplied in different
+    orders. The correct result keeps exactly the cells passing both QC gates.
+    """
+    import mudata
+
+    n_genes, n_peaks = 2000, 1000
+    gene_names = [f"Gene_{i}" for i in range(n_genes - 100)] + [f"MT-Gene{i}" for i in range(100)]
+    peak_names = [f"chr1:{i * 1000}-{i * 1000 + 500}" for i in range(n_peaks)]
+    rna_order = ["C", "F", "A", "E", "B", "D"]
+    atac_order = ["E", "B", "F", "D", "C", "A"]
+
+    def rna_row(cell):
+        row = np.zeros(n_genes, np.float32)
+        row[: (50 if cell == "A" else n_genes)] = 5.0
+        return row
+
+    def atac_row(cell):
+        row = np.full(n_peaks, 3.0, np.float32)
+        if cell == "B":
+            row[100:] = 0.0
+        return row
+
+    rna = AnnData(np.stack([rna_row(c) for c in rna_order]))
+    rna.obs_names = rna_order
+    rna.var_names = gene_names
+    atac = AnnData(np.stack([atac_row(c) for c in atac_order]))
+    atac.obs_names = atac_order
+    atac.var_names = peak_names
+
+    rna_h5ad = tmp_path / "rna.h5ad"
+    atac_h5ad = tmp_path / "atac.h5ad"
+    out = tmp_path / "m.h5mu"
+    rna.write_h5ad(rna_h5ad)
+    atac.write_h5ad(atac_h5ad)
+
+    load_multiome(rna_path=str(rna_h5ad), atac_path=str(atac_h5ad), output_path=str(out))
+
+    mdata = mudata.read(str(out))
+    assert set(mdata.obs_names) == {"C", "D", "E", "F"}
+
+
 def test_load_multiome_basic_contract(simple_rna_adata, simple_atac_adata, tmp_path):
     """Test load_multiome creates MuData and returns report."""
     rna_h5ad = tmp_path / "rna.h5ad"
@@ -156,3 +202,95 @@ def test_load_multiome_report_structure(simple_rna_adata, simple_atac_adata, tmp
     assert isinstance(result, dict)
     # Expect keys from load_multiome's docstring
     assert "n_cells_rna" in result or "n_cells_joint" in result or "n_cells_filtered" in result
+
+
+# --- Regressions for audited defects (M01 counts source, M02 empty intersection) ---
+
+def _rna(norm=False, prefix="c"):
+    import scanpy as sc
+    X = np.ones((10, 300)) * 3.0
+    X[:, :5] = 1.0
+    X[0, :5] = 90.0
+    X[0, 5:] = 5.0
+    a = AnnData(X)
+    a.var_names = [f"MT-{i}" if i < 5 else f"G{i}" for i in range(300)]
+    a.obs_names = [f"{prefix}{i}" for i in range(10)]
+    a.layers["counts"] = X.copy()
+    if norm:
+        sc.pp.normalize_total(a, target_sum=1e4)
+        sc.pp.log1p(a)
+    return a
+
+
+def _atac(norm=False, prefix="c"):
+    import scanpy as sc
+    X = np.random.default_rng(1).poisson(3, (10, 600)).astype(float)
+    a = AnnData(X)
+    a.var_names = [f"p{i}" for i in range(600)]
+    a.obs_names = [f"{prefix}{i}" for i in range(10)]
+    a.layers["counts"] = X.copy()
+    if norm:
+        sc.pp.normalize_total(a, target_sum=1e4)
+        sc.pp.log1p(a)
+    return a
+
+
+def test_m01_qc_uses_counts_layer_not_normalized_x(tmp_path):
+    import scanpy as sc
+    import mudata as md
+    truth = _rna()
+    truth.var["mt"] = truth.var_names.str.startswith("MT-")
+    sc.pp.calculate_qc_metrics(truth, qc_vars=["mt"], percent_top=None, inplace=True)
+    true_mt = float(truth.obs["pct_counts_mt"][0])
+
+    rp, ap = tmp_path / "r.h5ad", tmp_path / "a.h5ad"
+    _rna(norm=True).write_h5ad(rp)   # X normalized, counts layer raw
+    _atac(norm=True).write_h5ad(ap)
+    out = tmp_path / "out.h5mu"
+    load_multiome(str(rp), str(ap), output_path=str(out), min_genes=0, min_peaks=0, max_pct_mito=100)
+    mo = md.read_h5mu(str(out))
+    assert float(mo["rna"].obs["pct_counts_mt"][0]) == pytest.approx(true_mt, rel=1e-3)
+    assert "counts" in mo["rna"].layers and "counts" in mo["atac"].layers
+
+
+def test_m02_disjoint_barcodes_fail_loud_no_output(tmp_path):
+    rp, ap = tmp_path / "r.h5ad", tmp_path / "a.h5ad"
+    _rna(prefix="r").write_h5ad(rp)
+    _atac(prefix="a").write_h5ad(ap)
+    out = tmp_path / "out.h5mu"
+    with pytest.raises(ValueError, match="do not overlap"):
+        load_multiome(str(rp), str(ap), output_path=str(out))
+    assert not out.exists()
+
+
+def test_s06_multiome_preserves_existing_mt_annotation(tmp_path):
+    # Ensembl var_names (no MT- prefix) + preexisting correct var['mt']: the loader
+    # must NOT clobber it, so a high-mt cell is still caught.
+    import scanpy as sc
+    import mudata as md
+    rna = _rna()
+    rna.var_names = [f"ENSG{i:05d}" for i in range(rna.n_vars)]
+    rna.var["mt"] = [True] * 5 + [False] * (rna.n_vars - 5)  # c0 has 90% counts in first 5 genes
+    rp, ap = tmp_path / "r.h5ad", tmp_path / "a.h5ad"
+    rna.write_h5ad(rp)
+    _atac().write_h5ad(ap)
+    out = tmp_path / "out.h5mu"
+    res = load_multiome(str(rp), str(ap), output_path=str(out),
+                        min_genes=0, min_peaks=0, max_pct_mito=20)
+    mo = md.read_h5mu(str(out))
+    assert int(mo["rna"].var["mt"].sum()) == 5           # annotation preserved, not clobbered
+    assert "c0" not in list(mo["rna"].obs_names)          # the 90%-mt cell was caught & removed
+
+
+def test_m02_low_overlap_fails_loud(tmp_path):
+    # 1/10 shared barcodes is not paired multiome -> must fail, not persist 1 cell.
+    rna = _rna(prefix="c")
+    atac = _atac()
+    atac.obs_names = ["c0"] + [f"z{i}" for i in range(9)]
+    rp, ap = tmp_path / "r.h5ad", tmp_path / "a.h5ad"
+    rna.write_h5ad(rp)
+    atac.write_h5ad(ap)
+    out = tmp_path / "out.h5mu"
+    with pytest.raises(ValueError, match="overlap is only"):
+        load_multiome(str(rp), str(ap), output_path=str(out), min_genes=0, min_peaks=0, max_pct_mito=100)
+    assert not out.exists()

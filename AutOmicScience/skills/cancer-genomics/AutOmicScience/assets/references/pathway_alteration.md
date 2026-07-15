@@ -1,5 +1,7 @@
 # Reference — Pathway Alteration & Gene-Set Analysis
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Pathway alteration = **any-hit logic**: a pathway is "altered" in a patient if ≥1 gene in the set has a pathogenic mutation (or CNA).
 
 ## The any-hit rule

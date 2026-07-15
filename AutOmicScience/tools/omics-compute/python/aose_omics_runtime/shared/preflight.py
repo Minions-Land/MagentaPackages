@@ -12,16 +12,23 @@ Emits a single JSON object on stdout: {ready, modality, pythonBin,
 blocker?, fix?, missingPackages?, gpuAvailable?, packages?}.
 """
 
-import importlib.util
+import importlib
 import json
 import os
+import shutil
 import sys
 
 # modality -> required import names. Append-only; kept in lockstep with the
 # pixi.toml features and the modality->env table in omics-compute.toml.
+# Include the packages the STANDARD/default subcommands of each modality import
+# (e.g. seurat_v3 HVG -> skmisc, default integrate -> harmonypy), so a green
+# preflight covers the default workflow — not just the loader deps. Optional,
+# non-default methods (e.g. scanorama) fail loud at their call site.
+# (functional subcommands have no isolated modality env; their dep — decoupler —
+# fails loud at import.)
 MODALITY_REQUIREMENTS = {
-    "scrna": ["anndata", "scanpy", "scvi", "leidenalg", "igraph"],
-    "spatial": ["anndata", "scanpy", "squidpy", "spatialdata", "spatialdata_io"],
+    "scrna": ["anndata", "scanpy", "scvi", "leidenalg", "igraph", "skmisc", "harmonypy"],
+    "spatial": ["anndata", "scanpy", "squidpy", "spatialdata"],
     "scatac": ["anndata", "scanpy", "muon", "snapatac2"],
     "multiome": ["anndata", "scanpy", "muon", "mudata"],
 }
@@ -40,11 +47,47 @@ MODALITY_ENV = {
 # (it uses that arg to select the env, then drops it from argv).
 ENV_MODALITY = {env: modality for modality, env in MODALITY_ENV.items()}
 
+# Requirements contributed by a specific subcommand — and by the --method chosen
+# within it — on top of the modality baseline, plus any external executable the
+# subcommand shells out to. A modality list alone cannot express these, so a green
+# modality preflight could still be followed by a ModuleNotFoundError (e.g.
+# `integrate --method scanorama`). Passing --subcommand/--method makes a green
+# preflight mean "this exact request can run".
+SUBCOMMAND_REQUIREMENTS = {
+    "preprocess": {"packages": ["skmisc"]},                       # default seurat_v3 HVG
+    "integrate": {"methods": {"harmony": ["harmonypy"], "scanorama": ["scanorama"]}},
+    # snapATAC2 drives MACS3 as a library (`from MACS3.Signal.PeakDetect import PeakDetect`),
+    # so the importable package is the requirement — not the `macs3` executable on PATH.
+    "peak_calling": {"packages": ["MACS3"]},
+    "atac_qc": {"packages": ["snapatac2"]},
+    "gene_activity": {"packages": ["snapatac2"]},
+    "pathway_activity": {"packages": ["decoupler"]},
+    "enrichment": {"packages": ["decoupler"]},
+    "score": {"packages": ["sklearn"]},
+}
+
+
+def _executable_available(name: str) -> bool:
+    """True if `name` resolves on PATH (external binaries preflight must cover)."""
+    return shutil.which(name) is not None
+
+
+def _requirements_for(modality, subcommand, method):
+    """(packages, executables) this exact request needs: modality baseline plus the
+    subcommand's own imports and its selected method's dependency."""
+    packages = list(MODALITY_REQUIREMENTS.get(modality) or [])
+    spec = SUBCOMMAND_REQUIREMENTS.get(subcommand, {})
+    packages += spec.get("packages", [])
+    if method:
+        packages += spec.get("methods", {}).get(method, [])
+    return list(dict.fromkeys(packages)), list(spec.get("executables", []))
+
 
 def _module_importable(name: str) -> bool:
-    """True if `import name` would succeed, without importing heavy deps."""
+    """True if `import name` succeeds."""
     try:
-        return importlib.util.find_spec(name) is not None
+        importlib.import_module(name)
+        return True
     except Exception:
         # A parent package that raises on import surfaces here → treat as missing.
         return False
@@ -88,23 +131,35 @@ def main(args):
         return
 
     env_id = MODALITY_ENV.get(modality)
+    # `for_subcommand`, not `subcommand`: the unified CLI already uses the latter
+    # dest for the top-level subparser.
+    subcommand = getattr(args, "for_subcommand", None)
+    method = getattr(args, "method", None)
+    required, executables = _requirements_for(modality, subcommand, method)
 
     missing = [pkg for pkg in required if not _module_importable(pkg)]
+    missing_exe = [exe for exe in executables if not _executable_available(exe)]
     gpu_available = _gpu_available() if getattr(args, "check_gpu", False) else None
 
     result = {
         "modality": modality,
+        "subcommand": subcommand,
+        "method": method,
         "pythonBin": sys.executable,
         "activeEnv": active_env,
     }
     if gpu_available is not None:
         result["gpuAvailable"] = gpu_available
 
-    if missing:
+    if missing or missing_exe:
         result["ready"] = False
-        result["missingPackages"] = missing
-        result["blocker"] = (
-            f"Environment missing required packages for {modality}: " + ", ".join(missing)
+        if missing:
+            result["missingPackages"] = missing
+        if missing_exe:
+            result["missingExecutables"] = missing_exe
+        scope = f"{modality}/{subcommand}" if subcommand else modality
+        result["blocker"] = f"Environment missing requirements for {scope}: " + ", ".join(
+            missing + [f"{e} (executable)" for e in missing_exe]
         )
         if env_id:
             result["fix"] = (
@@ -121,5 +176,7 @@ def main(args):
     else:
         result["ready"] = True
         result["packages"] = required
+        if executables:
+            result["executables"] = executables
 
     print(json.dumps(result))

@@ -1,5 +1,7 @@
 # Bayesian colocalization with R `coloc`
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Test whether two association signals at a locus (GWAS×GWAS, or GWAS×molecular-QTL such as
 eQTL/pQTL) are driven by the **same** causal variant. Use the R `coloc` package (Wallace lab) — the
 reference implementation of `coloc.abf` (Giambartolomei 2014) and `coloc.susie` (Wallace 2021).

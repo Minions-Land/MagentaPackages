@@ -235,3 +235,14 @@ def test_emit_preserves_unicode():
     parsed = json.loads(json_str)
     assert parsed["report"]["description"] == "分析结果"
     assert parsed["report"]["marker"] == "β-actin"
+
+
+def test_s15_non_finite_report_rejected():
+    import pytest
+    from aose_omics_runtime.shared.evidence import shape_row, emit
+    with pytest.raises(ValueError, match="strict-JSON"):
+        shape_row({"x": float("nan")}, analysis="qc", identifier="c1")
+    # a finite report still emits, and the emitted string is strict JSON
+    import json
+    out = emit({"x": 1.0}, analysis="qc", identifier="c1")
+    json.loads(out)

@@ -14,7 +14,7 @@ Supported formats:
 - h5 → scanpy.read_10x_h5 (10x Genomics)
 - mtx, mtx.gz → scanpy.read_10x_mtx (Matrix Market)
 - loom → scanpy.read_loom
-- zarr → scanpy.read_zarr
+- zarr → anndata.read_zarr
 
 Output: always .h5ad for downstream compatibility
 """
@@ -28,6 +28,8 @@ from typing import Any
 import anndata as ad
 import numpy as np
 import pandas as pd
+
+from .io import save_h5ad
 import scanpy as sc
 
 
@@ -127,6 +129,13 @@ def load_tabular(
             "Hint: Check if first row/column should be header/index (use --header/--obs-names-col)"
         )
 
+    if numeric_df.isna().any().any():
+        raise ValueError(
+            f"Non-numeric values found while parsing numeric columns (coerced to NaN).\n"
+            f"DataFrame shape: {df.shape}\n"
+            "Hint: Set --header/--obs-names-col so non-numeric columns are excluded from the matrix."
+        )
+
     # Build AnnData
     X = numeric_df.values
     obs = pd.DataFrame(index=numeric_df.index)
@@ -136,12 +145,9 @@ def load_tabular(
     if var_names_col is not None and var_names_col != 0:
         # This is for when gene names are in a specific column rather than header
         # More complex logic needed - for now just document it
-        pass
+        raise NotImplementedError("var_names_col is not implemented; gene names are taken from the header/columns")
 
     adata = ad.AnnData(X=X, obs=obs, var=var)
-
-    # Store raw counts in layers["counts"] (convention)
-    adata.layers["counts"] = adata.X.copy()
 
     return adata
 
@@ -176,18 +182,12 @@ def load_10x_mtx(path: Path) -> ad.AnnData:
 def load_loom(path: Path) -> ad.AnnData:
     """Load loom file."""
     adata = sc.read_loom(path)
-    # Ensure counts layer exists
-    if "counts" not in adata.layers:
-        adata.layers["counts"] = adata.X.copy()
     return adata
 
 
 def load_zarr(path: Path) -> ad.AnnData:
-    """Load zarr store."""
-    adata = sc.read_zarr(path)
-    # Ensure counts layer exists
-    if "counts" not in adata.layers:
-        adata.layers["counts"] = adata.X.copy()
+    """Load zarr store (anndata provides read_zarr; scanpy does not)."""
+    adata = ad.read_zarr(path)
     return adata
 
 
@@ -277,6 +277,12 @@ def load_dataset(
             "Check the file format and parameters."
         ) from e
 
+    # Non-tabular formats (h5ad/h5/mtx/loom/zarr) are loaded in their native
+    # orientation; apply the requested transpose here so `transpose_applied`
+    # reflects a real action for every format (tabular transposes during parsing).
+    if transpose and format not in ('csv', 'tsv', 'txt', 'excel'):
+        adata = adata.T
+
     # Validate result
     if adata.n_obs == 0 or adata.n_vars == 0:
         raise ValueError(
@@ -284,9 +290,8 @@ def load_dataset(
             "Check if transpose is needed or if the file structure is correct."
         )
 
-    # Save as h5ad
-    output.parent.mkdir(parents=True, exist_ok=True)
-    adata.write_h5ad(output, compression="gzip")
+    # Save as h5ad (atomic; creates parent dir)
+    save_h5ad(adata=adata, path=output)
 
     # Build report
     report = {
@@ -366,7 +371,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--header",
-        type=int,
+        type=lambda x: None if str(x).lower() == "none" else int(x),
         default=0,
         help="Row index for header (default: 0, use None for no header)",
     )

@@ -1,5 +1,8 @@
 # Reference — Covariate-Adjusted Association (OLS)
 
+**Maturity: REFERENCE** — hand-rolled per-feature OLS with `statsmodels` (pinned). Which covariates
+enter the model is the study decision this doc exists to guide.
+
 Per-metabolite OLS with clinical covariates.
 
 ## OLS per feature

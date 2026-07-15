@@ -3,7 +3,6 @@ name: metabolomics
 description: Metabolomics & lipidomics analysis — plasma/clinical metabolite and lipid intensity matrices, covariate-adjusted association (OLS), paired/unpaired differential abundance, lipid-class nomenclature parsing (FA/PC/LPC/TAG/CE/acylcarnitine), HMDB/LIPID MAPS annotation, DE∩phenotype-correlation mediation heuristic + formal causal mediation, clinical metabolic phenotyping (Disposition Index, SSPG, HOMA-IR), two-way ANOVA with effect sizes. Use when the user has metabolite/lipid intensity tables, CGM/metabolic study data, or asks for metabolite association, lipid differential abundance, or metabolic-phenotype integration.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [omics, metabolomics, lipidomics, hmdb, lipid-maps, mediation, insulin-resistance, clinical-phenotyping, differential-abundance]
-extends: omics-shared
 ---
 
 # Metabolomics & Lipidomics — Plasma & Clinical Metabolic Analysis
@@ -26,15 +25,16 @@ This is **NOT** single-cell metabolomics, **NOT** flux analysis (13C-MFA), **NOT
 
 | Capability | Maturity | Tool/Method | Reference Doc |
 |------------|----------|-------------|---------------|
-| Load intensity matrix, QC, log-transform | **REFERENCE** | Python | `assets/references/load_qc.md` |
+| Load intensity matrix, QC, normalise, log-transform | **REFERENCE** | `pandas` / `numpy` | `assets/references/load_qc.md` |
 | Covariate-adjusted association (OLS per feature) | **REFERENCE** | statsmodels OLS | `assets/references/association.md` |
 | Differential abundance (paired/unpaired) | **REFERENCE** | scipy + BH-FDR | `assets/references/metabolite_de.md` |
-| Lipid-class nomenclature parsing | **REFERENCE** | Python (regex) | `assets/references/lipid_nomenclature.md` |
-| HMDB / LIPID MAPS annotation | **REFERENCE** | REST API (optional) | `assets/references/annotation.md` |
+| Lipid-class nomenclature parsing | **REFERENCE** | `re` (vendor spellings differ) | `assets/references/lipid_nomenclature.md` |
+| Metabolite ID → record (KEGG / PubChem) | **READY** | `biofetch_kegg_get` / `biofetch_pubchem_compound` | `assets/references/annotation.md` |
+| Name → ID search; LIPID MAPS lookup | **REFERENCE** | `requests` (ops not exposed over MCP) | `assets/references/annotation.md` |
 | Mediation (DE∩correlation heuristic + formal) | **REFERENCE** | statsmodels.mediation | `assets/references/mediation.md` |
 | Clinical metabolic phenotyping (DI/SSPG/HOMA-IR) | **REFERENCE** | Python | `assets/references/clinical_metabolic.md` |
-| Effect-size ranking | **REFERENCE** | Python | `../proteomics/assets/references/effect_size.md` |
-| Volcano plot | **REFERENCE** | matplotlib | `../omics-shared/assets/references/visualization.md` |
+| Effect-size ranking | **REFERENCE** | Python | `../../proteomics/AutOmicScience/assets/references/effect_size.md` |
+| Volcano plot | **REFERENCE** | matplotlib | `../../omics-shared/AutOmicScience/assets/references/visualization.md` |
 
 All capabilities are **REFERENCE** because metabolomics requires study-specific judgment: which covariates, paired vs unpaired, median-split thresholds, which IR index, which mediation approach.
 
@@ -42,58 +42,51 @@ All capabilities are **REFERENCE** because metabolomics requires study-specific 
 
 ## Standard Workflow
 
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
+
 ### 1. Load & QC
 
-```python
-import pandas as pd
-import numpy as np
-# samples × features intensity matrix
-mat = pd.read_csv("metabolites.csv", index_col=0)
-# Log-transform (metabolite intensities are right-skewed)
-log_mat = np.log2(mat + 1)
-```
+Feature table (metabolites × samples) + sample metadata + the platform's annotation.
 
-See `assets/references/load_qc.md`.
+- **Which normalisation** (PQN, TIC, internal standard) is the analysis, not a default — state it
+- Blanks, QC-pool samples and drift are the platform's own controls; use them or say why not
+- Missing values are **not** all the same: below-LOD ≠ not-detected ≠ failed. The imputation you pick
+  encodes which you believe
 
-### 2. Covariate-adjusted association
+→ `assets/references/load_qc.md`
 
-Per-metabolite OLS with clinical covariates:
+### 2. Annotation
 
-```python
-import statsmodels.formula.api as smf
-results = []
-for metabolite in log_mat.columns:
-    df = pd.DataFrame({"y": phenotype, "metabolite": log_mat[metabolite],
-                       "Age": age, "BMI": bmi})
-    model = smf.ols("y ~ metabolite + Age + BMI", data=df).fit()
-    results.append({"metabolite": metabolite,
-                    "coef": model.params["metabolite"],
-                    "p": model.pvalues["metabolite"]})
-res = pd.DataFrame(results)
-# Filter: p < 0.05 & coef > 0 (positive association)
-```
+Names → IDs → records. **Confidence level is part of the annotation**, not a footnote.
 
-See `assets/references/association.md`.
+- Name search is **ambiguous by construction** — report how many candidates each name returned, and
+  prefer InChIKey matching when the platform gives one
+- ID → record goes through `biofetch` (grounded, evidence recorded); only the *search* is hand-rolled
+- **HMDB has no usable REST route** — it is Cloudflare-gated and returns 403, not JSON. Map to
+  PubChem/KEGG via InChIKey, or query a local dump
+- **Never let a `None` reach a join key** — pandas matches `None` to `None`, so unparseable ids
+  cross-join and fabricate N×M annotations
+
+→ `assets/references/annotation.md`
 
 ### 3. Differential abundance
 
-Paired (within-subject) or unpaired, then BH-FDR. See `assets/references/metabolite_de.md`.
+Per-metabolite modelling with covariates.
 
-### 4. Lipid nomenclature
+- Log-transform before parametric tests; metabolite intensities are right-skewed
+- Covariates (batch, run order, sex, BMI) are a design decision — pre-specify them
+- FDR across metabolites, and say which method
 
-Parse lipid shorthand (e.g., `PC 34:2` = phosphatidylcholine, 34 carbons, 2 double bonds):
+→ `assets/references/metabolite_de.md`
 
-```python
-import re
-m = re.match(r"(\w+)\s+(\d+):(\d+)", "PC 34:2")
-lipid_class, carbons, db = m.group(1), int(m.group(2)), int(m.group(3))
-```
+### 4. Association / mediation
 
-See `assets/references/lipid_nomenclature.md`.
+Metabolite ↔ phenotype, and metabolite-as-mediator.
 
-### 5. Mediation
+- **Mediation is a causal claim.** It needs an assumed DAG, and the assumption belongs in the report
 
-Two legitimate approaches, chosen by the question: a DE ∩ phenotype-correlation integration heuristic that nominates candidate mediating species, and formal causal mediation that estimates an indirect effect. Use the integration heuristic when the question asks to identify or nominate mediating species from DE + correlation; use formal mediation when a causal/indirect-effect estimate is required. See `assets/references/mediation.md` for both.
+→ `assets/references/association.md`, `assets/references/mediation.md`
 
 ---
 
@@ -105,7 +98,7 @@ Metabolite intensities are right-skewed; log2-transform before t-tests/OLS.
 
 ### 2. Effect-size ranking
 
-When asked "which metabolites change most," rank by |log2FC| or |coef| after an FDR gate, not by p-value. See `../proteomics/assets/references/effect_size.md`.
+When asked "which metabolites change most," rank by |log2FC| or |coef| after an FDR gate, not by p-value. See `../../proteomics/AutOmicScience/assets/references/effect_size.md`.
 
 ### 3. IR index precedence
 

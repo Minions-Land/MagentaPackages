@@ -1,5 +1,7 @@
 # Reference — Copy Number Alteration (CNA)
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Copy-number analysis: GISTIC discrete calls, segment-to-gene mapping, amplification/deletion thresholds, and the critical mutation-vs-CNA distinction.
 
 ## GISTIC discrete scale

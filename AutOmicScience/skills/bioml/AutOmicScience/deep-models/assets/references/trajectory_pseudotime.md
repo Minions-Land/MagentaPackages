@@ -1,5 +1,7 @@
 # Reference — Trajectory / Pseudotime with dynverse Output
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Trajectory inference orders cells along a developmental/state continuum and recovers branch topology. Key: producing the deliverable in dynverse format.
 
 ## The task & output contract
@@ -57,15 +59,12 @@ for i in range(len(groups)):
                           "length": 1 - conn[i, j], "directed": False})
 milestone_network = pd.DataFrame(edges)
 
-# 2. progressions: assign each cell to its nearest edge, percentage from DPT
-progressions = pd.DataFrame({
-    "cell_id": adata.obs_names,
-    "from": adata.obs["leiden"].values,   # simplified: cluster as milestone
-    "to": adata.obs["leiden"].values,
-    "percentage": adata.obs["dpt_pseudotime"].values,
-})
-
-# 3. milestone_percentages: soft membership (here hard = 1.0)
+# 2. Cell positions. dynverse takes EITHER `progressions` (cell sits at `percentage` along edge
+#    from->to) OR `milestone_percentages` (cell's membership across milestones). They are two
+#    encodings of the same thing — pick the one your data actually supports.
+#
+#    With clusters as milestones each cell is hard-assigned to ONE cluster, which is exactly
+#    milestone_percentages. Use it.
 milestone_percentages = pd.DataFrame({
     "cell_id": adata.obs_names,
     "milestone_id": adata.obs["leiden"].values,
@@ -73,15 +72,33 @@ milestone_percentages = pd.DataFrame({
 })
 
 milestone_network.to_csv("milestone_network.csv", index=False)
-progressions.to_csv("progressions.csv", index=False)
 milestone_percentages.to_csv("milestone_percentages.csv", index=False)
 ```
+
+> **Do not fake `progressions` from cluster labels + global DPT.** The obvious shortcut —
+> `{"from": leiden, "to": leiden, "percentage": dpt_pseudotime}` — is structurally invalid twice over,
+> and silently: (a) `from == to` makes every row a **self-loop**, but `milestone_network` is built with
+> `range(i+1, ...)` and contains **no** self-loops, so every progression references an edge that does
+> not exist; (b) dynverse's `percentage` is position **along a given edge**, renormalized per
+> `(from, to)` pair — `dpt_pseudotime` is a **global** 0–1 coordinate, not a per-edge one. Nothing
+> raises; you get a trajectory object that no dynverse metric can score correctly.
+>
+> A real `progressions` needs each cell assigned to an actual `(from, to)` edge with a per-edge
+> position. If you need that, compute it deliberately — don't reach for the one-liner above.
 
 Consult the expected output's exact column names — dynverse conventions are strict.
 
 ## PHLOWER (escalation)
 
-PHLOWER uses Hodge decomposition on the cell graph for tree-like trajectories. Clone its repo, follow its README. Output is already close to dynverse format (milestone tree + cell progressions). Use when PAGA's branch topology is too coarse.
+PHLOWER uses Hodge decomposition on the cell graph for tree-like trajectories. Upstream is
+**`CostaLab/PHLOWER`**, on PyPI as `phlower` (0.3.0 at time of writing) — provision it per
+`omics-shared`'s `assets/references/AOSE_nonStandard_env.md`; it is in no pinned env. Output is already
+close to dynverse format (milestone tree + cell progressions). Use when PAGA's branch topology is too
+coarse.
+
+> Its API is **not verified here** — read its README/source before writing a recipe against it. The
+> SATURN section in this same tree once carried a fully invented API under exactly this "clone the
+> research repo" framing; don't repeat that.
 
 ## scVelo (direction, not topology)
 

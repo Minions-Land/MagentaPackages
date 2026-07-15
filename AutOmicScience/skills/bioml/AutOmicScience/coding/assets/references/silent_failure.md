@@ -1,5 +1,7 @@
 # Reference — Silent Failure Audit
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Honest error paths: a failure must be observable by whoever can act on it. Fallback behavior is acceptable only when it's explicit, traceable, and safe. Critical for ML code, where a "successful" run can silently produce garbage.
 
 ## When to audit

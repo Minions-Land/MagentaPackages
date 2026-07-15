@@ -1,5 +1,7 @@
 # Reference — Kaplan-Meier & Log-Rank Test
 
+**Maturity: PARTIAL** — `lifelines` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 Non-parametric survival estimation and group comparison.
 
 ## Kaplan-Meier estimator
@@ -28,8 +30,18 @@ Inspect the figure before citing.
 ```python
 from lifelines.utils import median_survival_times
 median = kmf.median_survival_time_
-ci = median_survival_times(kmf.confidence_interval_)
+ci = median_survival_times(kmf.confidence_interval_)   # -> TIME bounds, e.g. [17.16, 22.21]
 ```
+
+> **`median_survival_times`, not `confidence_interval_survival_function_`.** The latter looks like the
+> same thing and is not: it returns the confidence band's **survival probabilities** at that time,
+> which sit near 0.5 by construction (≈`[0.42, 0.57]` for *any* dataset). Reported as "median survival
+> 19.2 months, 95% CI [0.42, 0.57]" it is nonsense in the wrong units — and it never raises, because
+> both are perfectly good numbers. `median_survival_times` inverts the band to get **time** bounds
+> (`lifelines/utils/__init__.py:189` → `qth_survival_times(0.5, …)`). Verified on lifelines 0.30.3.
+>
+> A median that the curve never reaches is `inf`. That is a real answer — more than half the cohort
+> survived past follow-up — not a failure to paper over.
 
 ## Log-rank test (two groups)
 ```python

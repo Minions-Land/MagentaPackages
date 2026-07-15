@@ -1,162 +1,148 @@
 # Peak-Gene Linkage
 
-**Maturity: REFERENCE** — hand-rolled distance + correlation in a Python script (no snapATAC2 peak-gene function exists). The **scATAC-only** path (gene activity / co-accessibility); for paired multiome with real RNA, see `multi-omics` (SCENIC+ region-gene links).
+**Maturity: REFERENCE** — no compute subcommand, but **snapATAC2 owns the algorithm**: build a
+CRE→gene network from the annotation, then score its edges. You write the calls; you do not
+implement the linkage. `snapatac2` is pinned in `task4` — nothing to install. The **scATAC-only**
+path (gene activity as the expression stand-in); for paired multiome with real RNA, see the
+**multiome** subskill (SCENIC+ region-gene links, `regulation.md`).
 
 ## Goal / When to Use
 
-Connect candidate enhancers (peaks) to target genes for regulatory interpretation / GRN scaffolding. Use after peak calling and clustering, when you need peak→gene associations.
+Connect candidate enhancers (peaks) to target genes for regulatory interpretation / GRN scaffolding.
+Use after peak calling and gene activity, when you need peak→gene associations.
 
 ## Decision Criteria
 
-**The judgment this guides:**
-
-- **Distance-based linkage** (peak within N bp, e.g. 250-500 kb, of a gene TSS) is the cheap default and needs only ATAC. It's a candidate set, not proof of regulation.
-
-- **Correlation / co-accessibility linkage** (peak accessibility vs gene activity, or better, paired RNA) is stronger but needs many cells and ideally **paired multiome**. If data is unpaired, say the links are distance-only candidates.
-
-- **Restrict to differential / variable peaks** to keep it tractable — linking every peak to every gene is computationally expensive and mostly noise.
-
-## Method Menu
-
-- **Distance window** (compute from peak coords + gene annotation) — the baseline
-- **Co-accessibility / correlation** (use gene activity from `gene_activity.md` or paired RNA from multiome)
-- **`muon.atac.tl.add_peak_annotation`** + `muon.atac.tl.rank_peaks_groups` / `muon.atac.tl.add_genes_peaks_groups` — annotate peaks→genes for marker peaks
-
-**Note:** There is **no SnapATAC2 `snap.tl.co_accessibility` or `snap.tl.peak_gene_linkage` function** (do not reach for one that doesn't exist). The linkage itself is computed **inline** from peak coordinates, the gene annotation, and accessibility↔activity correlation.
+- **Distance alone** — `init_network_from_annotation` links every peak within `upstream`/`downstream`
+  of a gene TSS (default ±250 kb). That is the candidate set, not evidence of regulation. Report
+  distance-only links as candidates.
+- **Distance + correlation** — `add_cor_scores` adds a **Spearman** score per edge from the peak and
+  gene matrices. This is the default scoring step; it needs many cells.
+- **Distance + regression** — `add_regr_scores(method="elastic_net" | "gb_tree")` fits a model per
+  gene over its candidate peaks instead of scoring each pair independently, so it accounts for peaks
+  competing to explain the same gene. Slower; reach for it when the correlation set is too permissive.
+- **Restrict the peak set** before building the network (differential/variable peaks). Every peak ×
+  every gene in a ±250 kb window is mostly noise and dominates the runtime.
 
 ## How-to
 
-### Distance-based linkage (inline)
+The network's inputs are the two matrices our READY subcommands already produce: the peak matrix
+(`peak_calling --create-matrix`) and the gene-activity matrix (`gene_activity`).
 
 ```python
-import pandas as pd
-import numpy as np
+import snapatac2 as snap
+import anndata as ad
 
-# Get peak coords and gene TSS positions
-peaks = adata.var  # peak annotations (chrom, start, end)
-genes = genome.annotation  # or load from GTF
+peak_mat = ad.read_h5ad("peaks_matrix.h5ad")     # peak_calling --create-matrix
+gene_mat = ad.read_h5ad("gene_activity.h5ad")    # gene_activity subcommand
 
-# Example: link peaks within 250kb of a gene TSS
-links = []
-for gene_name, gene_info in genes.items():
-    gene_chrom = gene_info['chrom']
-    gene_tss = gene_info['tss']
+# snapATAC2's correlation is Rust-side and rejects integer matrices — cast first.
+peak_mat.X = peak_mat.X.astype("float32")
+gene_mat.X = gene_mat.X.astype("float32")
 
-    # Find peaks on the same chrom within distance
-    candidate_peaks = peaks[
-        (peaks['chrom'] == gene_chrom) &
-        (np.abs((peaks['start'] + peaks['end']) / 2 - gene_tss) <= 250_000)
-    ]
-
-    for peak_id in candidate_peaks.index:
-        links.append({
-            'peak': peak_id,
-            'gene': gene_name,
-            'distance': abs((peaks.loc[peak_id, 'start'] + peaks.loc[peak_id, 'end']) / 2 - gene_tss)
-        })
-
-link_table = pd.DataFrame(links)
-print(f"Linked {len(link_table)} peak-gene pairs (distance ≤ 250kb)")
-```
-
-### Correlation-based linkage (with gene activity)
-
-```python
-# Assume you have gene activity from gene_activity.md
-# ga = snap.pp.make_gene_matrix(...)
-
-# For each peak-gene pair within distance, compute correlation
-import scipy.stats as stats
-
-link_table_with_corr = []
-for _, row in link_table.iterrows():
-    peak_id = row['peak']
-    gene_name = row['gene']
-
-    if gene_name not in ga.var_names:
-        continue
-
-    # Get accessibility and activity vectors
-    peak_access = adata[:, peak_id].X.toarray().flatten()
-    gene_act = ga[:, gene_name].X.toarray().flatten()
-
-    # Pearson correlation
-    r, p = stats.pearsonr(peak_access, gene_act)
-
-    link_table_with_corr.append({
-        **row,
-        'correlation': r,
-        'pvalue': p
-    })
-
-link_table_corr = pd.DataFrame(link_table_with_corr)
-
-# Filter by correlation threshold
-strong_links = link_table_corr[
-    (link_table_corr['correlation'] > 0.3) &
-    (link_table_corr['pvalue'] < 0.01)
-]
-print(f"{len(strong_links)} peak-gene pairs with r>0.3, p<0.01")
-```
-
-### muon annotation (marker peaks → nearby genes)
-
-```python
-import muon as mu
-
-# Annotate peaks with nearby genes
-mu.atac.tl.add_peak_annotation(
-    adata,
-    annotation_file='/path/to/genes.gtf',
-    distance=250_000  # 250kb window
+network = snap.tl.init_network_from_annotation(
+    regions=list(peak_mat.var_names),
+    anno_file="genes.gtf",
+    upstream=250_000, downstream=250_000,        # regulatory domain around each TSS
+    id_type="gene_name",                         # must match gene_mat.var_names
+    coding_gene_only=True,
 )
-# Adds adata.uns['peak_annotation']
-
-# Rank peaks per group
-mu.atac.tl.rank_peaks_groups(adata, groupby='leiden', method='wilcoxon')
-
-# Map ranked peaks to genes
-mu.atac.tl.add_genes_peaks_groups(adata)
-# Adds gene names to the ranked peaks table
+snap.tl.add_cor_scores(network, gene_mat=gene_mat, peak_mat=peak_mat)
 ```
 
-## Pitfalls & Quality Checks
+`network` is a `rustworkx.PyDiGraph`: nodes carry `.id` / `.type` (`"region"` or `"gene"`), edges
+carry `.distance` and `.cor_score`. Read the links out:
 
-- **Distance ≠ regulation** — a peak within 250kb of a gene is a *candidate* regulatory element, not proof that it regulates that gene. Proximity is necessary but not sufficient.
+```python
+links = [
+    {"peak": network[src].id, "gene": network[dst].id,
+     "cor_score": edge.cor_score, "distance": edge.distance}
+    for src, dst in network.edge_list()
+    for edge in [network.get_edge_data(src, dst)]
+    if edge.cor_score is not None
+]
+```
 
-- **Multiple-testing on correlations** — if you compute correlations for thousands of peak-gene pairs, apply FDR correction. Uncorrected p-values will give many false positives.
+Keep only the confident edges with `prune_network` (it drops isolated nodes for you):
 
-- **Do not assert causality from co-accessibility** — "peak X and gene Y are correlated" does not mean "peak X drives gene Y expression." It could be co-regulation by a third factor, or reverse causality.
+```python
+strong = snap.tl.prune_network(
+    network,
+    edge_filter=lambda src, dst, edge: edge.cor_score is not None and edge.cor_score > 0.3,
+    remove_isolates=True,
+)
+```
 
-- **Inspect the figure** — a heatmap or network diagram of top peak-gene links (e.g., TF-gene pairs where the peak overlaps a TF motif). Are the links biologically plausible?
+> **`snap.tl.co_accessibility` and `snap.tl.peak_gene_linkage` do not exist.** If you find a recipe
+> calling either, it is fabricated — the real API is `init_network_from_annotation` +
+> `add_cor_scores` / `add_regr_scores`, as above.
+
+## Failure Modes
+
+1. **`PanicException: Cannot compute correlation for type uint32`.** *Diagnosis:* `add_tile_matrix`
+   / `make_peak_matrix` / `make_gene_matrix` all produce integer counts, and the Rust Spearman needs
+   floats. *Fix:* cast both `X` to `float32` before scoring (as above). Do not "fix" it by dropping
+   the correlation step.
+
+2. **Every edge has `cor_score = None`.** *Diagnosis:* `gene_mat`/`peak_mat` var_names don't match
+   the network's node ids — usually `id_type="gene_name"` against a gene matrix built with
+   `id_type="gene"`/gene ids, or a chromosome-naming mismatch upstream. *Fix:* print
+   `set(gene_mat.var_names) & {n.id for n in network.nodes() if n.type == "gene"}`; if empty, rebuild
+   with matching id types.
+
+3. **The network is enormous / scoring never finishes.** *Diagnosis:* every peak within ±250 kb of
+   every gene is a candidate; on a genome-wide peak set that is millions of edges. *Fix:* restrict
+   `regions` to differential or variable peaks before `init_network_from_annotation`, and/or narrow
+   the window.
+
+4. **Correlation is high but the peak is far and biologically implausible.** *Diagnosis:* both the
+   peak and the gene track the same cluster structure, so they correlate through cell type, not
+   regulation. *Fix:* this is co-variation, not linkage — check whether the correlation survives
+   within a cell type, and never present it as a regulatory claim.
+
+## Figure checkpoints
+
+- **Distance vs `cor_score` scatter** — do strong links concentrate near the TSS, or is the score
+  flat with distance? A flat profile means you are picking up cell-type covariation (Failure Mode 4).
+- **Network diagram / heatmap of top links** for a few known genes — are the implicated peaks
+  plausible (promoter + a few enhancers), or does one gene absorb hundreds of peaks?
+
+Observe each before it backs a claim.
 
 ## Grounding
 
-**What to record in the `report` dict:**
+Build the `report` **from the network** (do not hardcode), then `print(report)`:
 
 ```python
-{
-  "method": "distance_plus_correlation",
-  "distance_threshold_kb": 250,
-  "n_peaks": 45000,
-  "n_genes": 18000,
-  "n_distance_links": 120000,
-  "correlation_threshold": 0.3,
-  "pvalue_threshold": 0.01,
-  "n_correlated_links": 3500,
-  "top_links": [
-    {"peak": "chr1:12345-12600", "gene": "GATA1", "distance": 50000, "correlation": 0.65},
-    ...
-  ]
+report = {
+    "method": "snapatac2.tl.init_network_from_annotation + add_cor_scores",
+    "snapatac2_version": snap.__version__,
+    "score": "spearman",
+    "upstream": 250_000, "downstream": 250_000,
+    "id_type": "gene_name", "coding_gene_only": True,
+    "n_regions_in": int(peak_mat.n_vars),
+    "n_genes_in_network": sum(1 for n in network.nodes() if n.type == "gene"),
+    "n_candidate_links": int(network.num_edges()),
+    "cor_threshold": 0.3,
+    "n_links_kept": int(strong.num_edges()),
+    "top_links": sorted(links, key=lambda x: -abs(x["cor_score"]))[:20],
 }
 ```
 
-Ground: n peak-gene links, distance/correlation thresholds, top links with stats.
+Record the **window, the id_type, the score type (Spearman), and both link counts** — a link count
+means nothing without the window that generated it.
 
 ## Honesty
 
-- **Label distance-only links as candidates** — "peak X is a candidate regulator of gene Y (distance 50kb)" is honest; "peak X regulates gene Y" is over-claiming without functional evidence.
-
-- **Report when pairing is unavailable** — if you're working with unpaired ATAC (no matched RNA), say so and note that correlation-based links are computed via gene activity (a proxy, not expression).
-
-- **Linkage is a scaffold, not a GRN** — peak-gene links are inputs to GRN inference (e.g., SCENIC+ in multiome), not the GRN itself. They constrain which peaks *could* regulate which genes, but they don't tell you which TFs are active or what the regulatory logic is.
+- **Distance is a candidate, not a link.** "Peak X is within 50 kb of gene Y" is a hypothesis;
+  "peak X regulates gene Y" needs functional evidence this analysis cannot provide.
+- **Correlation here is against gene *activity*, not expression.** In scATAC-only data the gene
+  matrix is a proxy built from the same fragments as the peaks, so peak and gene signal are not
+  independent measurements. Say so; with paired multiome use real RNA (`regulation.md`).
+- **Co-accessibility is not causality.** A correlated pair can reflect co-regulation by a third
+  factor or shared cell-type structure (Failure Mode 4).
+- **Apply FDR if you threshold on significance.** Thousands of candidate edges are scored; an
+  uncorrected cutoff will pass many false positives.
+- **Linkage is a scaffold, not a GRN.** It constrains which peaks *could* regulate which genes; it
+  says nothing about which TFs are active or the regulatory logic. For a GRN use `link_tf_to_gene`
+  with motif binding (`motif_enrichment.md`) or SCENIC+ on multiome.

@@ -1,6 +1,6 @@
 # Cell-Cell Communication
 
-**Maturity: REFERENCE** — no compute subcommand; one opinionated recipe below, run in a Python script; emit a `report` dict and `print(report)` to stay grounded.
+**Maturity: REFERENCE** — no compute subcommand; one opinionated recipe below, run in a Python script; emit a `report` dict and `print(report)` to stay grounded. **`liana` 1.8.0 is already in the pinned `task1` env** — no install needed; run the script with the `scrna` interpreter.
 
 ## Goal / When to Use
 
@@ -12,15 +12,15 @@ Generate ligand-receptor interaction hypotheses between annotated cell types. Us
 
 - **Method-consensus vs. single method** — **liana `rank_aggregate`** gives a robust-rank-aggregation (RRA) consensus across multiple methods (CellPhoneDB, NATMI, Connectome, etc.), preferable to any single method for a first pass. Use a single method only when you specifically want its particular score/assumption.
 
-- **Expression-fraction filter** — filter by `expr_prop` (default 0.1) and `min_cells` per group so lowly-expressed pairs don't dominate the ranking. A ligand/receptor expressed in <10% of cells in a type is a weak signal.
+- **Expression-fraction filter** — filter by `expr_prop` (default 0.1) and `min_cells` per group (default 5) so lowly-expressed pairs don't dominate the ranking. A ligand/receptor expressed in <10% of cells in a type is a weak signal.
 
-- **Organism/resource** — choose the ligand-receptor database by organism (`consensus` resource is multi-organism and usually the default).
+- **Organism/resource** — pick the ligand-receptor database with `resource_name` (default `'consensus'`). Use `'mouseconsensus'` for mouse; `li.rs.show_resources()` lists all 17 (cellphonedb, cellchatdb, celltalkdb, …).
 
 ## Method Menu
 
-- **liana `rank_aggregate`** (consensus across CellPhoneDB, NATMI, Connectome, SingleCellSignalR, etc.) — robust default
-- **Single methods** — CellPhoneDB, NATMI, Connectome, etc. (via liana) when you want a specific score/assumption
-- **Result table** — lands in `adata.uns['liana_res']` as a DataFrame
+- **liana `rank_aggregate`** — robust default; RRA consensus over the single methods below
+- **Single methods** (`li.mt.<name>`) when you want one specific score/assumption. `li.mt.show_methods()` lists them: CellPhoneDB, Connectome, log2FC, NATMI, SingleCellSignalR, Geometric Mean, scSeqComm, CellChat
+- **Result table** — lands in `adata.uns['liana_res']` as a DataFrame (`key_added` changes the key)
 
 ## How-to
 
@@ -31,10 +31,10 @@ import liana as li
 li.mt.rank_aggregate(
     adata,
     groupby='cell_type',
-    expr_prop=0.1,       # min fraction of cells expressing L/R in each type
-    min_cells=10,        # min cells per type
-    use_raw=False,       # use normalized .X, not raw counts
-    resource='consensus' # multi-organism L-R database
+    expr_prop=0.1,             # min fraction of cells expressing L/R in each type
+    min_cells=10,              # min cells per type
+    use_raw=False,             # our canonical layout: normalized .X, no .raw
+    resource_name='consensus', # name of the built-in L-R database
 )
 
 # Inspect results
@@ -56,16 +56,18 @@ p.save('liana_top20.png')
 # Optionally pass source_labels=[...] / target_labels=[...] (lists of cell types) to subset senders/receivers.
 ```
 
-**What lands in `adata.uns['liana_res']`:**
+**What lands in `adata.uns['liana_res']`** (one row per source×target×L-R pair):
 - `source`, `target` — sender, receiver cell types
 - `ligand_complex`, `receptor_complex` — the L-R pair
 - `magnitude_rank`, `specificity_rank` — RRA consensus ranks (lower = stronger)
-- `lr_means` — mean expression of the pair
-- Method-specific scores (if you ran a single method)
+- `lr_means`, `expr_prod` — magnitude of the pair
+- **Every single method's own score, in the same table**: `cellphone_pvals`, `lrscore`, `scaled_weight`, `spec_weight`, `lr_logfc`. The consensus does not hide them — use them to see *why* a pair ranks high (Honesty, below).
 
-**Confirm exact liana symbols/kwargs against the installed version** — the API has evolved (e.g., `li.method.rank_aggregate` in older versions, `li.mt.rank_aggregate` in recent ones).
+> **`resource_name`, not `resource`.** `resource_name` takes the database *name*; `resource` takes a custom `DataFrame` with `ligand`/`receptor` columns and **overrides** `resource_name`. Passing `resource='consensus'` raises `ValueError: If 'interactions' is None, 'resource' must be a valid DataFrame with columns 'ligand' and 'receptor'`.
 
 ## Failure Modes
+
+- **`.raw is not initialized!`** — *symptom:* `ValueError` immediately, before any scoring. *Diagnosis:* liana's `use_raw` defaults to **`True`**, but our canonical layout keeps normalized values in `.X` and raw counts in `layers["counts"]`, with `.raw` unset. *Fix:* pass `use_raw=False` (as above). Do **not** "fix" it by setting `adata.raw` — liana's scores expect normalized, log-transformed expression, which is exactly what `.X` holds.
 
 - **Garbage labels in, garbage CCC out** — *symptom:* implausible sender→receiver pairs (two distant, non-interacting types dominate). *Diagnosis:* CCC is grouped by `cell_type`; wrong/over-clustered annotation corrupts every interaction. *Fix:* fix annotation first (`annotation.md`); never run CCC on `leiden` ids you have not labeled.
 - **Top hits are ambient/housekeeping genes** — *symptom:* ribosomal or ubiquitously expressed genes appear as top ligands. *Diagnosis:* ambient contamination or non-specific expression mislabeled as signaling. *Fix:* confirm QC/ambient handling; discard housekeeping pairs; cross-check the ligand is genuinely cell-type-specific.
@@ -81,15 +83,17 @@ p.save('liana_top20.png')
 Build the `report` dict **from `liana_res`** (do not hardcode numbers), then `print(report)`:
 
 ```python
+import liana as li
 top = liana_res.sort_values("magnitude_rank").head(20)
 report = {
     "method": "liana_rank_aggregate",
+    "liana_version": li.__version__,
     "groupby": "cell_type",
     "n_types": int(adata.obs["cell_type"].nunique()),
     "n_interactions": int(len(liana_res)),  # total L-R pairs tested
     "expr_prop": 0.1,
     "min_cells": 10,
-    "resource": "consensus",
+    "resource_name": "consensus",
     "top_interactions": top[
         ["source", "target", "ligand_complex", "receptor_complex", "magnitude_rank"]
     ].to_dict("records"),
@@ -97,7 +101,7 @@ report = {
 report
 ```
 
-Ground only the top-ranked interactions (source, target, L-R pair, ranks), the `expr_prop`/`min_cells` used, and the resource — these come straight from `liana_res`.
+Ground only the top-ranked interactions (source, target, L-R pair, ranks), the `expr_prop`/`min_cells` used, and the resource — these come straight from `liana_res`. Record the **resource name and liana version**: the L-R databases are curated and change between releases, so "X signals to Y" is a claim about a specific resource version.
 
 ## Honesty
 

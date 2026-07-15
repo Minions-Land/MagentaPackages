@@ -26,6 +26,10 @@ scikit-misc = "*"
 scikit-image = "*"
 pytest = ">=8.0"   # run ../omics-compute/python/tests in any analysis env
 
+[feature.singlecell.pypi-dependencies]
+decoupler = ">=2.0"   # 2.x API; conda-forge stuck at 1.x
+pydeseq2 = "*"
+
 [feature.scrna.dependencies]
 harmonypy = "*"
 scvi-tools = ">=1.1"
@@ -33,14 +37,18 @@ scvelo = "*"
 cellrank = "*"
 
 [feature.scrna.pypi-dependencies]
-decoupler = ">=2.0"   # 2.x API; conda-forge stuck at 1.x
-pydeseq2 = "*"
 liana = "*"
-pertpy = "*"
 
 [feature.spatial.dependencies]
-squidpy = ">=1.4"
+# Upper bound is load-bearing: squidpy 1.9 removes `gr.spatial_neighbors` (deprecated in favour of
+# spatial_neighbors_knn/_radius/_delaunay/_grid), which spatial_stats/domains/neighborhood_detection
+# all build their graph with. Floor is 1.8 because `gr.calculate_niche` does not exist in 1.4-1.7.
+# Locked at 1.8.1. Lifting either bound means migrating those three docs first.
+squidpy = ">=1.8,<1.9"
 spatialdata = "*"
+# Declared explicitly although conda-forge squidpy currently pulls it as a run-dep: viz_2d_3d.md's
+# SpatialData path depends on it, and a transitive dep is not a contract.
+spatialdata-plot = "*"
 
 [feature.scatac.dependencies]
 macs3 = "*"

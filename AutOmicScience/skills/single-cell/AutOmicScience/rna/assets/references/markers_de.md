@@ -95,8 +95,7 @@ meta = adata.obs[[SAMPLE, COND]].drop_duplicates().set_index(SAMPLE).loc[samples
 pb = pb.loc[:, (pb > 0).sum(axis=0) >= 3]
 
 # 4. Negative-binomial GLM with dispersion shrinkage
-dds = DeseqDataSet(counts=pb, metadata=meta, design_factors=COND)
-#    NOTE: PyDESeq2 >=0.4 replaces design_factors=COND with design="~condition".
+dds = DeseqDataSet(counts=pb, metadata=meta, design=f"~{COND}")   # formulaic formula
 dds.deseq2()
 res = DeseqStats(dds, contrast=[COND, "treated", "control"])   # treated vs control
 res.summary()
@@ -116,6 +115,10 @@ print(report)  # print a report dict with the numbers
 Emit the trailing `report` dict and `print(report)` so the DE result is grounded — the same contract READY subcommands satisfy via their report.
 
 Contrast direction: `[COND, "treated", "control"]` reports treated relative to control, so positive `log2FoldChange` = up in treated. State the direction in every claim.
+
+### Downstream — enrichment on this DE result
+
+To ask whether a signature is over-represented among these DE genes, do **not** hand the gene list to the `enrichment` subcommand: it tests against the *resource's* gene universe, while the correct denominator here is the genes DESeq2 actually tested — `n_genes_tested` above (after independent filtering), never the genome. See **`functional.md` §2b** for the hypergeometric with the right universe, and run the up- and down-regulated sets separately.
 
 ### Alternatives
 

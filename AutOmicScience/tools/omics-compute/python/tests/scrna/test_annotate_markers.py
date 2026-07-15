@@ -345,3 +345,45 @@ def test_annotation_details_structure(adata_with_clusters, mock_markers, simple_
             assert "score" in score_info
             assert "n_overlap" in score_info
             assert "overlapping_genes" in score_info
+
+
+# --- Regressions for audited defects R02 (numeric clusters) and R03 (cluster universe) ---
+
+def test_r02_numeric_categorical_clusters_map():
+    from aose_omics_runtime.scrna.annotate_markers import annotate_markers
+    markers = pd.DataFrame({"group": ["0", "1"], "names": ["CD3D", "MS4A1"]})
+    a = AnnData(np.zeros((4, 2)))
+    a.obs["leiden"] = pd.Categorical([0, 0, 1, 1])  # numeric-typed categories
+    ref = {"Tcell": ["CD3D"], "Bcell": ["MS4A1"]}
+    _, report = annotate_markers(a, markers, reference_db=ref, cluster_key="leiden",
+                                 min_score=0.0, min_overlap=1)
+    assert report["cluster_to_celltype"]["0"] == "Tcell"
+    assert report["cluster_to_celltype"]["1"] == "Bcell"
+
+
+def test_r03_cluster_without_markers_still_reported():
+    from aose_omics_runtime.scrna.annotate_markers import annotate_markers
+    markers = pd.DataFrame({"group": ["0", "1"], "names": ["CD3D", "MS4A1"]})  # no cluster 2
+    a = AnnData(np.zeros((6, 2)))
+    a.obs["leiden"] = pd.Categorical(["0", "1", "2", "0", "1", "2"])
+    ref = {"Tcell": ["CD3D"], "Bcell": ["MS4A1"]}
+    _, report = annotate_markers(a, markers, reference_db=ref, cluster_key="leiden",
+                                 min_score=0.0, min_overlap=1)
+    assert report["n_clusters"] == 3
+    assert "2" in report["cluster_to_celltype"]
+    assert "reason" in report["annotation_details"]["2"]
+
+
+def test_r04_summary_surfaces_sub_threshold_raw_evidence():
+    # A weak-but-real hit must not read as "no overlap" (0/0) in the reviewer text.
+    from aose_omics_runtime.scrna.annotate_markers import annotate_markers, format_annotation_summary
+    markers = pd.DataFrame({"group": ["0"], "names": ["CD3D"]})
+    a = AnnData(np.zeros((2, 2)))
+    a.obs["leiden"] = pd.Categorical(["0", "0"])
+    ref = {"T cell": ["CD3D", "CD3E", "CD3G"]}
+    _, report = annotate_markers(a, markers, reference_db=ref, cluster_key="leiden",
+                                 min_score=0.0, min_overlap=3)   # overlap 1 < 3 -> Unknown
+    details = report["annotation_details"]["0"]
+    assert details["best_overlap"] == 0 and details["raw_best_overlap"] == 1
+    text = format_annotation_summary(report)
+    assert "strongest raw evidence" in text and "T cell" in text

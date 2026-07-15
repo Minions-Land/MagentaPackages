@@ -1,13 +1,18 @@
 # Contig preprocessing & BCR analysis with dandelion
 
+**Maturity: PARTIAL** — `sc-dandelion` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 dandelion owns the **upstream** of single-cell repertoire work that scirpy does not: reannotating
 raw 10x V(D)J contigs to IMGT-numbered AIRR, contig QC, and BCR-specific biology (somatic
-hypermutation, isotype, germline, lineage). Set the mature backend once:
+hypermutation, isotype, germline, lineage).
 
 ```python
 import dandelion as ddl
-ddl.set_backend("base")     # default is auto→polars; "base" (pandas) is the mature backend
 ```
+
+> There is **no backend to select**. `ddl.set_backend()` does not exist in 0.5.7, in the 1.0.0a0
+> pre-release, or on master (0 hits), and there is no polars backend — master's polars lines are all
+> commented out. Calling it raises `AttributeError` on line 2.
 
 ## 1. Reannotate raw 10x contigs
 
@@ -50,7 +55,9 @@ vdj, adata = ddl.pp.check_contigs(vdj, adata)                    # QC: flags `am
 
 Readers: `ddl.read_airr` (AIRR tsv), `ddl.read_10x_vdj` (raw 10x csv/json), `ddl.read_10x_airr`
 (CellRanger `airr_rearrangement.tsv`), `ddl.read_h5ddl` (native). Merge samples with `ddl.concat([...])`.
-**Use `check_contigs`, not `filter_contigs`** (the latter was removed from the current API).
+**Use `check_contigs`, not `filter_contigs`** — because it is the better filter, *not* because the old one
+is gone: `filter_contigs` is still exported and undeprecated in the released 0.5.7 (it disappears only in
+unreleased master), so "removed from the current API" would be a wrong reason for a right call.
 
 ## 3. BCR-specific analysis (dandelion's differentiators)
 
@@ -71,8 +78,8 @@ ddl.pp.calculate_threshold(vdj)                                  # SHazaM distTo
 ## 4. Hand off to scirpy (or stay in dandelion)
 
 ```python
-mdata = ddl.tl.to_scirpy(vdj, to_mudata=True, gex_adata=adata)   # MuData .mod['gex']/.mod['airr']
-# or to_mudata=False -> AnnData with .obsm["airr"]; reverse: ddl.tl.from_scirpy(mdata)
+mdata = ddl.to_scirpy(vdj, to_mudata=True, gex_adata=adata)   # MuData .mod['gex']/.mod['airr']
+# or to_mudata=False -> AnnData with .obsm["airr"]; reverse: ddl.from_scirpy(mdata)
 ```
 
 ## What needs the container/external tools vs pure-Python

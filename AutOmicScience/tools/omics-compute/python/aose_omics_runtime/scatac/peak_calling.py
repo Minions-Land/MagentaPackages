@@ -1,581 +1,198 @@
-"""Peak calling wrapper for scATAC-seq."""
+"""Peak calling for scATAC-seq (snapATAC2 macs3 + merge_peaks)."""
 
 import json
-import subprocess
-import tempfile
 from datetime import datetime, UTC
 from pathlib import Path
-import numpy as np
-import pandas as pd
+
 import anndata as ad
+import pandas as pd
+import snapatac2 as snap
+
+from ..shared.io import save_h5ad, atomic_write
+from . import _snap
+
+_ALGORITHM = "snapatac2.tl.macs3"
+_BED_COLUMNS = ["chr", "start", "end", "name", "score"]
 
 
 def run_peak_calling(args):
-    """
-    Call peaks for scATAC-seq data using statistical peak detection.
+    """Call peaks with snapATAC2's MACS3 driver, in bulk or per cluster.
 
-    Supports:
-    - Per-cluster peak calling (pseudobulk)
-    - Single-cell peak calling
-    - Consensus peak generation
-    - Peak annotation
+    Bulk pools every cell into one pileup. Pseudobulk calls peaks within each
+    ``cluster-column`` group and reconciles them with ``snapatac2.tl.merge_peaks``,
+    whose iterative-overlap procedure yields a fixed-width, non-overlapping union —
+    a rare cluster's peaks survive instead of being absorbed by an abundant one.
+    Fails loud when no peaks are produced rather than emitting an empty "success".
 
     Args:
-        args: Argparse namespace with parameters
+        args: Argparse namespace with parameters.
 
     Returns:
-        dict: Result with peak locations, evidence metadata, and provenance
+        dict: Result with peak locations, evidence metadata, and provenance.
     """
     start_time = datetime.now(UTC)
 
-    # Load input data
     adata = ad.read_h5ad(args.adata)
-    input_shape = adata.shape
+    _snap.require_fragments(adata, "peak_calling")
 
-    # Determine calling mode
-    if args.mode == 'pseudobulk' and args.cluster_column:
-        peaks_df = call_peaks_pseudobulk(
-            adata,
-            fragment_file=args.fragment_file,
-            cluster_column=args.cluster_column,
-            genome=args.genome,
-            qvalue=args.qvalue,
-            min_length=args.min_length,
-            max_gap=args.max_gap,
-            keep_duplicates=args.keep_duplicates,
-            shift=args.shift,
-            extsize=args.extsize,
-            outdir=args.outdir
-        )
-    elif args.mode == 'consensus':
-        peaks_df = call_peaks_consensus(
-            adata,
-            fragment_file=args.fragment_file,
-            genome=args.genome,
-            qvalue=args.qvalue,
-            min_length=args.min_length,
-            max_gap=args.max_gap,
-            min_cell_overlap=args.min_cell_overlap,
-            outdir=args.outdir
-        )
+    missing_clusters = []
+    if args.mode == "pseudobulk":
+        if not args.cluster_column:
+            raise ValueError(
+                "pseudobulk mode requires --cluster-column (the obs column with cluster "
+                "labels); refusing to silently fall back to bulk peak calling."
+            )
+        if args.cluster_column not in adata.obs:
+            raise ValueError(
+                f"--cluster-column {args.cluster_column!r} is not in obs "
+                f"(available: {sorted(adata.obs.columns)[:10]})"
+            )
+        requested = {str(v) for v in pd.unique(adata.obs[args.cluster_column])}
+        with _snap.preserved_tempdir():
+            per_group = snap.tl.macs3(
+                adata, groupby=args.cluster_column, qvalue=args.qvalue,
+                min_len=args.min_length, inplace=False, n_jobs=args.n_jobs,
+            )
+        missing_clusters = sorted(requested - {str(k) for k in per_group})
+        merged = snap.tl.merge_peaks(per_group, _snap.chrom_sizes(adata), half_width=args.half_width)
+        peaks_df = _bed_from_merged(merged)
+        group_columns = [c for c in merged.columns if c != "Peaks"]
     else:
-        peaks_df = call_peaks_bulk(
-            adata,
-            fragment_file=args.fragment_file,
-            genome=args.genome,
-            qvalue=args.qvalue,
-            min_length=args.min_length,
-            max_gap=args.max_gap,
-            keep_duplicates=args.keep_duplicates,
-            shift=args.shift,
-            extsize=args.extsize,
-            outdir=args.outdir
+        with _snap.preserved_tempdir():
+            called = snap.tl.macs3(
+                adata, groupby=None, qvalue=args.qvalue, min_len=args.min_length, inplace=False,
+            )
+        peaks_df = _bed_from_macs3(called)
+        group_columns = []
+
+    if len(peaks_df) == 0:
+        raise RuntimeError(
+            "Peak calling produced zero peaks; refusing to report success with an empty peak "
+            "set. Check the fragment file, the q-value and min-length parameters, and that "
+            "the retained cells carry enough fragments."
         )
 
-    # Save peak file
     peak_file = Path(args.output)
-    peaks_df.to_csv(peak_file, sep='\t', index=False, header=False)
+    atomic_write(peak_file, lambda tmp: peaks_df.to_csv(tmp, sep="\t", index=False, header=False))
 
-    # Create peak x cell accessibility matrix if requested
-    if args.create_matrix:
-        peak_matrix = create_peak_matrix(
-            adata,
-            peaks_df,
-            fragment_file=args.fragment_file
-        )
-
-        # Create new AnnData with peak matrix
-        peak_adata = ad.AnnData(
-            X=peak_matrix,
-            obs=adata.obs.copy(),
-            var=pd.DataFrame(index=[f"{r['chr']}:{r['start']}-{r['end']}" for _, r in peaks_df.iterrows()])
-        )
-        peak_adata.var['chr'] = peaks_df['chr'].values
-        peak_adata.var['start'] = peaks_df['start'].values
-        peak_adata.var['end'] = peaks_df['end'].values
-        if 'name' in peaks_df.columns:
-            peak_adata.var['name'] = peaks_df['name'].values
-        if 'score' in peaks_df.columns:
-            peak_adata.var['score'] = peaks_df['score'].values
-
-        # Save matrix
-        matrix_file = str(peak_file).replace('.bed', '_matrix.h5ad')
-        peak_adata.write_h5ad(matrix_file, compression='gzip')
-        output_path = Path(matrix_file).resolve()
-    else:
-        output_path = peak_file.resolve()
-
-    # Compute peak statistics
+    widths = peaks_df["end"].sub(peaks_df["start"])
     peak_stats = {
-        'n_peaks': len(peaks_df),
-        'mean_width': int(peaks_df['end'].sub(peaks_df['start']).mean()),
-        'median_width': int(peaks_df['end'].sub(peaks_df['start']).median()),
-        'total_bp': int(peaks_df['end'].sub(peaks_df['start']).sum()),
+        "n_peaks": int(len(peaks_df)),
+        "mean_width": int(widths.mean()),
+        "median_width": int(widths.median()),
+        "total_bp": int(widths.sum()),
+        "chr_distribution": {
+            str(k): int(v) for k, v in list(peaks_df["chr"].value_counts().items())[:10]
+        },
+    }
+    if peaks_df["score"].notna().any():
+        peak_stats["mean_score"] = float(peaks_df["score"].mean())
+        peak_stats["median_score"] = float(peaks_df["score"].median())
+
+    metadata = {
+        "algorithm": _ALGORITHM,
+        "snapatac2_version": snap.__version__,
+        "mode": args.mode,
+        "qvalue": args.qvalue,
+        "min_length": args.min_length,
+        "half_width": args.half_width if args.mode == "pseudobulk" else None,
+        "cluster_column": args.cluster_column if args.mode == "pseudobulk" else None,
+        "n_peaks": int(len(peaks_df)),
+        "missing_clusters": missing_clusters,
+        "peak_file": str(peak_file),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
-    if 'score' in peaks_df.columns:
-        peak_stats['mean_score'] = float(peaks_df['score'].mean())
-        peak_stats['median_score'] = float(peaks_df['score'].median())
-
-    # Chromosome distribution
-    chr_counts = peaks_df['chr'].value_counts().to_dict()
-    peak_stats['chr_distribution'] = {str(k): int(v) for k, v in list(chr_counts.items())[:10]}
-
-    # Store metadata
-    adata.uns['peak_calling'] = {
-        'mode': args.mode,
-        'genome': args.genome,
-        'qvalue': args.qvalue,
-        'n_peaks': len(peaks_df),
-        'peak_file': str(peak_file),
-        'timestamp': datetime.now(UTC).isoformat(),
-    }
+    if args.create_matrix:
+        peak_adata = snap.pp.make_peak_matrix(
+            adata, use_rep=peaks_df["name"].tolist(), file=None,
+            counting_strategy=args.counting_strategy,
+        )
+        for column in group_columns:
+            peak_adata.var[column] = merged[column].to_list()
+        peak_adata.uns["peak_calling"] = metadata
+        save_meta = save_h5ad(adata=peak_adata, path=f"{peak_file.with_suffix('')}_matrix.h5ad")
+        output_path = save_meta["path"]
+    else:
+        output_path = str(peak_file.resolve())
 
     end_time = datetime.now(UTC)
     elapsed_ms = int((end_time - start_time).total_seconds() * 1000)
 
-    # Build evidence record
     evidence = {
-        "source": "peak calling pipeline",
+        "source": f"Peak calling ({_ALGORITHM}, snapATAC2 {snap.__version__})",
         "source_type": "computation",
         "query": f"{args.mode} peak calling",
-        "description": f"Called {len(peaks_df)} peaks using peak calling algorithm (qvalue={args.qvalue})",
+        "description": (
+            f"Called {len(peaks_df)} peaks with {_ALGORITHM} (mode={args.mode}, "
+            f"qvalue={args.qvalue})"
+        ),
         "timestamp": end_time.isoformat(),
         "metadata": {
-            "mode": args.mode,
-            "genome": args.genome,
-            "n_peaks": len(peaks_df),
-            "qvalue_cutoff": args.qvalue,
-            "peak_stats": peak_stats,
-        }
+            "algorithm": _ALGORITHM, "snapatac2_version": snap.__version__,
+            "mode": args.mode, "n_peaks": int(len(peaks_df)),
+            "qvalue_cutoff": args.qvalue, "peak_stats": peak_stats,
+        },
     }
-
-    # Build trace step
     trace = {
         "tool": "bio_atac_peak_calling",
         "status": "success",
-        "input": {
-            "adata": args.adata,
-            "fragment_file": args.fragment_file,
-            "mode": args.mode,
-        },
-        "output": {
-            "n_peaks": len(peaks_df),
-            "output_file": str(output_path),
-        },
+        "input": {"adata": args.adata, "mode": args.mode,
+                  "cluster_column": args.cluster_column},
+        "output": {"n_peaks": int(len(peaks_df)), "output_file": output_path},
         "duration_ms": elapsed_ms,
         "timestamp": end_time.isoformat(),
     }
-
-    # Build result
-    result = {
+    return {
         "success": True,
-        "output": str(output_path),
+        "output": output_path,
         "peak_file": str(peak_file),
-        "n_peaks": len(peaks_df),
+        "n_peaks": int(len(peaks_df)),
         "mode": args.mode,
-        "genome": args.genome,
+        "algorithm": _ALGORITHM,
+        "snapatac2_version": snap.__version__,
+        "missing_clusters": missing_clusters,
         "peak_stats": peak_stats,
         "evidence": [evidence],
         "trace": [trace],
         "elapsed_ms": elapsed_ms,
     }
 
-    return result
+
+def _bed_from_macs3(called):
+    """BED frame from a MACS3 narrowPeak-style result (bulk mode, variable width)."""
+    df = called.to_pandas()
+    out = pd.DataFrame({
+        "chr": df["chrom"].astype(str),
+        "start": df["start"].astype(int),
+        "end": df["end"].astype(int),
+        "score": df["score"],
+    })
+    out["name"] = out["chr"] + ":" + out["start"].astype(str) + "-" + out["end"].astype(str)
+    return out[_BED_COLUMNS]
 
 
-def call_peaks_bulk(adata, fragment_file, genome='hs', qvalue=0.05,
-                    min_length=200, max_gap=300, keep_duplicates='auto',
-                    shift=-100, extsize=200, outdir=None):
-    """
-    Call peaks on all cells together (bulk mode).
-
-    Args:
-        adata: AnnData object
-        fragment_file: Path to fragment file
-        genome: Genome build (hs, mm, etc.)
-        qvalue: Q-value cutoff
-        min_length: Minimum peak length
-        max_gap: Maximum gap between peaks
-        keep_duplicates: How to handle duplicate reads
-        shift: Read shift
-        extsize: Extension size
-        outdir: Output directory
-
-    Returns:
-        pd.DataFrame: Peak regions (chr, start, end, name, score)
-    """
-    if outdir is None:
-        outdir = tempfile.mkdtemp(prefix='macs3_')
-
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    # Prepare peak calling command
-    cmd = [
-        'macs3', 'callpeak',
-        '-t', fragment_file,
-        '-f', 'BED',
-        '-g', genome,
-        '-q', str(qvalue),
-        '--nomodel',
-        '--shift', str(shift),
-        '--extsize', str(extsize),
-        '--keep-dup', str(keep_duplicates),
-        '-n', 'bulk',
-        '--outdir', str(outdir),
-    ]
-
-    try:
-        # Run peak calling
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=600,
-            check=True
+def _bed_from_merged(merged):
+    """BED frame from merge_peaks, whose 'Peaks' column holds 'chrom:start-end' strings."""
+    peaks = merged["Peaks"].to_list()
+    coords = pd.Series(peaks, dtype=str).str.extract(r"^(?P<chr>.+):(?P<start>\d+)-(?P<end>\d+)$")
+    if coords.isna().any().any():
+        raise ValueError(
+            f"merge_peaks returned peak ids this reader cannot parse (first: {peaks[:3]}); "
+            "expected 'chrom:start-end'."
         )
-
-        # Parse narrowPeak file
-        peak_file = outdir / 'bulk_peaks.narrowPeak'
-        if not peak_file.exists():
-            raise RuntimeError(
-                f"Peak calling produced no output file: {peak_file} "
-                "(macs3 ran but emitted no peaks — check input/params)."
-            )
-
-        peaks_df = pd.read_csv(
-            peak_file,
-            sep='\t',
-            header=None,
-            names=['chr', 'start', 'end', 'name', 'score', 'strand', 'signalValue', 'pValue', 'qValue', 'peak']
-        )
-
-        # Filter by length
-        peak_widths = peaks_df['end'] - peaks_df['start']
-        peaks_df = peaks_df[peak_widths >= min_length].reset_index(drop=True)
-
-        return peaks_df[['chr', 'start', 'end', 'name', 'score']]
-
-    except subprocess.TimeoutExpired:
-        raise RuntimeError("Peak calling timed out after 10 minutes")
-    except subprocess.CalledProcessError as e:
-        raise RuntimeError(f"Peak calling failed: {e.stderr}")
-    except FileNotFoundError as e:
-        raise RuntimeError(
-            "Peak caller (MACS2/MACS3) not found on PATH. Install it (e.g. `pip install macs3`) "
-            "or supply a precomputed peak set; refusing to fabricate peaks."
-        ) from e
-
-
-def call_peaks_pseudobulk(adata, fragment_file, cluster_column, genome='hs',
-                          qvalue=0.05, min_length=200, max_gap=300,
-                          keep_duplicates='auto', shift=-100, extsize=200,
-                          outdir=None):
-    """
-    Call peaks per cluster using pseudobulk aggregation.
-
-    Args:
-        adata: AnnData object
-        fragment_file: Path to fragment file
-        cluster_column: Column with cluster labels
-        genome: Genome build
-        qvalue: Q-value cutoff
-        min_length: Minimum peak length
-        max_gap: Maximum gap
-        keep_duplicates: Duplicate handling
-        shift: Read shift
-        extsize: Extension size
-        outdir: Output directory
-
-    Returns:
-        pd.DataFrame: Union of all cluster peaks
-    """
-    if cluster_column not in adata.obs.columns:
-        raise ValueError(f"Cluster column '{cluster_column}' not found in adata.obs")
-
-    if outdir is None:
-        outdir = tempfile.mkdtemp(prefix='macs3_pseudobulk_')
-
-    outdir = Path(outdir)
-    outdir.mkdir(parents=True, exist_ok=True)
-
-    clusters = adata.obs[cluster_column].unique()
-    all_peaks = []
-
-    for cluster in clusters:
-        print(f"Calling peaks for cluster {cluster}...")
-
-        # Get cells in this cluster
-        cluster_cells = adata.obs_names[adata.obs[cluster_column] == cluster]
-
-        # Create cluster-specific fragment file
-        cluster_fragment_file = outdir / f'fragments_cluster_{cluster}.bed'
-        filter_fragments_by_cells(fragment_file, cluster_cells, cluster_fragment_file)
-
-        # Call peaks for this cluster
-        try:
-            cluster_peaks = call_peaks_bulk(
-                adata,
-                fragment_file=str(cluster_fragment_file),
-                genome=genome,
-                qvalue=qvalue,
-                min_length=min_length,
-                max_gap=max_gap,
-                keep_duplicates=keep_duplicates,
-                shift=shift,
-                extsize=extsize,
-                outdir=outdir / f'cluster_{cluster}'
-            )
-            cluster_peaks['cluster'] = cluster
-            all_peaks.append(cluster_peaks)
-        except Exception as e:
-            print(f"Warning: Peak calling failed for cluster {cluster}: {e}")
-            continue
-
-    if not all_peaks:
-        raise RuntimeError("No peaks called for any cluster")
-
-    # Merge all peaks
-    merged_peaks = pd.concat(all_peaks, ignore_index=True)
-
-    # Create union of overlapping peaks
-    union_peaks = merge_overlapping_peaks(merged_peaks, max_gap=max_gap)
-
-    return union_peaks
-
-
-def call_peaks_consensus(adata, fragment_file, genome='hs', qvalue=0.05,
-                         min_length=200, max_gap=300, min_cell_overlap=2,
-                         outdir=None):
-    """
-    Call consensus peaks across multiple replicates or conditions.
-
-    Args:
-        adata: AnnData object
-        fragment_file: Path to fragment file
-        genome: Genome build
-        qvalue: Q-value cutoff
-        min_length: Minimum peak length
-        max_gap: Maximum gap
-        min_cell_overlap: Minimum number of cells/samples with peak
-        outdir: Output directory
-
-    Returns:
-        pd.DataFrame: Consensus peaks
-    """
-    # For now, just call bulk peaks and filter by reproducibility
-    peaks_df = call_peaks_bulk(
-        adata,
-        fragment_file=fragment_file,
-        genome=genome,
-        qvalue=qvalue,
-        min_length=min_length,
-        max_gap=max_gap,
-        outdir=outdir
-    )
-
-    # In real implementation, would require peaks to appear in multiple replicates
-    # For now, return all peaks
-    return peaks_df
-
-
-def filter_fragments_by_cells(fragment_file, cell_barcodes, output_file):
-    """
-    Filter fragment file to only include specified cells.
-
-    Args:
-        fragment_file: Input fragment file
-        cell_barcodes: Set of cell barcodes to keep
-        output_file: Output filtered fragment file
-    """
-    cell_set = set(cell_barcodes)
-
-    with open(fragment_file, 'r') as f_in, open(output_file, 'w') as f_out:
-        for line in f_in:
-            if line.startswith('#'):
-                f_out.write(line)
-                continue
-            parts = line.strip().split('\t')
-            if len(parts) >= 4 and parts[3] in cell_set:
-                f_out.write(line)
-
-
-def merge_overlapping_peaks(peaks_df, max_gap=300):
-    """
-    Merge overlapping peaks into union peaks.
-
-    Args:
-        peaks_df: DataFrame with peak regions
-        max_gap: Maximum gap to merge
-
-    Returns:
-        pd.DataFrame: Merged peaks
-    """
-    # Sort by chromosome and position
-    peaks_df = peaks_df.sort_values(['chr', 'start']).reset_index(drop=True)
-
-    merged = []
-    current_chr = None
-    current_start = None
-    current_end = None
-    current_score = 0
-    peak_count = 0
-
-    for _, row in peaks_df.iterrows():
-        if current_chr != row['chr'] or (current_end is not None and row['start'] > current_end + max_gap):
-            # Save current peak
-            if current_chr is not None:
-                merged.append({
-                    'chr': current_chr,
-                    'start': current_start,
-                    'end': current_end,
-                    'name': f'peak_{len(merged)+1}',
-                    'score': current_score / peak_count if peak_count > 0 else 0
-                })
-            # Start new peak
-            current_chr = row['chr']
-            current_start = row['start']
-            current_end = row['end']
-            current_score = row.get('score', 0)
-            peak_count = 1
-        else:
-            # Extend current peak
-            current_end = max(current_end, row['end'])
-            current_score += row.get('score', 0)
-            peak_count += 1
-
-    # Save last peak
-    if current_chr is not None:
-        merged.append({
-            'chr': current_chr,
-            'start': current_start,
-            'end': current_end,
-            'name': f'peak_{len(merged)+1}',
-            'score': current_score / peak_count if peak_count > 0 else 0
-        })
-
-    return pd.DataFrame(merged)
-
-
-def create_peak_matrix(adata, peaks_df, fragment_file):
-    """
-    Create peak x cell accessibility matrix.
-
-    Args:
-        adata: AnnData object
-        peaks_df: DataFrame with peak regions
-        fragment_file: Path to fragment file
-
-    Returns:
-        scipy.sparse matrix: Peak x cell counts
-    """
-    from scipy.sparse import lil_matrix
-
-    n_peaks = len(peaks_df)
-    n_cells = adata.n_obs
-
-    # Initialize sparse matrix
-    matrix = lil_matrix((n_cells, n_peaks), dtype=np.int32)
-
-    # Build cell and peak indices
-    cell_to_idx = {cell: i for i, cell in enumerate(adata.obs_names)}
-
-    # For each fragment, check if it overlaps any peak
-    try:
-        with open(fragment_file, 'r') as f:
-            for line in f:
-                if line.startswith('#'):
-                    continue
-                parts = line.strip().split('\t')
-                if len(parts) < 4:
-                    continue
-
-                chrom, start, end, cell_id = parts[:4]
-                start, end = int(start), int(end)
-
-                if cell_id not in cell_to_idx:
-                    continue
-
-                cell_idx = cell_to_idx[cell_id]
-
-                # Find overlapping peaks
-                chr_peaks = peaks_df[peaks_df['chr'] == chrom]
-                for peak_idx, peak in chr_peaks.iterrows():
-                    if start < peak['end'] and end > peak['start']:
-                        # Fragment overlaps peak
-                        peak_pos = peaks_df.index.get_loc(peak_idx)
-                        matrix[cell_idx, peak_pos] += 1
-
-    except Exception as e:
-        raise RuntimeError(
-            f"Failed to create the peak-by-cell count matrix: {e}. Refusing to substitute a "
-            "random matrix; fix the inputs."
-        ) from e
-
-    return matrix.tocsr()
-
-
-def generate_simulated_peaks(n_peaks=50000, genome_size=3e9):
-    """
-    Generate simulated peak regions for testing.
-
-    Args:
-        n_peaks: Number of peaks to generate
-        genome_size: Total genome size
-
-    Returns:
-        pd.DataFrame: Simulated peaks
-    """
-    chromosomes = [f'chr{i}' for i in range(1, 23)] + ['chrX', 'chrY']
-
-    peaks = []
-    for i in range(n_peaks):
-        chr_name = np.random.choice(chromosomes)
-        start = np.random.randint(0, int(genome_size / len(chromosomes)))
-        width = np.random.randint(200, 2000)
-        end = start + width
-        score = np.random.randint(50, 1000)
-
-        peaks.append({
-            'chr': chr_name,
-            'start': start,
-            'end': end,
-            'name': f'peak_{i+1}',
-            'score': score
-        })
-
-    return pd.DataFrame(peaks).sort_values(['chr', 'start']).reset_index(drop=True)
+    out = pd.DataFrame({
+        "chr": coords["chr"],
+        "start": coords["start"].astype(int),
+        "end": coords["end"].astype(int),
+        "name": peaks,
+        "score": pd.NA,
+    })
+    return out[_BED_COLUMNS]
 
 
 def main(args):
-    """CLI entry for peak_calling subcommand."""
-    import json
-
+    """CLI entry: run peak calling and print the report as strict JSON."""
     result = run_peak_calling(args)
-
-    # Print summary
-    print(json.dumps(result, indent=2))
-
-
-if __name__ == '__main__':
-    import argparse
-    parser = argparse.ArgumentParser(description='Peak calling for scATAC-seq')
-    parser.add_argument('--adata', required=True, help='Input h5ad file')
-    parser.add_argument('--output', required=True, help='Output peak BED file')
-    parser.add_argument('--fragment-file', required=True, help='Fragment file')
-    parser.add_argument('--mode', default='bulk', choices=['bulk', 'pseudobulk', 'consensus'],
-                        help='Peak calling mode')
-    parser.add_argument('--cluster-column', help='Cluster column for pseudobulk mode')
-    parser.add_argument('--genome', default='hs', help='Genome build (hs, mm, etc.)')
-    parser.add_argument('--qvalue', type=float, default=0.05, help='Q-value cutoff')
-    parser.add_argument('--min-length', type=int, default=200, help='Minimum peak length')
-    parser.add_argument('--max-gap', type=int, default=300, help='Maximum gap between peaks')
-    parser.add_argument('--keep-duplicates', default='auto', help='Duplicate handling')
-    parser.add_argument('--shift', type=int, default=-100, help='Read shift')
-    parser.add_argument('--extsize', type=int, default=200, help='Extension size')
-    parser.add_argument('--outdir', help='Output directory for intermediate files')
-    parser.add_argument('--create-matrix', action='store_true', help='Create peak x cell matrix')
-    parser.add_argument('--min-cell-overlap', type=int, default=2, help='Min cells for consensus peaks')
-    args = parser.parse_args()
-    main(args)
+    print(json.dumps(result, indent=2, allow_nan=False))
+    return result

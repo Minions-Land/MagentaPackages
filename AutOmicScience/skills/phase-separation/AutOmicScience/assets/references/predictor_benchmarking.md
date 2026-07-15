@@ -1,5 +1,7 @@
 # Benchmarking phase-separation predictors (ROC-AUC)
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Goal: quantify how well each phase-separation predictor separates a positive set (condensate /
 PS proteins) from a negative set, fairly and per-mechanism.
 

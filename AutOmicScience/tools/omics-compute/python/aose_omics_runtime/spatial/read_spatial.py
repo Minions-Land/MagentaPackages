@@ -25,6 +25,76 @@ from ..shared.conventions import (
     OBSM_SPATIAL,
     OBS_BATCH,
 )
+from ..shared.io import save_h5ad
+
+
+def _validate_coords(coords, source):
+    """Require spatial coordinates to be a finite numeric (n_obs, 2) array."""
+    arr = np.asarray(coords)
+    if arr.ndim != 2 or arr.shape[1] != 2:
+        raise ValueError(f"{source}: spatial coordinates must be 2D (n_obs, 2), got shape {arr.shape}")
+    if not np.issubdtype(arr.dtype, np.number):
+        raise ValueError(f"{source}: spatial coordinates must be numeric, got dtype {arr.dtype}")
+    if not np.all(np.isfinite(arr)):
+        raise ValueError(f"{source}: spatial coordinates contain non-finite values (NaN/Inf)")
+
+
+def _align_by_ids(adata, meta_df, source, min_overlap=0.5):
+    """Align a count matrix and a metadata table by cell ID.
+
+    Reports overlap/dropped counts and fails loud on duplicate IDs, zero overlap,
+    or an overlap rate below ``min_overlap`` — rather than silently truncating to
+    the shared subset. Returns (aligned_adata, aligned_meta, overlap_report).
+    """
+    n_counts, n_meta = adata.n_obs, len(meta_df)
+    if adata.obs_names.duplicated().any():
+        raise ValueError(f"{source}: duplicate cell IDs in the count matrix")
+    if meta_df.index.duplicated().any():
+        raise ValueError(f"{source}: duplicate cell IDs in the metadata table")
+
+    common = adata.obs_names.intersection(meta_df.index)
+    n_common = len(common)
+    denom = max(n_counts, n_meta, 1)
+    overlap_rate = n_common / denom
+    if n_common == 0:
+        raise ValueError(
+            f"{source}: no matching cell IDs between count matrix ({n_counts}) and metadata "
+            f"({n_meta}). Check ID conventions.\n  counts sample: {adata.obs_names[:5].tolist()}\n"
+            f"  metadata sample: {meta_df.index[:5].tolist()}"
+        )
+    if overlap_rate < min_overlap:
+        raise ValueError(
+            f"{source}: only {n_common}/{denom} cell IDs overlap (rate {overlap_rate:.2f} < "
+            f"{min_overlap}); count matrix and metadata are largely disjoint. Refusing to "
+            "silently truncate to the shared subset."
+        )
+    report = {
+        "n_counts_cells": n_counts,
+        "n_metadata_cells": n_meta,
+        "n_common_cells": n_common,
+        "n_dropped_counts": n_counts - n_common,
+        "n_dropped_metadata": n_meta - n_common,
+        "overlap_rate": round(float(overlap_rate), 4),
+    }
+    return adata[common, :].copy(), meta_df.loc[common], report
+
+
+def _has_image_payload(uns):
+    """True if uns['spatial'] holds a real image for at least one library.
+
+    Requires a non-None image under some resolution key — a bare 'spatial' key, an
+    empty dict, or ``{'hires': None}`` is metadata only, not an image.
+    """
+    sp = uns.get("spatial")
+    if not isinstance(sp, dict) or not sp:
+        return False
+    for lib in sp.values():
+        if not isinstance(lib, dict):
+            continue
+        images = lib.get("images")
+        if isinstance(images, dict) and any(img is not None for img in images.values()):
+            return True
+    return False
 
 
 def load_visium(
@@ -47,7 +117,7 @@ def load_visium(
 
     Returns:
         (adata, report) where adata contains:
-            - X: normalized gene expression
+            - X: raw gene expression counts (not normalized)
             - layers["counts"]: raw count matrix
             - obsm["spatial"]: spot coordinates (array of shape [n_spots, 2])
             - obs: spot metadata (in_tissue, array_row, array_col)
@@ -102,26 +172,16 @@ def load_visium(
         adata.layers[LAYER_COUNTS] = adata.X.copy()
 
     # Ensure spatial coordinates are in obsm["spatial"]
-    # scanpy puts them in uns["spatial"][library_id]["images"]
     if OBSM_SPATIAL not in adata.obsm:
-        if "spatial" in adata.uns and library_id in adata.uns["spatial"]:
-            spatial_key = adata.uns["spatial"][library_id]
-            if "spatial" in adata.obsm:
-                # scanpy already put it in obsm, just verify
-                pass
-            else:
-                raise ValueError(
-                    f"Spatial coordinates not found in expected location. "
-                    f"Available obsm keys: {list(adata.obsm.keys())}"
-                )
-        else:
-            raise ValueError(
-                f"No spatial metadata found in uns['spatial']['{library_id}']. "
-                "Check that spatial/ directory contains tissue_positions_list.csv"
-            )
+        raise ValueError(
+            f"No spatial coordinates in obsm['{OBSM_SPATIAL}']. Visium spatial "
+            "coordinates are read together with the Space Ranger images, so "
+            "load_images=True is required to populate them."
+        )
 
     # Compute coordinate range for report
     spatial_coords = adata.obsm[OBSM_SPATIAL]
+    _validate_coords(spatial_coords, "visium")
     coord_range = {
         "x_min": float(np.min(spatial_coords[:, 0])),
         "x_max": float(np.max(spatial_coords[:, 0])),
@@ -155,6 +215,7 @@ def load_xenium(
     cells_table: str = "cells.csv.gz",
     min_counts: int = 0,
     min_genes: int = 0,
+    min_overlap: float = 0.5,
 ) -> tuple[ad.AnnData, dict[str, Any]]:
     """
     Load 10x Xenium spatial transcriptomics data.
@@ -233,26 +294,12 @@ def load_xenium(
     if "cell_id" in cells_df.columns:
         cells_df = cells_df.set_index("cell_id")
 
-    # Align cells (scanpy index should match cells.csv rows)
-    common_cells = adata.obs_names.intersection(cells_df.index)
-    if len(common_cells) == 0:
-        warnings.warn(
-            "No matching cell IDs between count matrix and cells.csv. "
-            "Assuming row order matches."
-        )
-        if len(adata.obs_names) != len(cells_df):
-            raise ValueError(
-                f"Row count mismatch: count matrix has {len(adata.obs_names)} cells, "
-                f"cells.csv has {len(cells_df)} rows."
-            )
-        cells_df.index = adata.obs_names
-        common_cells = adata.obs_names
-
-    adata = adata[common_cells, :].copy()
-    cells_df = cells_df.loc[common_cells]
+    # Align count matrix and metadata by cell ID (reports/fails loud on mismatch).
+    adata, cells_df, id_overlap = _align_by_ids(adata, cells_df, "xenium", min_overlap=min_overlap)
 
     # Add spatial coordinates
     adata.obsm[OBSM_SPATIAL] = cells_df[["x_centroid", "y_centroid"]].values
+    _validate_coords(adata.obsm[OBSM_SPATIAL], "xenium")
 
     # Add other cell metadata to obs
     for col in cells_df.columns:
@@ -265,8 +312,10 @@ def load_xenium(
 
     # Filter cells
     n_before = adata.n_obs
-    if min_counts > 0 or min_genes > 0:
-        sc.pp.filter_cells(adata, min_counts=min_counts, min_genes=min_genes)
+    if min_counts > 0:
+        sc.pp.filter_cells(adata, min_counts=min_counts)
+    if min_genes > 0:
+        sc.pp.filter_cells(adata, min_genes=min_genes)
     n_filtered = n_before - adata.n_obs
 
     # Compute coordinate range
@@ -284,6 +333,7 @@ def load_xenium(
         "n_obs": adata.n_obs,
         "n_vars": adata.n_vars,
         "n_filtered_cells": n_filtered,
+        "id_overlap": id_overlap,
         "coordinate_range": coord_range,
         "layers": list(adata.layers.keys()),
         "obsm_keys": list(adata.obsm.keys()),
@@ -302,6 +352,7 @@ def load_merfish(
     y_col: str = "y",
     cell_id_col: str = "cell_id",
     delimiter: str = ",",
+    min_overlap: float = 0.5,
 ) -> tuple[ad.AnnData, dict[str, Any]]:
     """
     Load MERFISH spatial transcriptomics data from CSV files.
@@ -375,20 +426,12 @@ def load_merfish(
     metadata_df = metadata_df.set_index(cell_id_col)
     metadata_df.index = metadata_df.index.astype(str)
 
-    # Align with counts matrix
-    common_cells = adata.obs_names.intersection(metadata_df.index)
-    if len(common_cells) == 0:
-        raise ValueError(
-            f"No matching cell IDs between counts matrix and metadata.\n"
-            f"Counts index sample: {adata.obs_names[:5].tolist()}\n"
-            f"Metadata index sample: {metadata_df.index[:5].tolist()}"
-        )
-
-    adata = adata[common_cells, :].copy()
-    metadata_df = metadata_df.loc[common_cells]
+    # Align count matrix and metadata by cell ID (reports/fails loud on mismatch).
+    adata, metadata_df, id_overlap = _align_by_ids(adata, metadata_df, "merfish", min_overlap=min_overlap)
 
     # Add spatial coordinates
     adata.obsm[OBSM_SPATIAL] = metadata_df[[x_col, y_col]].values
+    _validate_coords(adata.obsm[OBSM_SPATIAL], "merfish")
 
     # Add other metadata to obs
     for col in metadata_df.columns:
@@ -413,6 +456,7 @@ def load_merfish(
         "path": str(path),
         "n_obs": adata.n_obs,
         "n_vars": adata.n_vars,
+        "id_overlap": id_overlap,
         "coordinate_range": coord_range,
         "layers": list(adata.layers.keys()),
         "obsm_keys": list(adata.obsm.keys()),
@@ -464,21 +508,26 @@ def validate_spatial_adata(
         coord_shape = None
         coord_range = None
     else:
-        spatial_coords = adata.obsm[OBSM_SPATIAL]
+        spatial_coords = np.asarray(adata.obsm[OBSM_SPATIAL])
         coord_shape = spatial_coords.shape
-
-        if spatial_coords.shape[1] != 2:
-            errors.append(
-                f"Spatial coordinates should have shape (n_obs, 2), "
-                f"found {spatial_coords.shape}"
-            )
-
-        coord_range = {
-            "x_min": float(np.min(spatial_coords[:, 0])),
-            "x_max": float(np.max(spatial_coords[:, 0])),
-            "y_min": float(np.min(spatial_coords[:, 1])),
-            "y_max": float(np.max(spatial_coords[:, 1])),
-        }
+        coord_range = None
+        # Validate shape/empty/finite BEFORE indexing or reducing, so an invalid
+        # layout returns a structured error instead of raising (contract: no raise).
+        if spatial_coords.ndim != 2 or spatial_coords.shape[1] != 2:
+            errors.append(f"Spatial coordinates should have shape (n_obs, 2), found {coord_shape}")
+        elif spatial_coords.shape[0] == 0:
+            errors.append("Spatial coordinates are empty (0 observations)")
+        elif not np.issubdtype(spatial_coords.dtype, np.number):
+            errors.append(f"Spatial coordinates must be numeric, found dtype {spatial_coords.dtype}")
+        elif not np.all(np.isfinite(spatial_coords)):
+            errors.append("Spatial coordinates contain non-finite values (NaN/Inf)")
+        else:
+            coord_range = {
+                "x_min": float(np.min(spatial_coords[:, 0])),
+                "x_max": float(np.max(spatial_coords[:, 0])),
+                "y_min": float(np.min(spatial_coords[:, 1])),
+                "y_max": float(np.max(spatial_coords[:, 1])),
+            }
 
     # Check counts layer
     has_counts = LAYER_COUNTS in adata.layers
@@ -488,12 +537,12 @@ def validate_spatial_adata(
             f"Available layers: {list(adata.layers.keys())}"
         )
 
-    # Check images (Visium-specific)
-    has_images = "spatial" in adata.uns
+    # Check images (Visium-specific): require an actual image payload, not just the key.
+    has_images = _has_image_payload(adata.uns)
     if require_images and not has_images:
         errors.append(
-            "Missing spatial images in uns['spatial']. "
-            "Required for Visium data visualization."
+            "Missing spatial images in uns['spatial']. An image payload "
+            "(uns['spatial'][<library>]['images']) is required, not just the key."
         )
 
     # Platform-specific checks
@@ -536,8 +585,10 @@ def validate_spatial_adata(
 
 
 def main(args):
-    """CLI entry for read_spatial subcommand."""
+    """CLI entry for read_spatial subcommand. Emits a trailing JSON report (read
+    directly by the agent) instead of free text, matching the other subcommands."""
     import sys
+    import json
 
     # Dispatch based on platform
     if args.platform == "visium":
@@ -552,24 +603,29 @@ def main(args):
             min_genes=0,
         )
     elif args.platform == "merfish":
-        # For MERFISH, args.input should be a directory with counts and metadata files
+        # Generic per-cell CSV loader: the caller supplies file/column names, so it
+        # reads any layout (incl. Vizgen MERSCOPE: cell_by_gene.csv / EntityID /
+        # center_x / center_y) rather than assuming one hard-coded schema.
         adata, report = load_merfish(
             path=args.input,
-            counts_file="counts.csv",
-            metadata_file="cell_metadata.csv",
+            counts_file=getattr(args, "counts_file", "counts.csv"),
+            metadata_file=getattr(args, "metadata_file", "cell_metadata.csv"),
+            x_col=getattr(args, "x_col", "x"),
+            y_col=getattr(args, "y_col", "y"),
+            cell_id_col=getattr(args, "cell_id_col", "cell_id"),
+            delimiter=getattr(args, "delimiter", ","),
         )
     else:
         print(f"Error: Unknown platform '{args.platform}'", file=sys.stderr)
         sys.exit(1)
 
-    # Save output
-    adata.write_h5ad(args.output, compression='gzip')
+    # Save output (atomic; creates parent dir)
+    save_meta = save_h5ad(adata=adata, path=args.output)
 
-    # Print summary
-    print(f"Loaded {args.platform} data: {report['n_obs']} cells, {report['n_vars']} genes")
-    print(f"Coordinate range: x=[{report['coordinate_range']['x_min']:.1f}, {report['coordinate_range']['x_max']:.1f}], "
-          f"y=[{report['coordinate_range']['y_min']:.1f}, {report['coordinate_range']['y_max']:.1f}]")
-    print(f"Saved to: {args.output}")
+    report["platform"] = args.platform
+    report["input"] = args.input
+    report["output"] = save_meta["path"]
+    print(json.dumps(report, indent=2, default=str, allow_nan=False))
 
 
 if __name__ == '__main__':
@@ -579,5 +635,13 @@ if __name__ == '__main__':
     parser.add_argument('--output', required=True, help='Output h5ad file')
     parser.add_argument('--platform', required=True, choices=['visium', 'xenium', 'merfish'],
                         help='Spatial platform')
+    # Generic per-cell CSV options (platform=merfish): override for the actual
+    # file/column layout, e.g. Vizgen MERSCOPE cell_by_gene.csv / EntityID / center_x.
+    parser.add_argument('--counts-file', default='counts.csv', help='Counts CSV name (merfish)')
+    parser.add_argument('--metadata-file', default='cell_metadata.csv', help='Metadata CSV name (merfish)')
+    parser.add_argument('--x-col', default='x', help='Metadata x-coordinate column (merfish)')
+    parser.add_argument('--y-col', default='y', help='Metadata y-coordinate column (merfish)')
+    parser.add_argument('--cell-id-col', default='cell_id', help='Metadata cell-id column (merfish)')
+    parser.add_argument('--delimiter', default=',', help='CSV delimiter (merfish)')
     args = parser.parse_args()
     main(args)

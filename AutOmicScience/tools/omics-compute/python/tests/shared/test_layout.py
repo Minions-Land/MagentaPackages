@@ -199,3 +199,17 @@ def test_imports_from_conventions_not_redeclared():
 
     # Verify the module imports are the same objects (identity check)
     assert layout.LAYER_COUNTS is conventions.LAYER_COUNTS
+
+
+def test_s14_describe_layout_reports_mudata_per_modality():
+    import numpy as np
+    import mudata as md
+    from anndata import AnnData
+    from aose_omics_runtime.shared.layout import describe_layout
+    r = AnnData(np.ones((3, 4)))
+    r.layers["counts"] = np.ones((3, 4))
+    mdata = md.MuData({"rna": r, "atac": AnnData(np.ones((3, 5)))})
+    d = describe_layout(mdata)
+    assert d["type"] == "MuData"
+    assert set(d["modalities"]) == {"rna", "atac"}
+    assert d["modalities"]["rna"]["layers"] == ["counts"]

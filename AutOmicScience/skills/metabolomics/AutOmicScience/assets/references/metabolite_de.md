@@ -1,5 +1,8 @@
 # Reference — Differential Abundance (Paired/Unpaired)
 
+**Maturity: REFERENCE** — hand-rolled with `scipy.stats` + `statsmodels` (both pinned). Paired vs
+unpaired is a design question, not a parameter to guess.
+
 Paired or unpaired t-tests on metabolites.
 
 ## Paired
@@ -9,7 +12,8 @@ from statsmodels.stats.multitest import multipletests
 
 results = []
 for feat in log_mat.columns:
-    t, p = ttest_rel(log_mat[feat].loc[pre_samples], log_mat[feat].loc[post_samples])
+    # Argument order sets the sign of t: pass (post, pre) so t and log2FC agree.
+    t, p = ttest_rel(log_mat[feat].loc[post_samples], log_mat[feat].loc[pre_samples])
     log2fc = log_mat[feat].loc[post_samples].mean() - log_mat[feat].loc[pre_samples].mean()
     results.append({"feature": feat, "log2FC": log2fc, "p": p})
 res = pd.DataFrame(results)

@@ -1,5 +1,7 @@
 # Reference — Reproducible Code Snapshot
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Prepare a code bundle that lets any reader reproduce the claimed results — exact commands, pinned dependencies, and traceable artifacts.
 
 ## When to build a snapshot

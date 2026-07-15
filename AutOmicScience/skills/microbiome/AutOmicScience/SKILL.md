@@ -3,7 +3,6 @@ name: microbiome
 description: Microbiome analysis — 16S rRNA amplicon (OTU/ASV tables) and shotgun metagenomic taxonomic/functional abundance profiles, CLR transformation, alpha/beta diversity, differential abundance (DESeq2/ANCOM/ALDEx2), taxonomy filtering, survival integration. Use when the user has microbial abundance tables (taxa × samples), asks for diversity analysis, taxon differential abundance, or microbiome-phenotype association.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [omics, microbiome, 16S, metagenomics, taxonomy, diversity, clr, differential-abundance, ancom, aldex2]
-extends: omics-shared
 ---
 
 # Microbiome Analysis — 16S & Metagenomics
@@ -27,11 +26,43 @@ This is **NOT** assembly/binning, **NOT** functional annotation (KEGG/MetaCyc pa
 | Capability | Maturity | Tool/Method | Reference Doc |
 |------------|----------|-------------|---------------|
 | Load abundance table, taxonomy filtering | **REFERENCE** | Python | `assets/references/abundance_loading.md` |
-| CLR transformation | **REFERENCE** | scipy / compositions | `assets/references/abundance_loading.md` |
-| Alpha diversity (Shannon, Chao1, Faith PD) | **REFERENCE** | scikit-bio | `assets/references/diversity.md` |
-| Beta diversity (Bray-Curtis, UniFrac) + PCoA | **REFERENCE** | scikit-bio | `assets/references/diversity.md` |
-| Differential abundance (DESeq2 / ANCOM / ALDEx2) | **REFERENCE** | pydeseq2 / R via rpy2 | `assets/references/differential_abundance.md` |
-| Taxon-phenotype association (Cox survival) | **REFERENCE** | lifelines CoxPHFitter | `../clinical-survival/assets/references/cox_ph.md` |
+| CLR transformation | **REFERENCE** | `scipy` `gmean` (pinned) — or `scikit-bio` `clr`+`multi_replace` if provisioned | `assets/references/abundance_loading.md` |
+| Alpha diversity (Shannon, Chao1, Faith PD) | **PARTIAL** | `scikit-bio` — not pinned, provision first | `assets/references/diversity.md` |
+| Beta diversity (Bray-Curtis, UniFrac) + PCoA + PERMANOVA | **PARTIAL** | `scikit-bio` — not pinned, provision first | `assets/references/diversity.md` |
+| Differential abundance — DESeq2 | **REFERENCE** | `pydeseq2` — **pinned** | `assets/references/differential_abundance.md` |
+| Differential abundance — ANCOM-BC / ANCOM | **PARTIAL** | `scikit-bio` — not pinned, provision first | `assets/references/differential_abundance.md` |
+| Differential abundance — ALDEx2 | **PARTIAL** | R + Bioconductor + `rpy2`; expensive to provision — prefer ANCOM-BC | `assets/references/differential_abundance.md` |
+| Taxon-phenotype association (Cox survival) | **PARTIAL** | `lifelines` — not pinned, provision first | `../../clinical-survival/AutOmicScience/assets/references/cox_ph.md` |
+
+## Provision one environment for the whole workflow
+
+A real microbiome analysis crosses the pinned/PARTIAL line in a single run: loading + CLR on pinned
+`scipy`/`pandas`, DESeq2 on pinned `pydeseq2`, but diversity on `scikit-bio` and per-taxon Cox on
+`lifelines` — neither of which `task1–4` has. **Do not split it across two interpreters**; provision
+one env that composes the pinned stack plus the extras, and run every step there:
+
+```toml
+# tools/omics-environment/pixi.toml
+[feature.microbiome.dependencies]
+scikit-bio = "*"
+lifelines = "*"
+
+[environments]
+microbiome = { features = ["core", "singlecell", "microbiome"], solve-group = "microbiome" }
+```
+
+```bash
+pixi install --manifest-path tools/omics-environment/pixi.toml -e microbiome
+pixi lock    --manifest-path tools/omics-environment/pixi.toml
+```
+
+**`["core", "singlecell", ...]`, not `["core", ...]`** — `core` is only jupyterlab/h5py/mudata; the
+stack you import (scanpy, and through it pandas/numpy/scipy, plus `pydeseq2`) lives in `singlecell`,
+which is why every `task1–4` composes both. The separate `solve-group` keeps these pins away from
+`task1–4`. Full protocol: `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`.
+
+`omics_preflight` does not cover this env — check the imports yourself and record the env + versions
+in the `report`.
 
 All capabilities are **REFERENCE** because microbiome analysis requires study-specific judgment: taxonomy filtering (prevalence thresholds, low-count taxa), rarefaction vs CLR, which diversity metric, which DA method (compositional vs count-based).
 
@@ -39,67 +70,61 @@ All capabilities are **REFERENCE** because microbiome analysis requires study-sp
 
 ## Standard Workflow
 
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
+
 ### 1. Load abundance table
 
-```python
-import pandas as pd
-# taxa (rows) × samples (cols) — counts or relative abundance
-abundance = pd.read_csv("otu_table.csv", index_col=0)
-# Taxonomy table: OTU_ID → Kingdom, Phylum, Class, Order, Family, Genus, Species
-taxonomy = pd.read_csv("taxonomy.csv", index_col=0)
-```
+Taxa × samples counts, plus a taxonomy table.
 
-### 2. Filter low-prevalence taxa
+- Analyse at the **finest reliable level** (Genus/Species for 16S, Species for shotgun). Phylum-level
+  DE discards the signal
+- Deduplicate multi-sample subjects before anything downstream
 
-```python
-# Keep taxa present in ≥10% of samples
-prevalence_threshold = 0.1
-keep = (abundance > 0).sum(axis=1) >= len(abundance.columns) * prevalence_threshold
-abundance_filt = abundance.loc[keep]
-```
+→ `assets/references/abundance_loading.md`
 
-### 3. CLR transformation (compositional data)
+### 2. Prevalence filtering
 
-```python
-import numpy as np
-from scipy.stats.mstats import gmean
+Drop taxa present in <10% of samples.
 
-def clr_transform(counts):
-    # Add pseudocount, compute geometric mean, log-ratio
-    counts_pseudo = counts + 1
-    gm = gmean(counts_pseudo, axis=0)
-    return np.log(counts_pseudo / gm)
+- The threshold is a **choice** — state it, and report n taxa before/after. It sets the FDR family size
 
-clr_abundance = clr_transform(abundance_filt.values)
-```
+→ `assets/references/abundance_loading.md`
 
-See `assets/references/abundance_loading.md`.
+### 3. CLR transformation
 
-### 4. Alpha diversity
+Microbiome counts are compositional; CLR removes the sum-to-constant constraint.
 
-```python
-from skbio.diversity import alpha_diversity
-shannon = alpha_diversity('shannon', abundance_filt.T)  # samples in rows
-# Compare between groups
-from scipy.stats import mannwhitneyu
-stat, p = mannwhitneyu(shannon[group1], shannon[group2])
-```
+- **Zeros are the whole problem.** CLR takes a log ratio, so every zero must be replaced first — and
+  *how* changes the answer
+- `multi_replace` (multiplicative) swaps zeros for a small δ **and rescales each sample back to sum 1**,
+  keeping the object a composition. A `+1` pseudocount also yields a valid CLR — but of a *shifted*
+  composition. The two differ by up to ~1 natural-log unit on sparse tables, most for the low-count
+  taxa a microbiome study is about
+- If you take the `+1` route, **say so** — don't call it "CLR" unqualified
+
+→ `assets/references/abundance_loading.md`
+
+### 4. Diversity — PARTIAL
+
+Alpha (Shannon, Chao1, Faith PD) and beta (Bray-Curtis, UniFrac) + PCoA + PERMANOVA.
+
+- `scikit-bio` takes **samples in rows** — transpose the taxa × samples table
+- Non-parametric group comparison (Mann-Whitney / Kruskal); diversity is not normal
+- PERMANOVA needs a **distance matrix**, and its p-value is permutation-based — report the n_perm
+
+→ `assets/references/diversity.md`
 
 ### 5. Differential abundance
 
-```python
-from pydeseq2.dds import DeseqDataSet
-from pydeseq2.ds import DeseqStats
+DESeq2 (pinned) is the one path that runs today; ANCOM-BC is the compositional cross-check.
 
-metadata = pd.DataFrame({"condition": conditions}, index=abundance_filt.columns)
-dds = DeseqDataSet(counts=abundance_filt.T, metadata=metadata, design_factors="condition")
-dds.deseq2()
-stat = DeseqStats(dds, contrast=["condition", "disease", "healthy"])
-res = stat.summary()
-# res: baseMean, log2FoldChange, pvalue, padj (per taxon)
-```
+- **DESeq2 wants raw counts** — never feed it CLR-transformed data
+- Include batch (sequencing run, extraction kit) as a covariate; microbiome data is batch-dominated
+- Validate with **ANCOM-BC** if compositionality is a concern — same rigour, and it takes covariates,
+  unlike original ANCOM (whose `W` is a rank statistic, not a p-value)
 
-See `assets/references/differential_abundance.md`.
+→ `assets/references/differential_abundance.md`
 
 ---
 

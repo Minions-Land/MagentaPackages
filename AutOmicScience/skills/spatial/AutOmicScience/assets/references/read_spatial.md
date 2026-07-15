@@ -1,6 +1,17 @@
 # Read Spatial Data
 
-**Maturity: READY** — `omics_compute(subcommand="read_spatial", modality="spatial", ...)` dispatches the format-aware loader and returns a `report` dict — cite its numbers; the `spatialdata_io` readers below cover the imaging platforms.
+**Maturity: READY** — `omics_compute(subcommand="read_spatial", modality="spatial", ...)` dispatches the loader and returns a `report` dict — cite its numbers.
+
+Two caveats before you pick a path:
+
+- The grounded subcommand implements **three** loaders itself: `visium` (via scanpy), `xenium`
+  (cell_feature_matrix.h5 + cells table), and `merfish` — where `merfish` is a **generic per-cell
+  CSV reader**, not a Vizgen-format-aware reader. Point it at any layout with
+  `counts-file` / `metadata-file` / `cell-id-col` / `x-col` / `y-col` (see the MERSCOPE example
+  below).
+- The `spatialdata_io` readers listed under Method Menu are a **hand-rolled REFERENCE path** and
+  `spatialdata_io` is **not installed** in the pinned envs (only `spatialdata`); install it before
+  using them.
 
 ## Goal / When to Use
 
@@ -25,34 +36,43 @@ Load any spatial format into the canonical containers (AnnData / SpatialData) an
 - **Stereo-seq** — `spatialdata_io.stereoseq(path)`
 - **Generic `.h5ad` with coords** — `anndata.read_h5ad(path)`, then validate `obsm["spatial"]` is present
 
-**Helper-backed:** The frozen helper `read_spatial.read_spatial(path=..., platform=...)` wraps the format dispatch, returns `(adata, report)`, sets `layers['counts']`, runs `var_names_make_unique`, and asserts `obsm['spatial']` is 2D or 3D.
+**Grounded subcommand:** `omics_compute(subcommand="read_spatial", modality="spatial", args={"input": ..., "output": ..., "platform": "visium"|"xenium"|"merfish"})` dispatches the loader, sets `layers['counts']`, and returns a `report` (platform, n_obs, n_vars, coordinate_range, id_overlap). Coordinates must be finite, and counts/metadata IDs must overlap — a largely-disjoint pair fails loud rather than silently truncating to the shared cells.
+
+`platform="merfish"` is a **generic per-cell CSV** reader; give it the real file/column names.
+For a standard Vizgen MERSCOPE directory:
+
+```python
+omics_compute(subcommand="read_spatial", modality="spatial", args={
+    "input": "merscope_out/", "output": "spatial.h5ad", "platform": "merfish",
+    "counts-file": "cell_by_gene.csv", "metadata-file": "cell_metadata.csv",
+    "cell-id-col": "EntityID", "x-col": "center_x", "y-col": "center_y",
+})
+```
+
+For a platform outside those three, hand-roll with a `spatialdata_io` reader (install it first —
+it is not in the pinned envs).
 
 ## How-to
 
-### Via the frozen helper (preferred for AnnData output)
+### Via the grounded subcommand (preferred for AnnData output)
+
+```
+omics_compute(subcommand="read_spatial", modality="spatial",
+              args={"input": "/path/to/spaceranger_output",
+                    "output": "spatial.h5ad", "platform": "visium"})
+```
+
+Returns `{platform, n_obs, n_vars, coordinate_range}`; cite those numbers. To call a
+platform loader directly in a hand-written cell (e.g. to tweak reader parameters),
+import it from the package runtime:
 
 ```python
-import sys, os
-from pathlib import Path
+import os, sys
+sys.path.insert(0, os.environ.get("AOSE_OMICS_PYTHON_DIR") or "tools/omics-compute/python")
+from aose_omics_runtime.spatial.read_spatial import load_visium  # or load_xenium, load_merfish
 
-# Resolve skills dir
-skills_dir = os.environ.get("AOS_SKILLS_DIR") or "skills"
-sys.path.insert(0, str(Path(skills_dir) / "omics" / "spatial" / "scripts"))
-
-from read_spatial import read_spatial
-
-# Load
-adata, report = read_spatial(
-    path="/path/to/spaceranger_output",
-    platform="visium",
-    filter_control_probes=True,  # for imaging platforms
-    var_names_make_unique=True
-)
-
-# Inspect
-print(f"Loaded {report['n_obs']} obs x {report['n_vars']} vars")
-print(f"Spatial dims: {report['spatial_dim']}")
-print(f"Coord bounds: {report['spatial_bounds']}")
+adata, report = load_visium(path="/path/to/spaceranger_output")
+print(f"Loaded {report['n_obs']} obs x {report['n_vars']} vars; coords {report['coordinate_range']}")
 ```
 
 ### For image/segmentation work (SpatialData)
@@ -69,9 +89,9 @@ print(sdata)  # shows images, labels, points, shapes, tables
 # Extract the AnnData table
 adata = sdata.tables['table']  # Xenium typically names it 'table'
 
-# Or validate an existing SpatialData
-from read_spatial import validate_spatial
-report = validate_spatial(adata, require_counts=True)
+# Or validate an existing spatial AnnData
+from aose_omics_runtime.spatial.read_spatial import validate_spatial_adata
+report = validate_spatial_adata(adata, require_counts=True)
 ```
 
 ### Coordinate validation
@@ -98,7 +118,7 @@ sq.pl.spatial_scatter(
 
 - **Imaging panels are targeted** (hundreds of genes, not whole transcriptome) — HVG/marker logic that assumes 20K genes will mislead. Methods like gene activity or imputation that expect broad coverage will fail or give garbage.
 
-- **Control/blank probes in imaging data must be filtered before QC** — Xenium/MERFISH/CosMx include negative-control probes (named `NegControl*`, `BLANK*`, etc.) for QC purposes; these are not real genes and will poison downstream analysis if not removed. The helper's `filter_control_probes=True` handles this.
+- **Control/blank probes in imaging data must be filtered before QC** — Xenium/MERFISH/CosMx include negative-control probes (named `NegControl*`, `BLANK*`, etc.) for QC purposes; these are not real genes and will poison downstream analysis if not removed. The loaders do **not** strip them — filter by var-name prefix right after load, e.g. `adata = adata[:, ~adata.var_names.str.startswith(("NegControl", "BLANK", "antisense", "UnassignedCodeword"))].copy()`.
 
 - **Inspect the figure** — a spatial scatter of `total_counts`: is a tissue outline visible, or is it uniform noise? An empty/garbled spatial plot signals wrong platform, missing coords, or a load failure.
 
@@ -111,16 +131,12 @@ sq.pl.spatial_scatter(
   "platform": "visium",
   "n_obs": 3500,
   "n_vars": 18000,
-  "spatial_dim": 2,  # or 3 for Stereo-seq/volumetric
-  "spatial_bounds": {"min": [0, 0], "max": [127, 127]},
-  "has_image": True,
-  "counts_layer_set": True,
-  "n_control_probes_removed": 0,
-  "var_names_unique": True
+  "coordinate_range": {"x_min": 0.0, "x_max": 127.0, "y_min": 0.0, "y_max": 127.0}
+  # plus platform-specific fields (e.g. n_in_tissue for Visium)
 }
 ```
 
-Ground: n obs/vars, coordinate dimensionality and bounds, detected platform, presence of an image, counts-layer set.
+Ground: n obs/vars, the coordinate range, and the detected platform.
 
 ## Honesty
 

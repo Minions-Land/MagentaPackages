@@ -30,12 +30,14 @@ Excluded on purpose:
 
 Selection:
 
-- `AutOmicScience` loads the flattened package brand, skills, and tools directly.
-- The package does not define `general` or task profiles; modality behavior is
-  expressed by the modality skills `single-cell`, `spatial`, `bulk`, `bioml`,
-  `cancer-genomics`, `proteomics`, `cancer-dependency`, `metabolomics`,
-  `clinical-survival`, and `microbiome`, each of which extends the shared
-  `omics-shared` foundation.
+- `AutOmicScience` (bare) loads the brand, system prompt, all skills, and tools.
+- The package declares **3 profiles** for selective loading — `single-cell`
+  (single-cell / spatial / immune-repertoire), `bulk-genomics` (bulk RNA-seq &
+  epigenomics, somatic & statistical genetics, CRISPR dependency), and `molecular`
+  (proteomics, metabolomics, microbiome, phase-separation). `default_profiles = []`
+  means the bare name loads every component. The cross-cutting `clinical-survival`
+  and `bioml` skills are **dual-tagged into all three**; `omics-shared` is always
+  loaded.
 
 ## Reference package
 

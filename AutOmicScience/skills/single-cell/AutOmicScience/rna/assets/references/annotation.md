@@ -1,23 +1,21 @@
 # scRNA-seq Cell Type Annotation
 
-**Maturity: Route 1 (marker + LLM) = READY** — cluster with Leiden, then `omics_compute(subcommand="marker_table", modality="scrna", ...)`, then thread the marker table + dataset summary + study description into a labeling decision. **Route 2 (reference pipeline) = PARTIAL** — call the `run_annotation_pipeline` tool when a labeled reference is available.
+**Maturity: READY** — cluster with Leiden, then `omics_compute(subcommand="marker_table", modality="scrna", ...)`, then thread the marker table + dataset summary + study description into a labeling decision.
 
 ## Goal / When to Use
 
 Assign biological cell-type labels to clusters after QC and clustering. Annotation is a **hypothesis grounded in marker evidence**, never a lookup. Pick a route based on whether a trustworthy labeled reference exists.
 
-## Two routes (pick one)
-
-- **Route 1 — marker + LLM (default).** Cluster → marker table → label each cluster from its marker pattern + tissue/study context; abstain ("unknown") when markers are ambiguous. Interpretable, reference-free, abstention-capable. Use this unless the user supplies or requests a labeled reference.
-- **Route 2 — reference pipeline (PARTIAL).** Call `run_annotation_pipeline` (a real Task tool on the omics leader) when a quality labeled reference can be built. Reproducible label transfer; depends on reference quality.
-
-Do not bolt on other automated annotators ad hoc (CellTypist / scANVI / popV / scArches): Route 2 already provides the grounded reference path, and Route 1 keeps the call interpretable and auditable.
+Do not bolt on automated annotators ad hoc (CellTypist / scANVI / popV / scArches): they trade the
+auditable, abstention-capable call below for a black-box label, and none of them is in the pinned
+env. If the user supplies a labeled reference and explicitly wants transfer, say what you are doing
+and why the marker route was not enough.
 
 ## Anti-circular rule (read first)
 
 If the dataset already carries an `obs["cell_type"]` (or similar) column, treat it as **prior annotation, not ground truth**. Never copy it into your output, and never feed it into the marker test as the grouping. Cluster independently with Leiden, annotate from markers, then **compare** your labels against the prior with ARI/NMI (`omics_compute score` with `pred-key`/`ref-key`/`metric`, or `sklearn.metrics`). Report agreement and investigate disagreements. Copying the prior column is circular — the most common silent failure in annotation.
 
-## Route 1 — marker + LLM (READY, default)
+## Workflow — marker + LLM
 
 ### Step 1 — Ensure clusters exist
 
@@ -122,16 +120,6 @@ Compact human-PBMC reference (validation only — adapt to your tissue):
 | Myeloid | DC | FCER1A, CST3, CLEC10A |
 | Myeloid | pDC | LILRA4, IL3RA, CLEC4C |
 | Other | Platelet | PPBP, PF4, GP9 |
-
-## Route 2 — reference pipeline (PARTIAL)
-
-When a quality labeled reference is available, call the `run_annotation_pipeline` tool (a real Task tool registered on the omics leader). It runs a 3-stage sequential team — **selector → adapter → adjudicator** — performing no-training, label-free reference transfer:
-
-- **selector** picks source + model execution pairs from gene-name/metadata evidence (no peeking at query labels);
-- **adapter** emits an executable AdapterSpec (load query + reference, align shared genes, invoke embedding label transfer, postprocess);
-- **adjudicator** chooses a consensus coarse label per group from votes/confidence, abstaining to the unknown label when evidence is contradictory.
-
-It is **PARTIAL** because it needs a curated reference bundle and heavier transfer deps, and is a separate orchestration tool rather than an `omics_compute` subcommand. Validate its output with the same marker dotplots as Route 1, and compare to any prior labels with ARI/NMI — never accept transferred labels unchecked. (Notably it does *not* wrap CellTypist/scANVI; it is a label-free consensus transfer with explicit abstention.)
 
 ## Failure Modes
 

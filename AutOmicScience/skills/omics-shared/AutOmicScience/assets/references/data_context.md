@@ -127,9 +127,8 @@ Task: Compare cell type proportions between control and treated. Report shifts t
 
 ```python
 import os, sys
-skills_dir = os.environ.get("AOS_SKILLS_DIR") or "skills"
-sys.path.insert(0, os.path.join(skills_dir, "omics", "_shared", "scripts"))
-import summarize
+sys.path.insert(0, os.environ.get("AOSE_OMICS_PYTHON_DIR") or "tools/omics-compute/python")
+from aose_omics_runtime.shared import summarize
 
 # Load data
 adata = sc.read_h5ad("data.h5ad")

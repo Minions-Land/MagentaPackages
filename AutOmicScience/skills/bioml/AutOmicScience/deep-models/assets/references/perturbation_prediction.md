@@ -1,5 +1,7 @@
 # Reference — Perturbation Outcome Prediction (Perturb-seq)
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Predicting differential gene expression (DEG) outcomes from genetic perturbations — the Perturb-seq multi-task prediction problem.
 
 ## The task (NatureBench s43588-024-00698-1)
@@ -20,10 +22,13 @@ The embeddings (scGPT perturbation representations + gene ontology) are **pre-su
 ```python
 import torch
 import torch.nn as nn
+import torch.nn.functional as F      # the loss block below needs this
+import numpy as np                   # ...and this, for np.savez
 
 class PerturbationPredictor(nn.Module):
     def __init__(self, embed_dim=512, n_genes=5000):
         super().__init__()
+        self.n_genes = n_genes          # forward() reads self.n_genes; without this it is AttributeError
         self.shared = nn.Sequential(
             nn.Linear(embed_dim, 256), nn.ReLU(), nn.Dropout(0.2),
             nn.Linear(256, 128), nn.ReLU()
@@ -50,9 +55,19 @@ Not all genes are DEG for every perturbation. Mask the loss to predicted-DEG gen
 # Loss for level1 (binary DEG)
 loss_deg = F.binary_cross_entropy(pred["level1"], target_deg_binary)
 
-# Loss for level2/3: only on genes where level1 predicts DEG
-deg_mask = (pred["level1"] > 0.5).float()
-loss_direction = F.cross_entropy(pred["level2"], target_direction, reduction='none') * deg_mask
+# Loss for level2/3: only on genes that ARE DEG — mask by the GROUND TRUTH, never by the model's
+# own prediction. `(pred["level1"] > 0.5)` is self-referential: at init it is ~50% coin-flip noise,
+# and once level1 collapses to the majority "not DEG" class (which this doc warns about below), the
+# mask goes to all-zeros -> level2/level3 receive exactly ZERO gradient, permanently, with nothing
+# left to push level1 back up. It trains, it converges, it is silently broken.
+deg_mask = target_deg_binary.float()
+
+# cross_entropy reads the CLASS dim as dim=1. pred["level2"] is (N, n_genes, 3), so passing it
+# directly makes it think C = n_genes -> RuntimeError: Expected target size [N, 3], got [N, n_genes].
+# Permute so classes land on dim=1; the result is (N, n_genes), matching deg_mask.
+loss_direction = F.cross_entropy(
+    pred["level2"].permute(0, 2, 1), target_direction, reduction='none'
+) * deg_mask
 loss_fc = F.mse_loss(pred["level3"], target_fc, reduction='none') * deg_mask
 
 total_loss = loss_deg + loss_direction.mean() + loss_fc.mean()

@@ -1,5 +1,7 @@
 # Reference — Variant Classification & Pathogenicity
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Which somatic mutations count as "pathogenic" or "functional" vs benign/silent. Critical for gene recurrence, TMB, and association tests.
 
 ## The classification problem

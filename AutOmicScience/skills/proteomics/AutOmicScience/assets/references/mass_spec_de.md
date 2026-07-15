@@ -1,5 +1,15 @@
 # Reference — Mass-Spec Proteomics (MaxQuant / Perseus)
 
+**Maturity: REFERENCE** — hand-rolled in a Python script with `pandas` / `scipy.stats` /
+`statsmodels`, all pinned in `task1`.
+
+> **On `alphastats`.** MannLabs' `alphastats` is the ecosystem package for this layer (loaders for
+> MaxQuant / DIA-NN / Spectronaut / FragPipe / mzTab, plus normalization, imputation and a
+> permutation-FDR t-test). It is **not** in the pinned env and does not install cleanly here — pip
+> fails building `tables`/`numba` on the Python versions available, and it is not on conda-forge. It
+> is not documented as a recipe below because none of it has been run in this environment; reach for
+> it only if your environment can build it, and verify its API yourself first.
+
 Parsing and analyzing shotgun mass-spectrometry proteomics output from MaxQuant and Perseus.
 
 ## MaxQuant proteinGroups.txt

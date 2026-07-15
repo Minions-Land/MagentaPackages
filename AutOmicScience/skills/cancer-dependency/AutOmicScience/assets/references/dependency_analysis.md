@@ -1,104 +1,179 @@
 # Reference — Dependency Classification & normLRT
 
-Distinguishing pan-essential genes (drug-undevelopable) from selective dependencies (targetable vulnerabilities), and testing selectivity with normLRT.
+**Maturity: mixed.** Binary calls, essentiality classification and the group-comparison test are
+**REFERENCE** — the libraries are in the pinned `task1` env (select it with `modality="scrna"` — an
+environment selector, not a claim about your data) and you hand-write the script. The published
+**normLRT score is PARTIAL**: it needs R's `sn` package, which `task1–4` do not have (see below).
+Emit a `report` dict and cite its numbers.
+
+Distinguishing common-essential genes (no therapeutic window) from selective dependencies (targetable
+vulnerabilities).
+
+**`CRISPRGeneEffect.csv` is cell lines × genes** — every snippet here indexes accordingly. If that is
+news, read `depmap_loading.md` first; a transposed index is the single most common way this analysis
+goes silently wrong.
 
 ## Binary dependency call
 
-DepMap standard threshold: gene-effect < −0.5 = "dependent":
+DepMap's conventional threshold: gene-effect < −0.5 = "dependent".
 
 ```python
-dependent = (gene_effect < -0.5).astype(int)   # genes × cell lines
+dependent = gene_effect < -0.5                       # lines × genes, boolean
+dependency_frequency = dependent.mean(axis=0)        # axis=0 → per gene, fraction of LINES
 ```
 
-Some analyses use the **probability of dependency** file (`CRISPR_gene_dependency.csv`, values 0–1) and threshold at 0.5:
+`axis=0` averages down the rows (cell lines), giving one number per gene. `axis=1` would average each
+cell line across all 18k genes — a meaningless number that still returns a Series, so it fails
+downstream rather than here.
+
+The **probability of dependency** file is an alternative, thresholded at 0.5:
 
 ```python
-dep_prob = pd.read_csv("CRISPR_gene_dependency.csv", index_col=0)
-dependent = (dep_prob > 0.5).astype(int)
+dep_prob = pd.read_csv("CRISPRGeneDependency.csv", index_col=0)   # also lines × genes, 0–1
+dependent = dep_prob > 0.5
 ```
 
-## Pan-essential vs selective
+## Common-essential vs selective: use DepMap's own calls
 
-**Pan-essential**: essential in nearly all cell lines (ribosomal proteins, RNA Pol, proteasome). These are NOT good drug targets — killing them kills normal cells too (no therapeutic window).
+Do **not** re-derive essentiality with a frequency cutoff. DepMap ships the classification, computed
+against its curated controls with the release's own screen-quality model:
 
 ```python
-dependency_frequency = dependent.mean(axis=1)  # fraction of lines dependent
-
-pan_essential = dependency_frequency[dependency_frequency >= 0.9].index
-selective = dependency_frequency[
-    (dependency_frequency > 0.05) & (dependency_frequency < 0.9)
-].index
-never_essential = dependency_frequency[dependency_frequency <= 0.05].index
+common_essential = set(pd.read_csv("CRISPRInferredCommonEssentials.csv").Essentials)
+nonessential     = set(pd.read_csv("AchillesNonessentialControls.csv").Gene)
+# all three use the same "SYMBOL (EntrezID)" labels as gene_effect.columns
+selective_candidates = [
+    c for c in gene_effect.columns
+    if c not in common_essential and c not in nonessential
+]
 ```
 
-The **selective** genes are the therapeutic targets: essential in *some* cancers, dispensable in others.
+A hand-rolled `dependency_frequency >= 0.9` gate is not the same set and is not what DepMap means by
+"common essential": it drifts with which lines are in your subset, and it has no notion of screen
+quality. Reach for it only if you deliberately want a subset-specific frequency — and then say so, and
+call it something other than "common essential".
 
-## normLRT selective-dependency score
+**Why it matters:** common-essential genes (ribosome, proteasome, RNA Pol) are not drug targets — they
+kill normal cells too. Filtering them out is what leaves a therapeutic window.
 
-normLRT (normal Likelihood Ratio Test) quantifies how much a gene's dependency distribution deviates from a single normal — bimodal/skewed distributions indicate selective dependency (some lines very dependent, others not).
+## normLRT — the published selective-dependency score (PARTIAL: needs R)
 
-**Concept:** fit (a) a single normal to all gene-effect scores, and (b) a skew-normal or mixture. A large likelihood ratio = the gene's dependency is selective (a subset of lines is specifically dependent).
+normLRT measures how far a gene's dependency distribution departs from a single normal. A gene that is
+strongly essential in a *subset* of lines has a long left tail; a normal fits it badly.
 
-```python
-from scipy.stats import norm, skewnorm
-import numpy as np
+**The definition** (Project DRIVE, McDonald et al. 2017; used by DepMap and Pacini et al. 2021):
 
-def normLRT_score(gene_scores):
-    gene_scores = gene_scores.dropna().values
-    # Null: single normal
-    mu, sigma = norm.fit(gene_scores)
-    ll_normal = norm.logpdf(gene_scores, mu, sigma).sum()
-    # Alt: skew-normal (captures selective tail)
-    a, loc, scale = skewnorm.fit(gene_scores)
-    ll_skew = skewnorm.logpdf(gene_scores, a, loc, scale).sum()
-    lrt = 2 * (ll_skew - ll_normal)
-    return lrt   # higher = more selective
+> normLRT = 2 × ( log-likelihood of a **skew-t** fit − log-likelihood of a **normal** fit )
 
-normlrt = gene_effect.apply(lambda row: normLRT_score(row), axis=1)
-selective_ranked = normlrt.sort_values(ascending=False)
+A gene is called **selectively dependent** when *all three* hold:
+
+1. `normLRT >= 100`
+2. `mean(gene_effect) < median(gene_effect)` — the skew is to the **left** (toward lethality)
+3. the gene is **not** common-essential and **not** non-essential (use DepMap's lists, above)
+
+Condition 2 is not decoration: normLRT is a two-sided measure of non-normality, so a right-skewed gene
+(knockout *helps* growth in a few lines) scores just as high. Without it you rank growth-suppressors
+alongside vulnerabilities.
+
+**Skew-t, not skew-normal.** These are different distribution families, and the `>= 100` threshold is
+calibrated to the skew-t fit. `scipy.stats.skewnorm` fits a skew-*normal* (no tail parameter) and
+produces a different, smaller statistic — thresholding it at 100 does not reproduce the published
+call. There is no Python substitute either: `scipy.stats.jf_skew_t` is the Jones–Faddy family, not
+Azzalini's, and the PyPI package named `SkewT` is a meteorology plotting tool. **Do not approximate
+this score and keep calling it normLRT.**
+
+The reference implementation is R (`sn` ≥ 2.1, `MASS`), matching the published method — normal via
+`MASS::fitdistr` (`$loglik`), skew-t via `sn::st.mple` (`$logL`), with the paper's degrees-of-freedom
+fallback ladder when the free-`nu` fit fails to converge:
+
+```R
+library(sn); library(MASS)
+
+normLRT <- function(y) {
+  y <- y[!is.na(y)]
+  ll_norm <- fitdistr(y, "normal")$loglik
+  X <- matrix(1, nrow = length(y), ncol = 1)     # st.mple wants a design matrix of 1's
+  fit <- try(st.mple(x = X, y = y), silent = TRUE)
+  for (nu in c(2, 5, 10, 25, 50, 100)) {         # only reached if the free-nu fit errored
+    if (!inherits(fit, "try-error")) break
+    fit <- try(st.mple(x = X, y = y, fixed.nu = nu), silent = TRUE)
+  }
+  if (inherits(fit, "try-error")) return(NA_real_)   # report as unscored; do not call it 0
+  2 * (fit$logL - ll_norm)
+}
 ```
 
-High normLRT genes (e.g., top 500) are the classic selective dependencies — this is how DepMap's original paper prioritized targets.
+A gene whose skew-t fit fails at every `nu` is **unscored**, not "normLRT = 0". Zero means "fits a
+normal perfectly" — i.e. definitively *not* selective — so defaulting to it silently converts a fit
+failure into a substantive negative call. Count the NAs in the `report`.
 
-## Group-comparison selective dependency
+Provision R + `sn` per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A: a Pixi
+feature with its own solve-group, composing `["core", "singlecell", <new>]`), and drive it from Python
+with `rpy2` or via `Rscript` on a CSV. This is a real provisioning cost — take it only when you need
+the published score. If you only need "is gene X more essential in *this* group", the next section
+answers that in the pinned stack.
 
-Alternatively, test whether a gene is more essential in cancer type A vs others:
+## Group-comparison selective dependency (REFERENCE — pinned stack)
+
+A different question, and often the one actually being asked: *is this gene more essential in cancer
+type A than elsewhere?* normLRT does not take a group — it finds genes selective in *some* unnamed
+subset. If you can name the subset, test it directly:
 
 ```python
 from scipy.stats import mannwhitneyu
 
-def selective_in_group(gene, group_lines, other_lines):
-    g = gene_effect.loc[gene, group_lines].dropna()
-    o = gene_effect.loc[gene, other_lines].dropna()
-    # One-sided: group MORE dependent (lower gene-effect)
-    stat, p = mannwhitneyu(g, o, alternative="less")
-    effect = g.mean() - o.mean()   # negative = more dependent in group
-    return {"gene": gene, "delta": effect, "p": p}
+def selective_in_group(col, group_lines, other_lines):
+    """col is a gene_effect column label, e.g. 'EGFR (1956)'."""
+    g = gene_effect.loc[gene_effect.index.intersection(group_lines), col].dropna()
+    o = gene_effect.loc[gene_effect.index.intersection(other_lines), col].dropna()
+    stat, p = mannwhitneyu(g, o, alternative="less")   # group MORE dependent = lower gene-effect
+    return {"gene": col, "delta": g.mean() - o.mean(), "n_group": len(g), "p": p}
 ```
+
+`alternative="less"` is directional: it asks whether the group's scores are stochastically *lower*
+(more lethal). Apply across genes and FDR-correct (`statsmodels.stats.multitest.multipletests`,
+`method="fdr_bh"`). Report the FDR and the group sizes — with few lines in a lineage, a "significant"
+delta of 0.05 is noise.
 
 ## Therapeutic-window logic
 
-A good target is:
-1. **Selectively dependent** (essential in the cancer of interest)
-2. **NOT pan-essential** (dispensable in normal/other tissues → therapeutic window)
-3. **Druggable** (see `druggability.md`)
+A candidate target is:
+
+1. **Selectively dependent** — normLRT (unnamed subset) or the group test (named subset)
+2. **Not common-essential** — DepMap's list, above → the window exists
+3. **Druggable** — see `druggability.md`
 
 ```python
 candidates = [
-    g for g in selective
-    if g not in pan_essential
-    and dependency_frequency_in_cancer[g] > 0.5   # dependent in ≥50% of cancer lines
+    c for c in selective_candidates                      # already excludes common-essential
+    if (gene_effect.loc[gene_effect.index.intersection(cancer_lines), c] < -0.5).mean() > 0.5
 ]
 ```
 
+DepMap screens cancer lines only — it never measures normal-cell toxicity. "Not common-essential" is
+an *inference* that the window exists, not a measurement of it. Say so in the `report`.
+
 ## Pitfalls
 
-- **Targeting pan-essential genes** — no therapeutic window; toxic to normal cells
-- **Wrong threshold** — −0.5 is standard; document if you deviate
-- **normLRT without enough lines** — needs a decent sample (>50 lines) for stable fit
-- **Ignoring copy-number confound** — Chronos corrects this; CERES doesn't (amplified regions look falsely essential)
-- **One-sided vs two-sided** — selective dependency is directional (more essential in group) → one-sided
+- **Transposing the matrix** — it is lines × genes; `dependency_frequency` needs `axis=0`
+- **Bare gene symbols** — columns are `SYMBOL (EntrezID)`; see `depmap_loading.md`
+- **`skewnorm` called normLRT** — different family, uncalibrated against the ≥100 threshold
+- **normLRT without the mean<median check** — ranks growth-suppressors as vulnerabilities
+- **Hand-rolled ≥90% "common essential"** — DepMap ships the call; the frequency gate drifts with your subset
+- **Unscored genes defaulted to 0** — 0 is the "definitely not selective" answer; keep NA and count it
+- **normLRT on few lines** — the skew-t has 4 parameters; a tail needs a decent n (>50 lines)
+- **CERES instead of Chronos** — amplified regions look falsely essential
+- **Two-sided group test** — selective dependency is directional; use `alternative="less"`
 
 ## Grounding
 
-`report`: dependency threshold, n pan-essential / selective / never-essential, normLRT top genes or group-comparison stats with effect + p.
+`report`: DepMap release, dependency threshold, essentiality source (DepMap list vs a stated
+frequency gate), n common-essential / selective-candidate genes; for normLRT — the R env and `sn`
+version, n scored, n NA, and the three-part selectivity criterion; for the group test — n genes
+tested, group sizes, FDR method, top genes with delta + p + padj.
+
+## Sources
+
+- McDonald et al. (2017) *Cell* — Project DRIVE, the normLRT score
+- Pacini et al. (2021) *Nat Commun* — integrated dependency datasets; normLRT ≥ 100 + left-skew criterion
+- `sn` (Azzalini) — `st.mple`, the reference skew-t fit · `MASS::fitdistr` — the normal fit

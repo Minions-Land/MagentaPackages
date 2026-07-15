@@ -11,6 +11,10 @@ Provides:
 All functions use keyword-only args and return structured reports.
 """
 
+import gzip
+import os
+import tempfile
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +28,41 @@ from .conventions import (
     OBSM_PCA,
     validate_counts_layer,
 )
+
+
+def atomic_write(path: str | Path, write_fn: Callable[[Path], None]) -> Path:
+    """Serialize via a temp file in the destination directory, then atomically
+    ``os.replace`` it into place.
+
+    ``write_fn`` receives the temp path and performs the actual write. If it
+    raises, the temp file is removed and any pre-existing file at ``path`` is
+    left byte-for-byte intact — a failed overwrite never destroys valid output.
+    ``os.replace`` is atomic because the temp lives on the same filesystem.
+    Used for every final output (h5ad/h5mu/BED/JSON/CSV). Returns the resolved path.
+    """
+    path = Path(path).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    os.close(fd)
+    tmp = Path(tmp_name)
+    try:
+        write_fn(tmp)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    os.replace(tmp, path)
+    return path
+
+
+def open_maybe_gzip(path: str | Path, mode: str = "rt"):
+    """Open a text file, transparently decompressing gzip detected by its magic
+    bytes (``\\x1f\\x8b``) rather than by extension — some ``.tsv`` files are
+    gzipped and some ``.gz`` names lie. Returns a file object the caller closes.
+    """
+    path = Path(path)
+    with open(path, "rb") as fh:
+        is_gzip = fh.read(2) == b"\x1f\x8b"
+    return gzip.open(path, mode) if is_gzip else open(path, mode)
 
 
 def load_h5ad(
@@ -112,12 +151,11 @@ def save_h5ad(
         raise ValueError("Cannot save None as AnnData object")
 
     path = Path(path).resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    adata.write_h5ad(
+    atomic_write(
         path,
-        compression=compression,
-        compression_opts=compression_opts,
+        lambda tmp: adata.write_h5ad(
+            tmp, compression=compression, compression_opts=compression_opts
+        ),
     )
 
     report = {
@@ -225,12 +263,11 @@ def save_h5mu(
         raise ValueError("Cannot save None as MuData object")
 
     path = Path(path).resolve()
-    path.parent.mkdir(parents=True, exist_ok=True)
-
-    mdata.write_h5mu(
+    atomic_write(
         path,
-        compression=compression,
-        compression_opts=compression_opts,
+        lambda tmp: mdata.write_h5mu(
+            tmp, compression=compression, compression_opts=compression_opts
+        ),
     )
 
     modalities = {}

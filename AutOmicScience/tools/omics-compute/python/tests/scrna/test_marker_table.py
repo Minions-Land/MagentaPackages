@@ -247,3 +247,20 @@ def test_marker_table_sorted_output(adata_with_clusters):
 
         # Scores should be in descending order
         assert all(scores[i] >= scores[i+1] for i in range(len(scores)-1))
+
+
+# --- Regression for audited defect R09 (noise-gene rule) ---
+
+def test_r09_noise_gene_case_insensitive_and_kinase_protected():
+    from aose_omics_runtime.scrna.marker_table import is_noise_gene
+    # mouse (title-case) ribosomal/MALAT1/hemoglobin/mito now caught
+    for g in ["Rps3", "Rpl4", "Mrps5", "Malat1", "Neat1", "Xist", "Hba1", "mt-Co1"]:
+        assert is_noise_gene(g) is True, g
+    # human still caught
+    for g in ["RPS3", "RPL4", "MT-CO1", "MALAT1"]:
+        assert is_noise_gene(g) is True, g
+    # RPS6K* kinases are NOT ribosomal -> protected
+    for g in ["RPS6KA1", "RPS6KB1", "RPS6KC1"]:
+        assert is_noise_gene(g) is False, g
+    # ordinary genes are not noise
+    assert is_noise_gene("ACTB") is False

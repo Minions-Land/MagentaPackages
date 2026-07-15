@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # BioML Figure Check — Publication-Grade Plotting & Audit
 
-> Subskill of `bioml`. Enter here from the parent skill when you produce or audit figures for a publication, poster, or benchmark submission. Read `../SKILL.md` (parent) and `../../omics-shared/SKILL.md` first — their evidence/grounding rules apply here.
+> Subskill of `bioml`. Enter here from the parent skill when you produce or audit figures for a publication, poster, or benchmark submission. Read the parent (`../SKILL.md`) and the always-loaded `omics-shared` skill first — their evidence/grounding rules apply here.
 
 Two responsibilities: **apply matplotlib publication discipline** (rcParams, Type-42 font compliance), and **audit layout honesty** (no empty quadrants, readable labels, proper legend placement).
 
@@ -52,7 +52,27 @@ plt.rcParams.update({
 })
 ```
 
-**Why `pdf.fonttype=42` is non-negotiable:** The matplotlib PDF backend silently embeds Type-3 bitmap fonts unless told otherwise. A Type-3 PDF looks fine on-screen but scores 0 on `vector_fidelity` and prints poorly. **This setting cannot be skipped**, even for "simple" plots.
+**Why `pdf.fonttype=42` is non-negotiable:** matplotlib's default is `pdf.fonttype: 3` (verified:
+`matplotlib.rcParamsDefault['pdf.fonttype'] == 3`), so *every* PDF you save without this block embeds
+Type-3 fonts. **Nature, IEEE and ACM reject Type-3 submissions outright** — that is the reason, and it
+is enough of one.
+
+Be accurate about *why*, because the usual justification is wrong: Type-3 fonts are **not bitmaps**.
+They are vector glyph procedures, and matplotlib emits a ToUnicode map for them, so a Type-3 PDF
+renders identically and `pdftotext` extracts exactly the same text as a Type-42 one (checked on
+identical figures at both settings). The problem is purely that Type 3 is not a real embedded font
+program: journals reject it, and downstream editors cannot treat the glyphs as text. Do not claim it
+looks worse on screen or loses text — a reviewer who checks will find it does neither, and then the
+rule looks like superstition.
+
+**This setting cannot be skipped**, even for "simple" plots.
+
+> **The font list falls back silently.** `'font.sans-serif': ['Arial', 'Helvetica', 'DejaVu Sans']`
+> only gets you Arial if Arial is installed — it usually isn't on Linux, and matplotlib quietly walks
+> the list down to DejaVu Sans. The pinned envs here have **no Arial and no Helvetica**, so this block
+> produces DejaVu Sans. That is fine for a working figure; it is not "Nature house style". If the
+> journal requires Arial, install it and check
+> `{f.name for f in matplotlib.font_manager.fontManager.ttflist}` rather than trusting the rcParam.
 
 ---
 
@@ -100,27 +120,60 @@ plt.savefig("output/umap.pdf", dpi=300, bbox_inches='tight')
 plt.close()
 ```
 
-### 2. Post-save Type-42 verification
+### 2. Post-save Type-3 verification
 
-**After every `plt.savefig`**, verify the PDF embeds TrueType fonts:
+**After every `savefig`**, verify no Type-3 font slipped in. This needs nothing beyond the pinned env:
 
-```bash
-pdffonts output/umap.pdf | grep -v "Type 42\|Type 1C" && echo "FAIL: bitmap fonts detected" || echo "OK: vector fonts"
+```python
+def assert_no_type3(path):
+    """Raise if the PDF embeds a Type-3 font (journals reject them)."""
+    raw = open(path, "rb").read()
+    if b"/Subtype /Type3" in raw or b"/Subtype/Type3" in raw:
+        raise AssertionError(f"{path}: Type-3 font embedded — set pdf.fonttype=42 and regenerate")
+
+assert_no_type3("output/umap.pdf")
 ```
 
-If it fails, the `pdf.fonttype=42` rcParam was not set. Fix it and regenerate.
+matplotlib writes the font dictionary as a plain object, so the subtype token stays greppable in the
+raw bytes. Verified to discriminate correctly across `pdf.fonttype` 42/3 × `pdf.compression` 0/6/9 ×
+simple/multi-artist figures — 12/12.
+
+If poppler is installed (`pdffonts` is **not** in `task1–4`, nor declared in `pixi.toml` — it is a
+system tool that may simply be absent), this is the equivalent:
+
+```bash
+pdffonts output/umap.pdf | tail -n +3 | awk '$2=="Type" && $3=="3" {bad=1} END {exit !bad}' \
+  && echo "FAIL: Type-3 fonts" || echo "OK"
+```
+
+> **Do not test for the string `Type 42`.** `pdffonts` never prints it. A `pdf.fonttype=42` figure is
+> reported as **`CID TrueType`** — "Type 42" is the PostScript name for the TrueType wrapper, not a
+> PDF font subtype. The obvious-looking check
+> `pdffonts f.pdf | grep -v "Type 42\|Type 1C" && echo FAIL || echo OK` therefore prints **FAIL on a
+> correct PDF and FAIL on a broken one** — the header rows alone guarantee a match. A check with no
+> discriminating power is worse than none: it trains you to ignore it.
 
 ### 3. Visual audit (pixel-level layout check)
 
 Render the PDF to PNG at print resolution and visually inspect:
 
 ```bash
-# Render at 300 DPI (print quality)
+# Ghostscript (a system tool — not in task1–4; check it exists first)
 gs -sDEVICE=pngalpha -r300 -o output/umap_300dpi.png output/umap.pdf
-
-# Or use ImageMagick:
-convert -density 300 output/umap.pdf output/umap_300dpi.png
 ```
+
+Simpler when the figure is still in hand: save both formats from the same `Figure` object, and skip
+the render step entirely.
+
+```python
+fig.savefig("output/umap.pdf")                 # the submission artifact
+fig.savefig("output/umap_300dpi.png", dpi=300) # the one you inspect
+```
+
+This is not just convenience — a `gs` render can differ from what the journal's RIP produces, whereas
+the PNG comes from the same draw call as the PDF. Reach for `gs` when you are auditing a PDF you did
+not generate. (ImageMagick also works, but v7 renamed `convert` to `magick`, and its default
+`policy.xml` blocks PDF on many distributions — treat it as a fallback, not the instruction.)
 
 Open `umap_300dpi.png` and audit for:
 
@@ -205,7 +258,10 @@ The model successfully merges batches while preserving cell-type structure (ARI 
 
 | Symptom / mistake | Cause | Fix |
 |-------------------|-------|-----|
-| `pdffonts` shows Type 3 (bitmap fonts) | `pdf.fonttype=42` not set or not verified | Add the rcParams block at the top; verify with `pdffonts` |
+| `pdffonts` shows Type 3 | `pdf.fonttype=42` not set (matplotlib's default is 3) | Add the rcParams block at the top; verify with `assert_no_type3` |
+| Font check says FAIL on a good PDF | Grepping for the string `Type 42` — `pdffonts` prints `CID TrueType` | Test for the *presence of Type 3*, not the absence of "Type 42" |
+| `pdffonts: command not found` | poppler is a system tool, not in `task1–4` | Use the pure-Python `assert_no_type3` |
+| Text isn't Arial despite the rcParam | Arial/Helvetica not installed; matplotlib walked the list to DejaVu Sans, silently | Check `fontManager.ttflist`; install the font if the journal requires it |
 | Labels overlap / text too small | `tight_layout()` not called, axes too small, or default font size (10–12 pt) | `plt.tight_layout()` before save, enlarge figsize; rcParams (7 pt body, 6 pt ticks) |
 | Legend obscures data | Auto-placement failed | Set `loc='upper right'`, or place outside with `bbox_to_anchor=(1.05, 1)` |
 | Empty quadrant / wasted canvas | Data doesn't span the axes | Crop with `ax.set_xlim` / `ax.set_ylim` |
@@ -220,7 +276,7 @@ Every figure emits:
 - The figure file (`.pdf` preferred)
 - The generation script (`gen_figure.py`)
 - The data source (which `.h5ad` / `.npy` / `.csv` was plotted)
-- `pdffonts` output (confirms Type-42)
+- The Type-3 check result, and **which font was actually embedded** (not which one you asked for)
 - The 300 DPI PNG render (for visual audit)
 
 Inspect the figure before it backs a claim. The script + data source are the reproducibility trail.

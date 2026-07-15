@@ -1,6 +1,6 @@
 # Peak Calling & Differential Accessibility
 
-**Maturity: READY** — peak calling via `omics_compute(subcommand="peak_calling", modality="scatac", ...)`; differential accessibility is hand-rolled snapATAC2 (REFERENCE).
+**Maturity: READY** — peak calling via `omics_compute(subcommand="peak_calling", modality="scatac", ...)`, which wraps `snapatac2.tl.macs3` (+ `tl.merge_peaks` for the pseudobulk union). Its `--adata` must come from `snapatac2.pp.import_fragments`; there is **no `--fragment-file`** and no `--genome` (chromosome sizes come from `uns['reference_sequences']`). Differential accessibility is hand-rolled `snap.tl.diff_test` (REFERENCE).
 
 ## Goal / When to Use
 
@@ -34,11 +34,12 @@ Derive cell-type-specific peaks and find differentially accessible regions. Use 
 Grounded path — the `omics_compute` peak_calling subcommand (records evidence):
 ```python
 omics_compute(subcommand="peak_calling", modality="scatac", args={
-    "input": "qc.h5ad", "output": "peaks.bed", "fragment-file": "fragments.tsv.gz",
+    "adata": "qc.h5ad", "output": "peaks.bed",
     "mode": "pseudobulk", "cluster-column": "leiden", "qvalue": "0.05",
+    "create-matrix": "true",
 })
 ```
-Or directly with snapATAC2 in a Python script: `snap.tl.macs3(adata, groupby="leiden")` → `snap.tl.merge_peaks(...)` → `snap.pp.make_peak_matrix(...)` (confirm exact kwargs against the installed snapATAC2 version).
+The subcommand is exactly that pipeline — `snap.tl.macs3(adata, groupby=...)` → `snap.tl.merge_peaks(...)` → `snap.pp.make_peak_matrix(...)` — plus the BED export, the zero-peak guard and the evidence record. Call snapATAC2 directly only when you need a knob the subcommand does not expose (`blacklist`, `call_broad_peaks`, `replicate`).
 
 ### Differential accessibility (fast)
 

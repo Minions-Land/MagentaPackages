@@ -10,6 +10,7 @@ for downstream annotation and reporting.
 
 from typing import Optional, Literal
 from datetime import datetime, UTC
+import numpy as np
 import pandas as pd
 import scanpy as sc
 from anndata import AnnData
@@ -23,26 +24,40 @@ DEFAULT_MIN_IN_GROUP_FRACTION = 0.25
 DEFAULT_MAX_OUT_GROUP_FRACTION = 0.5
 DEFAULT_N_GENES = 100
 
-# Noise-gene exclusion (ribosomal / mito / MALAT1 / hemoglobin). See markers.py.
-NOISE_GENE_PREFIXES = ("MT-", "MT.", "mt-", "RPS", "RPL", "MRPS", "MRPL")
+# Noise-gene exclusion (mito / ribosomal / MALAT1 / hemoglobin). Case-insensitive
+# so mouse (title-case) genes are caught; RPS6K* kinases are protected from the
+# broad RPS/RPL prefix.
+_MITO_PREFIXES = ("MT-", "MT.")
+_RIBO_PREFIXES = ("RPS", "RPL", "MRPS", "MRPL")
+_RIBO_KINASE_PREFIXES = ("RPS6KA", "RPS6KB", "RPS6KC", "RPS6KL")  # signalling kinases, not ribosomal
 NOISE_GENE_EXACT = ("MALAT1", "NEAT1", "XIST")
 HEMOGLOBIN_GENES = ("HBA1", "HBA2", "HBB", "HBD", "HBE1", "HBG1", "HBG2", "HBM", "HBQ1", "HBZ")
+_NOISE_EXACT_UPPER = frozenset(g.upper() for g in NOISE_GENE_EXACT + HEMOGLOBIN_GENES)
 
 
 def is_noise_gene(name: str) -> bool:
-    """True if a gene is a ribosomal / mito / MALAT1 / hemoglobin noise gene."""
-    if name in NOISE_GENE_EXACT or name in HEMOGLOBIN_GENES:
+    """True for mito / ribosomal / MALAT1 / hemoglobin noise genes (case-insensitive).
+
+    RPS6K* ribosomal-S6 kinases are excluded: they share the RPS prefix but are
+    signalling genes, not ribosomal proteins.
+    """
+    u = name.upper()
+    if u in _NOISE_EXACT_UPPER:
         return True
-    return any(name.startswith(p) for p in NOISE_GENE_PREFIXES)
+    if u.startswith(_MITO_PREFIXES):
+        return True
+    if u.startswith(_RIBO_KINASE_PREFIXES):
+        return False
+    return u.startswith(_RIBO_PREFIXES)
 
 
 def marker_table(
     adata: AnnData,
     *,
     groupby: str = OBS_LEIDEN,
-    groups: Optional[str] = "all",
+    groups: "str | list[str]" = "all",
     reference: str = "rest",
-    method: Literal["wilcoxon", "t-test", "logreg"] = DEFAULT_METHOD,
+    method: Literal["wilcoxon", "t-test"] = DEFAULT_METHOD,
     use_raw: Optional[bool] = None,
     n_genes: int = DEFAULT_N_GENES,
     min_logfc: float = DEFAULT_MIN_LOGFC,
@@ -66,7 +81,7 @@ def marker_table(
         Which groups to compute markers for
     reference : str, default='rest'
         Reference group ('rest' for one-vs-rest)
-    method : {'wilcoxon', 't-test', 'logreg'}, default='wilcoxon'
+    method : {'wilcoxon', 't-test'}, default='wilcoxon'
         Statistical test to use
     use_raw : bool or None
         Whether to use adata.raw for testing. If None, uses raw if available.
@@ -115,6 +130,11 @@ def marker_table(
 
     n_groups = adata.obs[groupby].nunique()
 
+    # Scanpy rejects a bare group string (except the special "all"); normalize a
+    # scalar group id to a single-element sequence.
+    if isinstance(groups, str) and groups != "all":
+        groups = [groups]
+
     # Run rank_genes_groups with pts=True
     sc.tl.rank_genes_groups(
         adata,
@@ -145,11 +165,11 @@ def marker_table(
         if 'pts_rest' in adata.uns['rank_genes_groups']:
             group_df['pts_rest'] = group_df['names'].map(
                 adata.uns['rank_genes_groups']['pts_rest'][group])
+            # Calculate specificity score
+            group_df['specificity'] = group_df['pts'] / (group_df['pts'] + group_df['pts_rest'] + 1e-10)
         else:
-            group_df['pts_rest'] = 0.0
-
-        # Calculate specificity score
-        group_df['specificity'] = group_df['pts'] / (group_df['pts'] + group_df['pts_rest'] + 1e-10)
+            group_df['pts_rest'] = np.nan
+            group_df['specificity'] = np.nan
 
         result_dfs.append(group_df)
 
@@ -165,7 +185,7 @@ def marker_table(
     filtered = markers[
         (markers['logfoldchanges'] >= min_logfc) &
         (markers['pts'] >= min_in_group_fraction) &
-        (markers['pts_rest'] <= max_out_group_fraction)
+        (markers['pts_rest'].isna() | (markers['pts_rest'] <= max_out_group_fraction))
     ].copy()
 
     # Sort by group then by score, keep at most n_genes per group
@@ -178,7 +198,9 @@ def marker_table(
         report = {
             "operation": "marker_table",
             "n_groups": n_groups,
-            "groups": sorted(adata.obs[groupby].unique().tolist()),
+            # str: the same canonical cluster-id type as the table's 'group' column
+            # (scanpy's structured dtype names), so report and table always join.
+            "groups": sorted(str(g) for g in adata.obs[groupby].unique().tolist()),
             "parameters": {
                 "groupby": groupby,
                 "groups": groups,
@@ -291,7 +313,7 @@ def main(args):
         return_report=True,
     )
 
-    table.to_csv(args.output, index=False)
+    io.atomic_write(args.output, lambda tmp: table.to_csv(tmp, index=False))
     report = report or {}
     report["input"] = args.input
     report["output"] = args.output

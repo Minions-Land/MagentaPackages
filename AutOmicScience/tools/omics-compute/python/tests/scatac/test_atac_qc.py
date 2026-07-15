@@ -1,194 +1,144 @@
-"""
-Tests for scATAC atac_qc helper.
+"""Tests for the scATAC atac_qc wrapper.
 
-Tests the core contract: takes AnnData, populates QC metrics in .obs,
-returns a report dict, fails loud on bad input.
+TSSe, FRiP and the fragment-size distribution come from snapATAC2, so these tests
+cover the wiring, the fail-loud guards, the filter/report layer, and the one metric
+we still own (per-cell nucleosome signal) — not snapATAC2's numerics.
 """
 
-import pytest
+import inspect
+import json
+import types
+
+import anndata as ad
 import numpy as np
-import pandas as pd
-from anndata import AnnData
-import sys
-import os as _os
+import pytest
+import snapatac2 as snap
+
+from aose_omics_runtime.scatac.atac_qc import run_atac_qc
+
+CHROM = "chr1"
 
 
-from aose_omics_runtime.scatac.atac_qc import (
-    run_atac_qc,
-    compute_tss_enrichment,
-    compute_fragment_size_distribution,
-    count_fragments_per_cell,
-    compute_frip,
-)
-
-
-@pytest.fixture
-def simple_adata():
-    """Create minimal AnnData for contract testing (no real fragments)."""
-    np.random.seed(42)
-    n_cells = 50
-    n_peaks = 100
-
-    # Sparse peak matrix (simulates ATAC counts)
-    X = np.random.poisson(2, (n_cells, n_peaks)).astype(np.float32)
-    adata = AnnData(X)
-    adata.var_names = [f"peak_{i}" for i in range(n_peaks)]
-    adata.obs_names = [f"cell_{i}" for i in range(n_cells)]
-
-    # Pre-populate some QC metrics (simulating what a real pipeline would compute)
-    adata.obs['tsse'] = np.random.uniform(3, 15, n_cells)
-    adata.obs['n_fragment'] = np.random.randint(1000, 50000, n_cells)
-    adata.obs['frac_dup'] = np.random.uniform(0.1, 0.4, n_cells)
-    adata.obs['frac_mito'] = np.random.uniform(0.01, 0.1, n_cells)
-
-    return adata
-
-
-def test_atac_qc_run_basic_contract(simple_adata, tmp_path):
-    """Test run_atac_qc honors the basic contract: modifies .obs, returns report."""
-    import argparse
-
-    # Write input to disk (run_atac_qc expects file paths)
-    input_h5ad = tmp_path / "input.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    simple_adata.write_h5ad(input_h5ad)
-
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        compute_tsse=False,  # skip (needs fragment file)
-        compute_fragment_size=False,
-        compute_frip=False,
-        fragment_file=None,
-        tss_bed=None,
-        tss_window=2000,
-        filter=False,
-        min_fragments=1000,
-        max_fragments=100000,
-        min_tsse=5.0,
-        max_nucleosome_signal=2.0,
-        min_frip=0.15,
+def _args(tmp_path, adata, gtf=None, **overrides):
+    params = dict(
+        adata=str(adata), output=str(tmp_path / "qc.h5ad"),
+        gtf_file=str(gtf) if gtf else None,
+        compute_tsse=False, compute_fragment_size=False, compute_frip=False,
+        max_fragment_size=1000, peak_bed=None, filter=False,
+        min_fragments=1, max_fragments=1_000_000, min_tsse=None,
+        max_nucleosome_signal=None, min_frip=None,
     )
-
-    result = run_atac_qc(args)
-
-    # Contract checks
-    assert isinstance(result, dict), "run_atac_qc must return a dict"
-    # The actual return structure uses 'evidence' + cell counts
-    assert "evidence" in result or "n_cells_after" in result
-    assert output_h5ad.exists(), "Output file must be written"
-
-    # Verify output AnnData has expected QC columns
-    import anndata as ad
-    adata_out = ad.read_h5ad(output_h5ad)
-    assert 'n_fragment' in adata_out.obs.columns or 'total_counts' in adata_out.obs.columns
+    params.update(overrides)
+    return types.SimpleNamespace(**params)
 
 
-def test_count_fragments_per_cell_fails_loud_on_missing_file(simple_adata, tmp_path):
-    """count_fragments_per_cell fails loud on a missing fragment file (no inference/fabrication)."""
-    simple_adata.obs['total_counts'] = simple_adata.obs['n_fragment'].copy()
-    del simple_adata.obs['n_fragment']
+def test_atac_qc_contract(fragments_h5ad, gtf_file, tmp_path):
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, gtf_file,
+                               compute_tsse=True, compute_fragment_size=True, compute_frip=True))
+    assert result["success"] is True
+    assert set(result["qc_metrics"]) == {
+        "tss_enrichment", "fragment_size", "n_fragment", "frip", "n_peaks"
+    }
+    out = ad.read_h5ad(result["output"])
+    assert {"tsse", "nucleosome_signal", "frip", "n_peaks", "n_fragment"} <= set(out.obs.columns)
+    assert "frag_size_distr" in out.uns
 
-    fragment_file = tmp_path / "nonexistent.tsv.gz"
 
-    # Fail-loud: a missing fragment file must raise, not silently infer from total_counts.
-    with pytest.raises((RuntimeError, FileNotFoundError, OSError)):
-        count_fragments_per_cell(simple_adata, str(fragment_file))
+def test_atac_qc_provenance_names_snapatac2(fragments_h5ad, gtf_file, tmp_path):
+    """Each metric must name the implementation that produced it."""
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, gtf_file,
+                               compute_tsse=True, compute_fragment_size=True, compute_frip=True))
+    metrics = result["qc_metrics"]
+    assert metrics["tss_enrichment"]["method"] == "snapatac2.metrics.tsse"
+    assert metrics["frip"]["method"] == "snapatac2.metrics.frip"
+    assert metrics["fragment_size"]["distribution_method"] == "snapatac2.metrics.frag_size_distr"
+    assert metrics["n_fragment"]["method"] == "import_fragments"
+    assert result["snapatac2_version"] == snap.__version__
 
 
-def test_atac_qc_fails_on_missing_input():
-    """Test fail-loud on missing input file."""
-    import argparse
+def test_atac_qc_rejects_plain_feature_matrix(plain_feature_matrix, tmp_path):
+    with pytest.raises(ValueError, match="import_fragments"):
+        run_atac_qc(_args(tmp_path, plain_feature_matrix))
 
-    args = argparse.Namespace(
-        adata="/nonexistent/path.h5ad",
-        output="/tmp/output.h5ad",
-        compute_tsse=False,
-        compute_fragment_size=False,
-        compute_frip=False,
-        fragment_file=None,
-        tss_bed=None,
-        tss_window=2000,
-        filter=False,
-        min_fragments=1000,
-        max_fragments=100000,
-        min_tsse=5.0,
-        max_nucleosome_signal=2.0,
-        min_frip=0.15,
-    )
 
+def test_atac_qc_tsse_chromosome_mismatch_fails_loud(fragments_h5ad, gtf_writer, tmp_path):
+    bad = gtf_writer(tmp_path / "bad.gtf", chrom="1")
+    with pytest.raises(ValueError, match="Chromosome naming mismatch"):
+        run_atac_qc(_args(tmp_path, fragments_h5ad, bad, compute_tsse=True))
+
+
+def test_atac_qc_n_fragment_is_always_a_true_count(fragments_h5ad, tmp_path):
+    """import_fragments writes n_fragment, so there is no proxy to mistake for a count."""
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad))
+    assert result["qc_metrics"]["n_fragment"]["method"] == "import_fragments"
+    out = ad.read_h5ad(result["output"])
+    assert "n_fragment_proxy" not in out.obs.columns
+
+
+def test_atac_qc_fragment_thresholds_always_apply(fragments_h5ad, tmp_path):
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, filter=True, min_fragments=10_000))
+    assert result["n_cells_after"] == 0
+    report = ad.read_h5ad(result["output"]).uns["atac_qc"]
+    assert "n_fragment" in report["filter_report"]["applied"]
+    assert report["filters_applied"] is True
+
+
+def test_atac_qc_filters_requested_but_none_ran_is_reported(fragments_h5ad, tmp_path):
+    """Requesting a threshold whose column was never computed must be reported as skipped."""
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, filter=True,
+                               min_tsse=5.0, min_frip=0.15))
+    report = ad.read_h5ad(result["output"]).uns["atac_qc"]
+    assert report["filters_requested"] is True
+    assert set(report["filter_report"]["skipped"]) == {"tsse", "frip"}
+
+
+def test_atac_qc_skip_reason_names_a_real_flag(fragments_h5ad, tmp_path):
+    """The remedy in a skip message must be a flag the CLI actually accepts."""
+    import aose_omics_runtime.__main__ as cli
+
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, filter=True, min_tsse=5.0,
+                               max_nucleosome_signal=2.0, min_frip=0.15))
+    skipped = ad.read_h5ad(result["output"]).uns["atac_qc"]["filter_report"]["skipped"]
+    assert set(skipped) == {"tsse", "nucleosome_signal", "frip"}
+
+    source = inspect.getsource(cli.main)
+    for name, reason in skipped.items():
+        flag = reason.rsplit("pass ", 1)[1].rstrip(")")
+        assert f'"{flag}"' in source, f"{name} points at {flag}, which the CLI does not define"
+
+
+def test_nucleosome_signal_is_per_cell_and_undefined_without_nfr(fragments_from_rows, tmp_path):
+    """snapATAC2 has no per-cell nucleosome signal, so this metric is ours to get right.
+
+    A cell with only mononucleosomal fragments has no nucleosome-free denominator: it
+    must be NaN and counted, never a fabricated ratio.
+    """
+    rows = []
+    for pos in range(1000, 1000 + 20 * 500, 500):
+        rows.append(f"{CHROM}\t{pos}\t{pos + 200}\tc_mono\t1")            # mononucleosomal only
+    for i, pos in enumerate(range(1000, 1000 + 20 * 500, 500)):
+        rows.append(f"{CHROM}\t{pos}\t{pos + (80 if i % 2 else 200)}\tc_mixed\t1")
+    path = fragments_from_rows(rows)
+
+    result = run_atac_qc(_args(tmp_path, path, compute_fragment_size=True))
+    signal = ad.read_h5ad(result["output"]).obs["nucleosome_signal"]
+    assert np.isnan(signal["c_mono"])
+    assert signal["c_mixed"] > 0
+    assert result["qc_metrics"]["fragment_size"]["nucleosome_signal"]["n_cells_undefined"] == 1
+
+
+def test_atac_qc_frip_is_within_zero_and_one(fragments_h5ad, tmp_path):
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, compute_frip=True))
+    frip = ad.read_h5ad(result["output"]).obs["frip"].to_numpy()
+    assert ((frip >= 0) & (frip <= 1)).all()
+
+
+def test_atac_qc_report_is_strict_json(fragments_h5ad, gtf_file, tmp_path):
+    result = run_atac_qc(_args(tmp_path, fragments_h5ad, gtf_file,
+                               compute_tsse=True, compute_fragment_size=True, compute_frip=True))
+    json.dumps(result, allow_nan=False)
+
+
+def test_atac_qc_fails_on_missing_input(tmp_path):
     with pytest.raises((FileNotFoundError, OSError)):
-        run_atac_qc(args)
-
-
-def test_atac_qc_report_has_required_keys(simple_adata, tmp_path):
-    """Test that the report dict has the expected structure."""
-    import argparse
-
-    input_h5ad = tmp_path / "input.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    simple_adata.write_h5ad(input_h5ad)
-
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        compute_tsse=False,
-        compute_fragment_size=False,
-        compute_frip=False,
-        fragment_file=None,
-        tss_bed=None,
-        tss_window=2000,
-        filter=False,
-        min_fragments=1000,
-        max_fragments=100000,
-        min_tsse=5.0,
-        max_nucleosome_signal=2.0,
-        min_frip=0.15,
-    )
-
-    result = run_atac_qc(args)
-
-    # Check the actual return structure (evidence-based reporting)
-    assert isinstance(result, dict)
-    assert "evidence" in result
-    assert isinstance(result["evidence"], list)
-    assert "n_cells_after" in result
-    assert "n_cells_before" in result or "cells_removed" in result
-
-
-def test_atac_qc_preserves_input_on_error(simple_adata, tmp_path):
-    """Test that a failed QC run doesn't corrupt the input file."""
-    import argparse
-
-    input_h5ad = tmp_path / "input.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    simple_adata.write_h5ad(input_h5ad)
-
-    # Force an error by requesting TSSE without a TSS BED file
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        compute_tsse=True,  # will fail without tss_bed
-        compute_fragment_size=False,
-        compute_frip=False,
-        fragment_file=None,
-        tss_bed=None,  # missing, should raise
-        tss_window=2000,
-        filter=False,
-        min_fragments=1000,
-        max_fragments=100000,
-        min_tsse=5.0,
-        max_nucleosome_signal=2.0,
-        min_frip=0.15,
-    )
-
-    # Should fail loud, but input file should remain intact
-    try:
-        run_atac_qc(args)
-    except (RuntimeError, ValueError, FileNotFoundError, TypeError):
-        pass  # expected (fail-loud)
-
-    # Verify input file is still readable
-    import anndata as ad
-    adata_check = ad.read_h5ad(input_h5ad)
-    assert adata_check.shape == simple_adata.shape
+        run_atac_qc(_args(tmp_path, tmp_path / "nope.h5ad"))

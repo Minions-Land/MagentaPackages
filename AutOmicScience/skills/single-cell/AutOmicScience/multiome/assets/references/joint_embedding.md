@@ -1,6 +1,8 @@
 # Joint Embedding
 
-**Maturity: REFERENCE** — no compute subcommand; a few lines of `muon` in a Python script (ground by printing a `report` dict). Produce **one cell representation** fusing RNA + ATAC for joint clustering and visualization. Works on the **MuData** directly.
+**Maturity: mixed.** **WNN is REFERENCE** — no compute subcommand (`joint_embed` is deliberately excluded from `omics_compute` pending module migration), so you write a few lines of `muon` in a Python script and print a `report` dict yourself; `muon` is pinned in `task3`, nothing to install. **MultiVI is PARTIAL** — `scvi-tools` is pinned in `task3` too, but it needs a **GPU**; verify preflight before committing to it. Produce **one cell representation** fusing RNA + ATAC for joint clustering and visualization. Works on the **MuData** directly.
+
+> **"Hand-rolled" means you write the script that calls muon — not that you implement WNN.** `mu.pp.neighbors` *is* the real algorithm (Hao 2021). The only thing REFERENCE costs you here is that no subcommand records evidence for you, so you must print the `report` yourself. Implementing WNN by hand is the **first Failure Mode below**, not the intent.
 
 ## Decision Criteria — pick one default
 

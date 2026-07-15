@@ -1,5 +1,7 @@
 # Clonal expansion, public clonotypes, phenotype linkage
 
+**Maturity: PARTIAL** — `scirpy` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+
 Downstream of a sequence-defined `clone_id` (see `clonotype_definition.md`). Two distinct concepts:
 **expansion** = within-donor clonal size; **public** = cross-donor sharing. Don't conflate them.
 

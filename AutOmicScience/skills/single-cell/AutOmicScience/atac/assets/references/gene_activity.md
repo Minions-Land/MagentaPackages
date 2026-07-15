@@ -1,6 +1,6 @@
 # Gene Activity Scores
 
-**Maturity: READY** — `omics_compute(subcommand="gene_activity", modality="scatac", ...)`, or `snap.pp.make_gene_matrix` directly. A rough proxy, **not expression**.
+**Maturity: READY** — `omics_compute(subcommand="gene_activity", modality="scatac", ...)` wraps `snapatac2.pp.make_gene_matrix`, counting TN5 insertions in each gene's regulatory domain. Its `--adata` must come from `snapatac2.pp.import_fragments` (insertions live in `obsm`). Accessibility is still a proxy for **expression** — it is not expression.
 
 ## Goal / When to Use
 

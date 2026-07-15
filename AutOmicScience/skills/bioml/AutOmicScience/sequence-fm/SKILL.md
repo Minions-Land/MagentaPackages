@@ -5,7 +5,7 @@ disable-model-invocation: true
 
 # BioML Sequence Foundation Models — DNA/RNA/Protein Transformers
 
-> Subskill of `bioml`. Enter here from the parent skill when you need to train or apply a DNA, RNA, or protein sequence foundation model. Read `../SKILL.md` (parent) and `../../omics-shared/SKILL.md` first — their ML-engineering foundations and evidence rules apply here.
+> Subskill of `bioml`. Enter here from the parent skill when you need to train or apply a DNA, RNA, or protein sequence foundation model. Read the parent (`../SKILL.md`) and the always-loaded `omics-shared` skill first — their ML-engineering foundations and evidence rules apply here.
 
 This subskill covers **sequence-based foundation models**: Nucleotide Transformer, DNABERT, HyenaDNA, Borzoi (DNA); RNA-FM (RNA); ESM-2, GPN (protein). These are orthogonal to `deep-models` (single-cell scVI/scGPT on count matrices); here the input is FASTA/raw sequences and the task is sequence classification, per-base prediction, or embedding.
 
@@ -25,15 +25,39 @@ Use this path when:
 
 ## Model Menu
 
-| Model | Modality | Use case | Package/Repo | Compute |
-|-------|----------|----------|--------------|---------|
-| **Nucleotide Transformer (NT)** | DNA | Regulatory prediction, genomic regions | HuggingFace `InstaDeepAI/nucleotide-transformer-*` | GPU (hours) |
-| **DNABERT** | DNA | Promoter/enhancer classification | HuggingFace `zhihan1996/DNABERT-*` | GPU (hours) |
-| **HyenaDNA** | DNA | Long-context DNA (1M bp) | Repo `HazyResearch/hyena-dna` | GPU (hours), large memory |
-| **Borzoi** | DNA | Per-base epigenome prediction | Repo `calico/borzoi` | GPU (hours–days) |
-| **RNA-FM** | RNA | RNA structure/function | Repo `ml4bio/RNA-FM` | GPU (hours) |
-| **ESM-2** | Protein | Protein function/structure | HuggingFace `facebook/esm2_*` | GPU (hours) |
-| **GPN** | Protein/genomic | Genomic PTM/variant effect | Repo (GPN) | GPU (hours) |
+**Everything here is PARTIAL.** `torch` is pinned, but **`transformers` is in no pinned env** — every
+snippet below fails at the import until you provision it. Repo-based models (HyenaDNA, Borzoi, RNA-FM,
+GPN) additionally need their own clone + requirements.
+
+```toml
+# tools/omics-environment/pixi.toml — §A; use §B (named conda env) if a CUDA build must be pinned
+[feature.seqfm.pypi-dependencies]
+transformers = "*"
+datasets = "*"
+
+[environments]
+seqfm = { features = ["core", "singlecell", "seqfm"], solve-group = "seqfm" }
+```
+
+```bash
+pixi install --manifest-path tools/omics-environment/pixi.toml -e seqfm
+pixi run     --manifest-path tools/omics-environment/pixi.toml -e seqfm python -c "import transformers"
+```
+
+Never a bare `pip install transformers` — it resolves against whatever `python` leads `$PATH` (often
+conda `base`) and drags its own `torch` pin. Full protocol: `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md`. `omics_preflight` covers only `task1–4`, so verify the
+import yourself and record the env + versions in the `report`.
+
+| Model | Maturity | Modality | Use case | Package/Repo | Compute |
+|-------|----------|----------|----------|--------------|---------|
+| **Nucleotide Transformer (NT)** | **PARTIAL** — `transformers` | DNA | Regulatory prediction, genomic regions | HF `InstaDeepAI/nucleotide-transformer-*` | GPU (hours) |
+| **DNABERT** | **PARTIAL** — `transformers` | DNA | Promoter/enhancer classification | HF `zhihan1996/DNABERT-*` | GPU (hours) |
+| **ESM-2** | **PARTIAL** — `transformers` | Protein | Protein function/structure | HF `facebook/esm2_*` | GPU (hours) |
+| **HyenaDNA** | **PARTIAL** — repo install | DNA | Long-context DNA (1M bp) | Repo `HazyResearch/hyena-dna` | GPU (hours), large memory |
+| **Borzoi** | **PARTIAL** — repo install | DNA | Per-base epigenome prediction | Repo `calico/borzoi` | GPU (hours–days) |
+| **RNA-FM** | **PARTIAL** — repo install | RNA | RNA structure/function | Repo `ml4bio/RNA-FM` | GPU (hours) |
+| **GPN** | **PARTIAL** — repo install | Protein/genomic | Genomic PTM/variant effect | Repo (GPN) | GPU (hours) |
 
 **First try:** If a lightweight baseline (CNN, k-mer BOW) exists in the literature for the same task, run that first. FMs escalate when the baseline misses the target metric.
 
@@ -51,39 +75,42 @@ Use this path when:
 
 ## Common Workflow (DNA FM example)
 
-### 1. Tokenize sequences
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step. `transformers` is **not
+pinned**; provision it first (Model Menu).
 
-Most DNA FMs use k-mer tokenization (k=6 common):
+### 1. Tokenize
 
-```python
-from transformers import AutoTokenizer
-tokenizer = AutoTokenizer.from_pretrained("InstaDeepAI/nucleotide-transformer-500m-1000g")
-seq = "ATCGATCGTAGC..."
-tokens = tokenizer(seq, return_tensors="pt", padding=True, truncation=True, max_length=512)
-```
+Use the model's **paired** tokenizer — always `from_pretrained` on the same checkpoint id.
 
-### 2. Load pretrained model
+- A mismatched tokenizer (DNABERT's on NT) **degrades results silently**; nothing raises
+- Max length is a property of the checkpoint, not a preference. NT is ~6 kb (1000 tokens × 6 nt).
+  Beyond it, window — or pick a long-context model
 
-```python
-from transformers import AutoModelForSequenceClassification
-model = AutoModelForSequenceClassification.from_pretrained(
-    "InstaDeepAI/nucleotide-transformer-500m-1000g", num_labels=2
-)
-```
+### 2. Load the pretrained model
 
-### 3. Finetune (task-specific)
+- The published checkpoints are **masked-LMs**. `AutoModelForSequenceClassification` keeps the encoder
+  and creates a **randomly initialised** classifier head; transformers warns, and the warning is
+  correct. Never report zero-shot numbers from that object — until you train it, the head is noise
 
-```python
-from transformers import Trainer, TrainingArguments
-trainer = Trainer(model=model, args=training_args, train_dataset=train_ds, eval_dataset=val_ds)
-trainer.train()
-```
+### 3. Finetune
+
+- **Finetune** when you have labels (100s+); **zero-shot embed + kNN/logistic** when you have few or
+  none. Finetuning wins whenever data exists
+- Hold out a real validation set — an FM overfits a small labelled set effortlessly
 
 ### 4. Output contract
 
-Verify the expected output format (logits, embeddings, per-base scores) and shape. Match exactly.
+Verify shape *and* semantics against what was asked (logits vs probabilities vs per-base scores).
+`(n, 3)` where `(n, 2)` was wanted is the cheap failure; the right shape with the wrong axis order is
+the expensive one.
 
-See `assets/references/dna_fm.md` for full recipes.
+### 5. DNA-specific
+
+**Average forward + reverse-complement predictions.** DNA is double-stranded; a model scoring only one
+strand is answering a question the biology does not ask.
+
+→ `assets/references/dna_fm.md` · `assets/references/rna_fm.md` · `assets/references/protein_fm.md`
 
 ---
 

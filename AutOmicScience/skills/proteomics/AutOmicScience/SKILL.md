@@ -3,7 +3,6 @@ name: proteomics
 description: Proteomics analysis — plasma Olink targeted panels (NPX QC, paired within-subject differential expression), mass-spectrometry shotgun proteomics (MaxQuant/Perseus, log2-ratio tables), phosphoproteomics (activating-site filtering, occupancy), cross-cohort hypergeometric enrichment with correct universe, directional concordance, effect-size ranking. Use when the user has Olink NPX files, MaxQuant output, phosphoproteomics data, or asks to test differential protein expression, identify enriched pathways, or integrate proteomics with dependency/transcriptomics.
 requiredTools: [run_python, bash, read, write, observe_figure]
 tags: [omics, proteomics, olink, npx, mass-spec, maxquant, phosphoproteomics, differential-expression, hypergeometric, effect-size]
-extends: omics-shared
 ---
 
 # Proteomics — Olink & Mass-Spec Differential Expression
@@ -36,102 +35,84 @@ This is **NOT** single-cell CyTOF, **NOT** immunoassays (ELISA/Luminex raw OD), 
 | Parse Perseus multi-header Excel (skip metadata rows) | **REFERENCE** | `pandas.read_excel(header=[0,1])` | `assets/references/mass_spec_de.md` |
 | Log2-ratio differential expression | **REFERENCE** | Python | `assets/references/mass_spec_de.md` |
 | **Phosphoproteomics** | | | |
-| ActivatingSite filtering (kinase substrates) | **REFERENCE** | Python | `assets/references/phosphoproteomics.md` |
+| ActivatingSite filtering (PSP `Regulatory_sites`) | **REFERENCE** | Python (manual PSP download) | `assets/references/phosphoproteomics.md` |
 | Phosphosite occupancy (phospho / total protein) | **REFERENCE** | Python | `assets/references/phosphoproteomics.md` |
+| Kinase activity from phosphosites | **REFERENCE** | `decoupler` (pinned) + OmniPath `Enzsub` (`pip install omnipath`) | `assets/references/phosphoproteomics.md` |
 | **Cross-cohort enrichment** | | | |
 | Hypergeometric enrichment with correct universe | **REFERENCE** | `scipy.stats.hypergeom` | `assets/references/cross_cohort.md` |
 | Directional concordance (upregulated in both) | **REFERENCE** | Python | `assets/references/cross_cohort.md` |
 | **Visualization** | | | |
-| Volcano plot (log2FC vs -log10 p) | **REFERENCE** | `matplotlib` | `../omics-shared/assets/references/visualization.md` |
+| Volcano plot (log2FC vs -log10 p) | **REFERENCE** | `matplotlib` | `../../omics-shared/AutOmicScience/assets/references/visualization.md` |
 
-**All capabilities are REFERENCE** because proteomics requires study-specific judgment: which QC flag to accept (PASS only vs PASS+WARN), how to handle LOD, which universe for enrichment, which effect-size threshold. These are deliberate design decisions, not black-box automation.
+**All capabilities are REFERENCE** — but for two different reasons, and it matters which:
+
+- **No library to defer to.** Olink's `OlinkAnalyze` is R-only with no Python port; the hypergeometric
+  universe and the effect-size gate are study decisions no package can make for you. Here "hand-rolled"
+  *is* the method.
+- **A library exists and you should use it.** Kinase activity runs on pinned `decoupler` with an
+  OmniPath network — do not hand-roll substrate aggregation. `alphastats` covers the mass-spec loader
+  layer but does not install in this environment (see `mass_spec_de.md`), so that one stays hand-rolled
+  by necessity, not by design.
+
+REFERENCE means *you write the calls*, not *you reimplement the algorithm*.
 
 ---
 
 ## Standard Workflow
 
+Each step names the decisions it forces and the traps that do not announce themselves. **The runnable
+recipe lives in the reference doc** — read it before writing the step.
+
 ### 1. Load & QC (Olink)
 
-```python
-import pandas as pd
-olink = pd.read_csv("olink_npx.csv")
-# Columns: SampleID, Assay (protein), NPX, QC_Warning, LOD
+Read the long-format NPX table, gate on QC, pivot to samples × proteins.
 
-# Filter to PASS QC
-olink_pass = olink[olink.QC_Warning == "PASS"]
+- Olink ships **long**: `SampleID, Assay, NPX, QC_Warning, LOD`. Pivot before anything else
+- NPX is **already log2** — do not log it again
+- Gate on `QC_Warning == "PASS"`, and state how many samples that dropped
 
-# Pivot to matrix (samples × proteins)
-npx_matrix = olink_pass.pivot(index="SampleID", columns="Assay", values="NPX")
-```
+→ `assets/references/olink_qc_de.md`
 
 ### 2. Paired differential expression (Olink)
 
-Timepoint 1 vs timepoint 2 (within-subject):
+Paired t-test per protein, within subject, then BH-FDR.
 
-```python
-from scipy.stats import ttest_rel
-import numpy as np
+- **Paired (`ttest_rel`), not independent (`ttest_ind`)** — the within-subject design removes
+  between-subject variance and buys real power
+- **Pair on SUBJECT, never on SampleID.** The matrix is indexed by SampleID, so two timepoint slices
+  hold *disjoint* indices; pandas aligns on index and every `log2FC` becomes `NaN` — while
+  `ttest_rel` still returns a t and a p, because numpy pairs positionally. The table looks like it
+  ran, and `de[de.log2FC > 0.5]` then quietly returns nothing
+- Argument order sets the sign of `t` — keep it matching `log2FC`
+- Too few pairs is a **skip you report**, not a number you fake
 
-# Split by timepoint
-npx_t1 = npx_matrix.loc[samples_t1]
-npx_t2 = npx_matrix.loc[samples_t2]
-
-# Paired t-test per protein
-results = []
-for protein in npx_matrix.columns:
-    stat, p = ttest_rel(npx_t1[protein], npx_t2[protein], nan_policy="omit")
-    log2fc = (npx_t2[protein] - npx_t1[protein]).mean()  # NPX is already log2
-    results.append({"protein": protein, "log2FC": log2fc, "t": stat, "p": p})
-de = pd.DataFrame(results)
-```
-
-Apply FDR correction (BH):
-
-```python
-from statsmodels.stats.multitest import multipletests
-de["padj"] = multipletests(de.p, method="fdr_bh")[1]
-```
+→ `assets/references/olink_qc_de.md`
 
 ### 3. MaxQuant/Perseus loading
 
-See `assets/references/mass_spec_de.md` for the multi-header Excel parsing recipe.
+Multi-header Excel, contaminant/reverse filtering, LFQ columns.
+
+→ `assets/references/mass_spec_de.md`
 
 ### 4. Cross-cohort hypergeometric
 
-Two cohorts, both with DE results → test enrichment of upregulated proteins:
+Test whether two cohorts' upregulated sets overlap more than chance.
 
-```python
-from scipy.stats import hypergeom
+- **The universe is the whole analysis** — proteins measured in *both* cohorts, not the human proteome
+- **Intersect with the universe before counting.** `N = len(up_A)` counts proteins cohort B never
+  measured; they are not in the urn. On a whole-proteome cohort vs an Olink panel it makes `N > M`,
+  and `hypergeom.sf` then returns **`nan` without raising** — which prints as a p-value
+- `sf(k-1, ...)` for P(X ≥ k), not `sf(k, ...)`
 
-# Cohort A: upregulated proteins (padj < 0.05, log2FC > 0.5)
-up_A = set(de_A[(de_A.padj < 0.05) & (de_A.log2FC > 0.5)].protein)
-# Cohort B: same
-up_B = set(de_B[(de_B.padj < 0.05) & (de_B.log2FC > 0.5)].protein)
-
-# Overlap
-overlap = up_A & up_B
-
-# Universe = all proteins measured in BOTH cohorts
-universe = set(de_A.protein) & set(de_B.protein)
-M = len(universe)    # total proteins
-N = len(up_A)        # successes in cohort A
-n = len(up_B)        # draws (cohort B up)
-k = len(overlap)     # overlap
-
-p = hypergeom.sf(k - 1, M, N, n)  # P(X ≥ k)
-print(f"Overlap: {k} / {n} (p={p:.3e})")
-```
-
-See `assets/references/cross_cohort.md` for the full recipe + universe definition.
+→ `assets/references/cross_cohort.md`
 
 ### 5. Effect-size ranking
 
-Rank by **effect size** (log2FC or t-statistic), not p-value:
+- "Which changed **most**" → FDR gate first, then rank by **|effect size|**
+- "Which are **most significant**" → rank by p-value; that is the right axis for *that* question
+- Same analysis, different ranking axis — read the question before choosing
 
-```python
-de_ranked = de[de.padj < 0.05].sort_values("log2FC", key=abs, ascending=False)
-top10 = de_ranked.head(10)
-```
+→ `assets/references/effect_size.md`
 
 See `assets/references/effect_size.md`.
 

@@ -1,5 +1,7 @@
 # Reference — Mutation × Phenotype Association Testing
 
+**Maturity: REFERENCE** — no `omics_compute` subcommand: the libraries are already in the pinned `task1` env (select it with `modality="scrna"` — an environment selector, not a claim about your data), and you hand-write the script that calls them. Emit a `report` dict and cite its numbers.
+
 Testing whether a gene's alteration associates with a clinical phenotype (response, stage, subtype) via Fisher exact + FDR.
 
 ## The 2×2 table
@@ -16,14 +18,30 @@ Not altered       c            d
 from scipy.stats import fisher_exact
 
 def gene_phenotype_test(gene, altered, phenotype_pos, alternative="two-sided"):
-    is_altered = altered[gene]
-    a = (is_altered & phenotype_pos).sum()
-    b = (is_altered & ~phenotype_pos).sum()
-    c = (~is_altered & phenotype_pos).sum()
+    """altered: patients × genes bool, already reindexed onto the cohort (recurrence.md).
+    phenotype_pos: bool Series on the same cohort index."""
+    is_altered = altered[gene].reindex(phenotype_pos.index, fill_value=False)
+    a = ( is_altered &  phenotype_pos).sum()
+    b = ( is_altered & ~phenotype_pos).sum()
+    c = (~is_altered &  phenotype_pos).sum()
     d = (~is_altered & ~phenotype_pos).sum()
+    assert a + b + c + d == len(phenotype_pos)        # the table must cover the whole cohort
     odds, p = fisher_exact([[a, b], [c, d]], alternative=alternative)
     return {"gene": gene, "a": a, "b": b, "c": c, "d": d, "odds_ratio": odds, "p": p}
 ```
+
+> ### Reindex first, or the "Not altered" row silently loses its patients
+>
+> Without the `.reindex`, `is_altered` carries only the patients present in `altered` — i.e. those
+> with ≥1 pathogenic variant *somewhere*. pandas then aligns `is_altered & phenotype_pos` to the union
+> and fills `False`, so **`a` and `b` come out right** — but `~is_altered` is evaluated on the
+> *unaligned* Series, so `c` and `d` only ever count patients who were already in `altered`. The
+> mutation-free patients — who belong squarely in the "Not altered" row — disappear.
+>
+> Measured on a 120-patient cohort with 40 mutation-free patients: the table sums to **80**, giving
+> OR = 0.375, **p = 0.078**. Reindexed, it sums to 120: OR = 0.154, **p = 0.0001**. Here it *hides* a
+> real association; with the responders distributed the other way it manufactures one. The `assert` is
+> the whole defence — this bug has no symptom other than the table not adding up.
 
 ## One-sided vs two-sided
 
@@ -101,6 +119,8 @@ print(results[results.gene == "BRCA2"])
 
 ## Pitfalls
 
+- **2×2 that doesn't sum to the cohort** — `~is_altered` on an unaligned Series drops the
+  mutation-free patients out of the "Not altered" row; reindex, then `assert` the total
 - **Wrong sidedness** — exclusivity/enrichment questions need one-sided; using a two-sided test here is a common mistake
 - **No FDR** — testing 100 genes at p<0.05 gives ~5 false positives
 - **FDR family too large** — testing all genes instead of recurrent ones dilutes power
@@ -110,4 +130,5 @@ print(results[results.gene == "BRCA2"])
 
 ## Grounding
 
-`report`: genes tested (with family size), test (Fisher, sidedness), 2×2 counts for significant hits, odds ratio, raw p, padj.
+`report`: genes tested (with family size), test (Fisher, sidedness), **2×2 counts for significant hits
+and their total** (it must equal the cohort size), odds ratio, raw p, padj.

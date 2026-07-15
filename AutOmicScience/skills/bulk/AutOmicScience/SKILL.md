@@ -3,7 +3,6 @@ name: bulk
 description: Bulk RNA & epigenomics analysis — normalization (TMM / VST / logCPM),count-based differential expression (DESeq2 / edgeR / limma-voom), pathway enrichment (GSEA / ORA), co-expression networks (WGCNA). Use when the user has a bulk or pseudobulk gene-count matrix with sample metadata (not single-cell data).
 requiredTools: [run_python, bash, read, write, omics_preflight, omics_compute]
 tags: [omics, bulk, bulk-rna, rna-seq, differential-expression, deseq2, gsea, wgcna]
-extends: omics-shared
 ---
 
 # Bulk Omics Analysis
@@ -22,6 +21,14 @@ Bulk work routes to a **subskill** by data type. This parent does routing plus t
 ## Bulk-wide notes (details in `omics-shared` + the subskill)
 
 - **Tabular, counts-first** — a gene × sample **raw integer count** matrix + a sample metadata table; never start DE from TPM/FPKM/normalized values. You may `omics_compute load_dataset` a count matrix into AnnData to reuse the grounded `enrichment`/`pathway_activity` subcommands, but the count-model steps (DE, normalization, WGCNA) are hand-written Python/`Rscript`.
+- **Know what is installed before you plan.** There is no `bulk` modality — pass **`modality="scrna"`**, the
+  environment selector for `task1`, where the bulk Python stack lives (`pydeseq2`, `decoupler`, `scipy`,
+  `statsmodels`). **The R stack is absent** (`DESeq2`/`edgeR`/`limma`/`WGCNA`), and so is most of the
+  epigenomics toolchain (`pyranges`/`gtfparse`/`bedtools`/`TOBIAS`/`ChIPseeker`/`DiffBind`). Each subskill's
+  menu marks what runs today (**READY** = `omics_compute` subcommand; **REFERENCE** = library present, you
+  write the script) vs what must be **provisioned first** (**PARTIAL** = not in any env). For PARTIAL,
+  follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — its own Pixi env with an isolated
+  solve-group, or a named conda env; never `base`, never a bare `pip install`, never new pins in `task1–4`.
 - **Count-based models** — raw counts → DESeq2/edgeR/limma-voom (negative-binomial / voom); a Welch t-test or OLS on log-CPM is statistically weaker. Normalize by goal: VST/rlog for clustering/PCA, TMM+logCPM or size-factors for the DE model input; never z-score raw counts.
 - **Effect size ≠ significance** — shrink fold changes (apeglm/ashr) before ranking or GSEA; rank by shrunken |log2FC| with an FDR gate, and report both axes.
 - **Model covariates in the design** — batch/sex/age/RIN/library-prep/site when present; an unmodeled confound is the most common silent error. State the design formula.

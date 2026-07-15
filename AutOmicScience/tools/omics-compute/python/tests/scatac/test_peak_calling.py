@@ -1,194 +1,117 @@
-"""
-Tests for scATAC peak_calling helper.
+"""Tests for the scATAC peak_calling wrapper.
 
-Tests the core contract: calls macs3 subprocess, handles errors,
-returns peak coordinates, fails loud on bad input.
+peak_calling is a thin wrapper over snapatac2.tl.macs3 (+ merge_peaks for the
+pseudobulk union), so these tests cover the wiring, the fail-loud guards, the BED
+contract and the recorded provenance — not MACS3's peak numerics.
 """
 
-import pytest
-import numpy as np
+import json
+import tempfile
+import types
+
+import anndata as ad
 import pandas as pd
-from anndata import AnnData
-from unittest.mock import patch, MagicMock
-import sys
-import os as _os
+import polars as pl
+import pytest
+import snapatac2 as snap
+
+from aose_omics_runtime.scatac.peak_calling import run_peak_calling
 
 
-from aose_omics_runtime.scatac.peak_calling import (
-    run_peak_calling,
-    call_peaks_bulk,
-)
-
-
-@pytest.fixture
-def simple_adata_with_clusters():
-    """Create minimal AnnData with cluster labels for peak calling."""
-    np.random.seed(42)
-    n_cells = 100
-    n_peaks = 50
-
-    X = np.random.poisson(2, (n_cells, n_peaks)).astype(np.float32)
-    adata = AnnData(X)
-    adata.var_names = [f"peak_{i}" for i in range(n_peaks)]
-    adata.obs_names = [f"cell_{i}" for i in range(n_cells)]
-
-    # Add cluster labels (required for pseudobulk peak calling)
-    adata.obs['leiden'] = ['0'] * 50 + ['1'] * 50
-    adata.obs['leiden'] = adata.obs['leiden'].astype('category')
-
-    return adata
-
-
-@patch('subprocess.run')
-def test_peak_calling_subprocess_called(mock_subprocess, simple_adata_with_clusters, tmp_path):
-    """Test that peak_calling invokes macs3 via subprocess."""
-    import argparse
-
-    # Mock successful macs3 run
-    mock_subprocess.return_value = MagicMock(
-        returncode=0,
-        stdout="Mock macs3 output",
-        stderr=""
+def _args(tmp_path, adata, **overrides):
+    params = dict(
+        adata=str(adata), output=str(tmp_path / "peaks.bed"), mode="bulk",
+        cluster_column=None, qvalue=0.05, min_length=None, half_width=250,
+        n_jobs=1, counting_strategy="paired-insertion", create_matrix=False,
     )
-
-    input_h5ad = tmp_path / "input.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    fragment_file = tmp_path / "fragments.tsv.gz"
-
-    simple_adata_with_clusters.write_h5ad(input_h5ad)
-    fragment_file.touch()
-
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        fragment_file=str(fragment_file),
-        genome='hs',
-        mode='bulk',
-        cluster_column='leiden',
-        qvalue=0.05,
-        min_peak_width=200,  # old param name
-        max_peak_width=2000,  # old param name
-        min_length=200,
-        max_gap=300,
-        keep_duplicates='auto',
-        shift=-100,
-        extsize=200,
-        outdir=None,
-        create_matrix=False,
-        min_cell_overlap=2,
-    )
-
-    # Should not crash; mocks the macs3 call
-    try:
-        result = run_peak_calling(args)
-        # Verify subprocess was called with macs3
-        assert mock_subprocess.called
-        call_args = mock_subprocess.call_args
-        if call_args and call_args[0]:
-            cmd = call_args[0][0]
-            assert 'macs3' in cmd or 'callpeak' in ' '.join(str(x) for x in cmd)
-    except Exception:
-        # Even if the full pipeline fails (e.g., no real peaks file produced),
-        # we've proven the subprocess.run path is exercised
-        if mock_subprocess.called and 'macs3' in str(mock_subprocess.call_args):
-            pass  # Success: subprocess was called
-        else:
-            raise
+    params.update(overrides)
+    return types.SimpleNamespace(**params)
 
 
-def test_peak_calling_fails_on_missing_fragment_file():
-    """Test fail-loud when fragment file is missing."""
-    import argparse
-
-    args = argparse.Namespace(
-        adata="/tmp/fake.h5ad",
-        output="/tmp/output.h5ad",
-        fragment_file="/nonexistent/fragments.tsv.gz",
-        genome='hs',
-        mode='bulk',
-        cluster_column='leiden',
-        qvalue=0.05,
-        min_peak_width=200,
-        max_peak_width=2000,
-        min_length=200,
-        max_gap=300,
-        keep_duplicates='auto',
-        shift=-100,
-        extsize=200,
-        outdir=None,
-        create_matrix=False,
-        min_cell_overlap=2,
-    )
-
-    with pytest.raises((FileNotFoundError, OSError, ValueError)):
-        run_peak_calling(args)
+def _read_bed(path):
+    return pd.read_csv(path, sep="\t", header=None,
+                       names=["chr", "start", "end", "name", "score"])
 
 
-def test_peak_calling_fails_on_missing_cluster_column(simple_adata_with_clusters, tmp_path):
-    """Test fail-loud when cluster column is missing (pseudobulk mode)."""
-    import argparse
-
-    input_h5ad = tmp_path / "input.h5ad"
-    output_h5ad = tmp_path / "output.h5ad"
-    fragment_file = tmp_path / "fragments.tsv.gz"
-
-    # Remove cluster column
-    del simple_adata_with_clusters.obs['leiden']
-    simple_adata_with_clusters.write_h5ad(input_h5ad)
-    fragment_file.touch()
-
-    args = argparse.Namespace(
-        adata=str(input_h5ad),
-        output=str(output_h5ad),
-        fragment_file=str(fragment_file),
-        genome='hs',
-        mode='pseudobulk',  # requires cluster_column
-        cluster_column='leiden',  # missing in adata
-        qvalue=0.05,
-        min_peak_width=200,
-        max_peak_width=2000,
-        min_length=200,
-        max_gap=300,
-        keep_duplicates='auto',
-        shift=-100,
-        extsize=200,
-        outdir=None,
-        create_matrix=False,
-        min_cell_overlap=2,
-    )
-
-    with pytest.raises((KeyError, ValueError)):
-        run_peak_calling(args)
+def test_peak_calling_bulk_contract(fragments_h5ad, tmp_path):
+    result = run_peak_calling(_args(tmp_path, fragments_h5ad))
+    assert result["success"] is True
+    assert result["n_peaks"] > 0
+    bed = _read_bed(result["peak_file"])
+    assert len(bed) == result["n_peaks"]
+    assert (bed["end"] > bed["start"]).all()
 
 
-@patch('subprocess.run')
-def test_call_peaks_bulk_returns_dataframe(mock_subprocess, simple_adata_with_clusters, tmp_path):
-    """Test call_peaks_bulk returns expected structure."""
-    # Mock macs3 to write a fake narrowPeak file
-    def mock_macs3_side_effect(cmd, *args, **kwargs):
-        if '--outdir' in cmd:
-            idx = cmd.index('--outdir')
-            outdir = cmd[idx + 1]
-            peak_file = _os.path.join(outdir, 'bulk_peaks.narrowPeak')
-            with open(peak_file, 'w') as f:
-                f.write("chr1\t100\t500\tpeak1\t100\t.\t5.0\t10.0\t-1\t200\n")
-        return MagicMock(returncode=0, stdout="", stderr="")
+def test_peak_calling_provenance_names_snapatac2(fragments_h5ad, tmp_path):
+    result = run_peak_calling(_args(tmp_path, fragments_h5ad))
+    assert result["algorithm"] == "snapatac2.tl.macs3"
+    assert result["snapatac2_version"] == snap.__version__
 
-    mock_subprocess.side_effect = mock_macs3_side_effect
 
-    fragment_file = tmp_path / "fragments.tsv.gz"
-    fragment_file.touch()
+def test_peak_calling_pseudobulk_merges_to_fixed_width(fragments_h5ad_clustered, tmp_path):
+    """merge_peaks re-centres each peak on its summit at half_width, so the union is fixed-width."""
+    result = run_peak_calling(_args(
+        tmp_path, fragments_h5ad_clustered, mode="pseudobulk",
+        cluster_column="cluster", half_width=250,
+    ))
+    assert result["n_peaks"] > 0
+    assert result["missing_clusters"] == []
+    bed = _read_bed(result["peak_file"])
+    assert set(bed["end"] - bed["start"]) == {501}
 
-    # Call the low-level function
-    peaks_df = call_peaks_bulk(
-        simple_adata_with_clusters,
-        str(fragment_file),
-        genome='hs',
-        qvalue=0.05,
-    )
 
-    # Contract: should return a DataFrame with peak coordinates
-    assert isinstance(peaks_df, pd.DataFrame)
-    assert 'chr' in peaks_df.columns or 'chrom' in peaks_df.columns
-    assert 'start' in peaks_df.columns
-    assert 'end' in peaks_df.columns
+def test_peak_calling_pseudobulk_matrix_records_cluster_membership(
+    fragments_h5ad_clustered, tmp_path
+):
+    """merge_peaks reports which cluster contributed each peak — keep that in var."""
+    result = run_peak_calling(_args(
+        tmp_path, fragments_h5ad_clustered, mode="pseudobulk",
+        cluster_column="cluster", create_matrix=True,
+    ))
+    out = ad.read_h5ad(result["output"])
+    assert {"a", "b"} <= set(out.var.columns)
+    assert out.uns["peak_calling"]["algorithm"] == "snapatac2.tl.macs3"
+
+
+def test_peak_calling_rejects_plain_feature_matrix(plain_feature_matrix, tmp_path):
+    with pytest.raises(ValueError, match="import_fragments"):
+        run_peak_calling(_args(tmp_path, plain_feature_matrix))
+
+
+def test_peak_calling_pseudobulk_requires_cluster_column(fragments_h5ad, tmp_path):
+    with pytest.raises(ValueError, match="requires --cluster-column"):
+        run_peak_calling(_args(tmp_path, fragments_h5ad, mode="pseudobulk"))
+
+
+def test_peak_calling_rejects_unknown_cluster_column(fragments_h5ad_clustered, tmp_path):
+    with pytest.raises(ValueError, match="not in obs"):
+        run_peak_calling(_args(tmp_path, fragments_h5ad_clustered, mode="pseudobulk",
+                               cluster_column="no_such_column"))
+
+
+def test_peak_calling_zero_peaks_fails_loud(fragments_h5ad, tmp_path, monkeypatch):
+    """An empty peak set is a failure, not a successful empty BED."""
+    empty = pl.DataFrame({"chrom": [], "start": [], "end": [], "name": [], "score": []})
+    monkeypatch.setattr(snap.tl, "macs3", lambda *a, **k: empty)
+    with pytest.raises(RuntimeError, match="zero peaks"):
+        run_peak_calling(_args(tmp_path, fragments_h5ad))
+
+
+def test_peak_calling_report_is_strict_json(fragments_h5ad, tmp_path):
+    result = run_peak_calling(_args(tmp_path, fragments_h5ad))
+    json.dumps(result, allow_nan=False)
+
+
+def test_peak_calling_does_not_leak_tempdir(fragments_h5ad_clustered, tmp_path):
+    """snapATAC2 2.9.0 points the global tempfile.tempdir at scratch it then deletes.
+
+    With n_jobs=1 that assignment runs in this process (`tools/_call_peaks.py:175`),
+    so without the guard every later tempfile user — a second peak_calling, any other
+    library — dies on a FileNotFoundError naming an unrelated path.
+    """
+    before = tempfile.tempdir
+    run_peak_calling(_args(tmp_path, fragments_h5ad_clustered, mode="pseudobulk",
+                           cluster_column="cluster", n_jobs=1))
+    assert tempfile.tempdir == before
+    with tempfile.NamedTemporaryFile() as handle:      # would raise if tempdir were poisoned
+        assert handle.name

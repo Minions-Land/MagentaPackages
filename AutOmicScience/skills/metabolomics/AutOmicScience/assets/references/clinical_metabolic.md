@@ -1,5 +1,8 @@
 # Reference — Clinical Metabolic Phenotyping
 
+**Maturity: REFERENCE** — hand-rolled with `statsmodels` (pinned). The indices below are clinical
+definitions; getting the formula and its units right is the work.
+
 Insulin-resistance indices and metabolic classification.
 
 ## Disposition Index (primary)

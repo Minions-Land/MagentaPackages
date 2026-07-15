@@ -1,5 +1,7 @@
 # Reference — GitHub Fetch (read-only)
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 How to read, summarize, port, or copy material from a GitHub repo — a single file, a sub-tree, a whole repo — from an environment where direct `github.com` HTTPS may be throttled.
 
 > Magenta's `WebFetch` tool already auto-probes local proxies/VPN, so for reading a page it usually "just works". This doc is for the `bash`+`gh`/`git`/`curl` path you need when pulling code and weights for reproduction.

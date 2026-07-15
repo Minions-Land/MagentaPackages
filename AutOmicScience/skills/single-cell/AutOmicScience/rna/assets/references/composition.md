@@ -1,243 +1,228 @@
-# scRNA-seq Compositional Analysis
+# Compositional Analysis — Did cell-type abundance shift?
 
-## Overview
+**Maturity: REFERENCE** — no compute subcommand. §1/§2 (the inferential tests) run in a Python script
+with `pertpy` — install it for the task. §3 (Ro/e) is descriptive and needs only pandas + scipy, both
+already in the pinned env. Emit a `report` dict and `print(report)` to stay grounded.
 
-This guide covers compositional analysis for scRNA-seq data: scCODA (Bayesian compositional analysis) and Milo (differential abundance testing). These methods test changes in cell type proportions or neighborhood abundances between conditions.
+**This doc owns abundance only.** For "which *genes* changed between conditions" see
+`markers_de.md` (Part B, pseudobulk + PyDESeq2 — already in the pinned env). Both can be true at
+once: a cell type can expand while its genes go down.
 
-**For differential expression of genes within cell types**, see `markers_de.md`.
+## Goal / When to Use
 
----
+Test whether the **proportion of a cell type** (or the density of a transcriptional neighbourhood)
+differs between conditions. Requires an annotation you trust and, critically, **biological
+replicates** — several samples per condition, not several cells.
 
-## Compositional Analysis (scCODA)
+## Decision Criteria
 
-### 1. Prepare Count Data
+- **Discrete, trusted cell types + sample-level design** → **scCODA** (`pt.tl.Sccoda`). Bayesian,
+  models counts as compositional, reports credible effects against a reference type.
+- **No trustworthy discretisation, or shifts inside a cell type** → **Milo** (`pt.tl.Milo`). Tests
+  differential abundance over kNN neighbourhoods, so it catches a subpopulation shifting without
+  needing a cluster label for it. Needs `pertpy[milo-edger]` **and a working R** (it calls edgeR
+  through rpy2).
+- **Never a per-type proportion test** (t-test/Mann-Whitney on proportions). Proportions sum to 1,
+  so one type expanding mechanically shrinks every other — a per-type test scores that artifact as
+  a real effect, usually as several types "changing" in opposite directions.
+- **Only *describing* which types sit in which tissue** (a TME-atlas style figure) → **Ro/e** (§3).
+  Descriptive only: no p-value, no inference, not a substitute for §1/§2.
+
+**`pertpy` is in no pinned env** — provision it per `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md` (§A: a `pertpy` feature + env with its own `solve-group`;
+spec `pertpy` for scCODA, `pertpy[milo-edger]` for Milo). Never a bare `pip install` — it can land in
+`base`. Verified absent from `pixi.toml`/`pixi.lock`; a stale copy may linger in an un-rebuilt
+`.pixi/envs/task1`, so check the import in the env you actually run, not a previous session's.
+Tools are in `pt.tl`; **plots are methods on the tool object**, not in `pt.pl`.
+
+## 1. scCODA — sample-level compositional test
 
 ```python
-import pandas as pd
-from sccoda.util import comp_ana as mod
-from sccoda.util import cell_composition_data as dat
+import pertpy as pt
 
-# Count cells per sample per cell type
-cell_counts = adata.obs.groupby(['sample_id', 'cell_type']).size().unstack(fill_value=0)
-
-# Sample metadata
-sample_meta = adata.obs[['sample_id', 'condition']].drop_duplicates().set_index('sample_id')
-
-# Create scCODA data object
-coda_data = dat.from_pandas(
-    cell_counts,
-    covariate_df=sample_meta,
-    covariate_columns=['condition']
+sccoda = pt.tl.Sccoda()
+mdata = sccoda.load(
+    adata, type="cell_level", generate_sample_level=True,
+    cell_type_identifier="cell_type",   # obs column with the annotation
+    sample_identifier="sample_id",      # obs column with the biological replicate
+    covariate_obs=["condition"],        # obs columns to carry to the sample level
 )
+mdata = sccoda.prepare(mdata, formula="condition", reference_cell_type="automatic")
+sccoda.run_nuts(mdata, rng_key=0)       # MCMC; rng_key makes it reproducible
+
+credible = sccoda.credible_effects(mdata)   # Series: (covariate, cell type) -> bool
+effects = sccoda.get_effect_df(mdata)       # effect sizes / log2-fold changes
+sccoda.plot_effects_barplot(mdata, covariates="condition")
 ```
 
-### 2. Run scCODA
+Every argument after `data` is keyword-only — `plot_effects_barplot(mdata, "condition")` binds
+`"condition"` to `modality_key` and raises `TypeError: takes 2 positional arguments but 3 were
+given`.
+
+**Why these choices:** `formula="condition"` is the design — add covariates as `"condition + batch"`.
+`reference_cell_type="automatic"` picks the type with the lowest relative-abundance dispersion that
+is present in ≥90% of samples; name a type explicitly if you know one is genuinely unchanged.
+`credible_effects` is a **boolean per (covariate, cell type)** — scCODA reports credible intervals,
+not p-values, so there is no FDR column to threshold.
+
+**Read the reference back for your report:**
 
 ```python
-# Set up model
-model = mod.CompositionalAnalysis(coda_data, formula="condition", reference_cell_type="automatic")
-
-# Run MCMC
-model.sample_hmc()
-
-# Get results
-results = model.summary()
-print(results)
-
-# Credible effects (cell types with significant change)
-credible = results[results['Final Parameter'] != 0]
-print(f"\nCell types with credible compositional change:\n{credible}")
+ref = mdata["coda"].uns["scCODA_params"]["reference_cell_type"]
 ```
 
-### 3. Visualization
+**Tune the FDR** with `sccoda.set_fdr(mdata, est_fdr=0.2)` then re-read `credible_effects` — the
+default (0.05) is conservative for small sample sizes.
 
-```python
-# Effect plot
-model.plot_effects()
-
-# Boxplot of cell type proportions
-coda_data.plot_boxplot(feature='condition', figsize=(12, 6))
-
-# Stacked barplot
-coda_data.plot_stacked_barplot(feature='condition')
-```
-
-### 4. Alternative: Manual Compositional Test
-
-```python
-# Simple frequency-based test (not accounting for compositionality)
-# Use only as comparison to scCODA
-
-from scipy.stats import mannwhitneyu
-
-# Compute proportions
-props = adata.obs.groupby(['sample_id', 'cell_type']).size().unstack(fill_value=0)
-props = props.div(props.sum(axis=1), axis=0)
-
-# Merge with condition
-props = props.merge(sample_meta, left_index=True, right_index=True)
-
-# Test each cell type
-results = []
-for cell_type in props.columns[:-1]:  # Exclude 'condition' column
-    treated = props[props['condition'] == 'treated'][cell_type]
-    control = props[props['condition'] == 'control'][cell_type]
-    
-    stat, pval = mannwhitneyu(treated, control, alternative='two-sided')
-    results.append({
-        'cell_type': cell_type,
-        'mean_treated': treated.mean(),
-        'mean_control': control.mean(),
-        'fold_change': treated.mean() / control.mean(),
-        'p_value': pval
-    })
-
-results_df = pd.DataFrame(results)
-
-# FDR correction
-from statsmodels.stats.multitest import multipletests
-results_df['padj'] = multipletests(results_df['p_value'], method='fdr_bh')[1]
-
-print(results_df.sort_values('padj'))
-```
-
-## Integrated Workflow: All Three Methods
+## 2. Milo — neighbourhood-level differential abundance
 
 ```python
 import scanpy as sc
-import pandas as pd
-from pydeseq2.dds import DeseqDataSet
-from pydeseq2.ds import DeseqStats
-import milopy
-from sccoda.util import comp_ana as mod
-from sccoda.util import cell_composition_data as dat
 
-# 1. Load annotated data
-adata = sc.read_h5ad('annotated.h5ad')
+milo = pt.tl.Milo()
+mdata = milo.load(adata)
+sc.pp.neighbors(mdata["rna"], n_neighbors=30)          # build the kNN graph first
+milo.make_nhoods(mdata["rna"], prop=0.1)               # sample 10% of cells as nhood indices
+mdata = milo.count_nhoods(mdata, sample_col="sample_id")
+milo.da_nhoods(mdata, design="~condition")             # calls edgeR via rpy2
 
-# Ensure metadata is present
-assert 'sample_id' in adata.obs.columns
-assert 'condition' in adata.obs.columns
-assert 'cell_type' in adata.obs.columns
-
-# 2. Pseudobulk DE (PyDESeq2)
-print("Running pseudobulk DE...")
-pb_data = pseudobulk(adata)
-de_results = {}
-
-for cell_type, counts in pb_data.items():
-    dds = DeseqDataSet(counts=counts.T, metadata=sample_metadata, design_factors="condition")
-    dds.deseq2()
-    stat_res = DeseqStats(dds, contrast=["condition", "treated", "control"])
-    stat_res.summary()
-    de_results[cell_type] = stat_res.results_df
-
-# 3. Differential abundance (Milo)
-print("Running Milo DA...")
-sc.pp.neighbors(adata, n_neighbors=30)
-milopy.core.make_nhoods(adata, prop=0.1)
-milopy.core.count_nhoods(adata, sample_col='sample_id')
-milopy.core.DA_nhoods(adata, design='~ condition', model_contrasts='conditiontreated')
-nhood_res = adata.uns['nhood_adata'].obs
-
-# 4. Compositional analysis (scCODA)
-print("Running scCODA...")
-cell_counts = adata.obs.groupby(['sample_id', 'cell_type']).size().unstack(fill_value=0)
-sample_meta = adata.obs[['sample_id', 'condition']].drop_duplicates().set_index('sample_id')
-coda_data = dat.from_pandas(cell_counts, covariate_df=sample_meta, covariate_columns=['condition'])
-model = mod.CompositionalAnalysis(coda_data, formula="condition", reference_cell_type="automatic")
-model.sample_hmc()
-comp_results = model.summary()
-
-# 5. Compare results
-print("\n=== Summary ===")
-print(f"DE genes per cell type: {[(ct, (res['padj'] < 0.05).sum()) for ct, res in de_results.items()]}")
-print(f"Significant Milo neighborhoods: {(nhood_res['SpatialFDR'] < 0.1).sum()}")
-print(f"Cell types with compositional change: {(comp_results['Final Parameter'] != 0).sum()}")
+res = mdata["milo"].var                                # logFC, PValue, SpatialFDR per nhood
+milo.annotate_nhoods(mdata, anno_col="cell_type")      # label nhoods by majority cell type
+milo.plot_da_beeswarm(mdata)
 ```
 
-## Best Practices
+`prop` sets how many cells seed neighbourhoods — 0.1 is the default; lower it for very large
+datasets. Milo's unit is a **neighbourhood, not a cell type**, so results are "N neighbourhoods
+annotated mostly as X shifted", which is a weaker but more honest claim when the annotation is
+uncertain. Filter on `SpatialFDR` (spatially-corrected), not `PValue`.
 
-1. **Always use raw counts for DE**: Log-normalized data breaks distributional assumptions
+## 3. Ro/e — descriptive tissue enrichment (not a test)
 
-2. **Require biological replicates**: Minimum 3 per condition for pseudobulk DE
+Ro/e (ratio of observed to expected) is the standard *descriptive* summary of which cell types
+concentrate in which tissue or compartment — the TME-atlas convention for tumor vs adjacent-normal vs
+blood. It is **not** an alternative to §1/§2: it yields no p-value and makes no inference. Use it to
+**describe** composition in a figure; use scCODA/Milo to **test** whether composition shifted.
 
-3. **Filter lowly expressed genes**: Remove genes expressed in <10 cells before pseudobulk
+```python
+import pandas as pd, numpy as np
+from scipy.stats import chi2_contingency
 
-4. **Check for batch effects**: Visualize PCA colored by batch before DE
+obs = pd.crosstab(adata.obs["cell_type"], adata.obs["tissue"])   # rows = cell types, cols = tissues
+_, _, _, expected = chi2_contingency(obs)          # expected counts under cell-type ⟂ tissue
+expected = pd.DataFrame(expected, index=obs.index, columns=obs.columns)
 
-5. **Use appropriate reference for scCODA**: "automatic" mode works well in most cases
-
-6. **Validate with marker genes**: Check if known markers show expected direction
-
-7. **Report multiple testing correction**: Always use adjusted p-values (FDR)
-
-8. **Document design formula**: Record all covariates included in model
-
-9. **Check model assumptions**: QQ plots, dispersion estimates, Cook's distance
-
-10. **Combine methods**: Use DE for genes, Milo for neighborhoods, scCODA for cell type shifts
-
-## Common Pitfalls
-
-- Using normalized/log-transformed data for PyDESeq2 (need raw counts)
-- Insufficient replicates (n=2 is not enough for DE)
-- Ignoring batch effects or confounders
-- Testing compositional data with standard frequency tests
-- Not filtering low-quality cells before aggregation
-- Aggregating across batches instead of samples
-- Using clusters instead of annotated cell types
-- Comparing absolute cell counts instead of proportions
-- Over-interpreting small effect sizes
-- Not validating with orthogonal methods (FACS, IF, etc.)
-
-## Troubleshooting
-
-### Issue: PyDESeq2 fails with singular matrix error
-**Cause:** Perfect collinearity in design, or too few samples  
-**Fix:** Check design matrix, ensure sufficient replicates, remove redundant covariates
-
-### Issue: No significant genes found
-**Cause:** Insufficient power, small effect sizes, or high variability  
-**Fix:** Check power analysis, increase replicates, aggregate more cells per pseudobulk
-
-### Issue: Milo finds too many/too few neighborhoods
-**Cause:** prop parameter too high/low  
-**Fix:** Tune prop (default 0.1), check neighborhood size distribution
-
-### Issue: scCODA reference selection changes results dramatically
-**Cause:** No truly stable cell type, or small sample size  
-**Fix:** Test multiple references, report sensitivity, use "automatic" mode
-
-### Issue: DE and compositional results disagree
-**Cause:** Different questions (expression vs abundance)  
-**Fix:** Interpret correctly—both can be true (cell type increases but genes downregulated)
-
-## Available AOSE Tools
-
-```bash
-# Check DE/composition tools
-aos bio list-tools | grep -E "deseq|de_test|composition"
+roe = obs / expected                               # >1 enriched in that tissue, <1 depleted
+residuals = (obs - expected) / np.sqrt(expected)   # signed Pearson residual = strength of deviation
 ```
 
-- `bio_rank_genes_groups` - Basic Wilcoxon DE (scanpy)
-- `bio_pydeseq2` - PyDESeq2 pseudobulk DE (if installed)
-- `bio_milo` - Milo differential abundance (if milopy installed)
-- `bio_sccoda` - scCODA compositional analysis (if sccoda installed)
+`chi2_contingency` is used **only for its `expected` table** (the independence model
+`row_total × col_total / N`). Take the expected counts; discard the χ² statistic and its p-value —
+see Failure Mode 6.
 
-## References
+**Run it at the finest granularity you trust** (SubCellType, never broad lineage). The signal lives in
+the states, not the lineage: SPP1⁺ and FOLR2⁺ macrophages can move in opposite directions and cancel
+out once pooled as "Macrophage". TME atlases name tumor-enriched populations `Lineage_StateGene`
+(`Mph_SPP1`, `Fibro_FAP`, `Endo_COL4A1`, `CD8_Tex_LAYN`) for exactly this reason.
 
-- PyDESeq2: Muzellec et al. bioRxiv 2022 (Python port of DESeq2)
-- DESeq2: Love et al. Genome Biology 2014
-- Milo: Dann et al. Nature Biotechnology 2021
-- scCODA: Buttner et al. Nature Communications 2021
-- Compositional data analysis: Aitchison 1986
+**Do not "normalize for sampling depth" by hand.** A per-tissue proportion fold-change
+`(n_ij / n_·j) / (n_i· / N)` is *algebraically identical* to `obs / expected` — Ro/e already **is** the
+depth-normalized quantity. Writing it a second way adds a step, not robustness.
 
-## When to Seek Expert Help
+Rare types: `expected < 5` is where the ratio turns unstable (3 expected, 6 observed reads as
+Ro/e = 2.0 on almost nothing). Flag them rather than ranking them:
 
-- Complex experimental designs (time-series, multi-factor, nested)
-- Small sample sizes (n<3 per group)
-- Confounded designs (batch == condition)
-- Interpreting compositional shifts in context
-- Power analysis for future experiments
-- Integration with proteomics or other modalities
+```python
+unstable = (expected < 5)     # report alongside roe; don't headline a type flagged here
+```
+
+The tumor-specific triple filter (`roe["Tumor"] > 1` & `roe["Normal"] < 1` & `roe["Blood"] < 1`) is a
+convention for *shortlisting* candidates, not a test — a type passing it has not been shown to be
+significantly tumor-restricted.
+
+## Failure Modes
+
+1. **Too few samples.** *Symptom:* nothing is credible, or scCODA's automatic reference flips
+   between runs. *Diagnosis:* compositional tests replicate over **samples**; 100k cells from 2
+   donors is n=2. *Fix:* need ≥3 samples/condition; below that, report the comparison as
+   underpowered and abstain — do not fall back to a per-cell test, which manufactures significance.
+
+2. **Reference cell type drives the result.** *Symptom:* conclusions change when the reference
+   changes. *Diagnosis:* every scCODA effect is *relative* to the reference; if the reference itself
+   moved, everything else appears to move the other way. *Fix:* test 2–3 references, report the
+   sensitivity, and prefer a type with a real biological reason to be stable.
+
+3. **Clusters used instead of annotated types.** *Symptom:* several fine-grained clusters of the
+   same cell type split the signal and none is credible. *Diagnosis:* over-clustering fragments one
+   population across categories. *Fix:* annotate first (`annotation.md`), or use Milo, which does
+   not need a discretisation.
+
+4. **`da_nhoods` fails to import rpy2 / R.** *Symptom:* `ImportError` or an rpy2/R error inside
+   `da_nhoods`. *Diagnosis:* Milo's model is edgeR, called through rpy2 — the base pertpy install
+   has neither. *Fix:* provision an env with the `pertpy[milo-edger]` spec **and** R + edgeR in it (§A/§B
+   of `AOSE_nonStandard_env.md` — Milo's R dependency is a classic §B case);
+   if R isn't available, use scCODA instead rather than hand-rolling a proportion test.
+
+5. **Absolute counts compared instead of proportions.** *Symptom:* every type "increases" in the
+   condition with more cells sequenced. *Diagnosis:* cell counts reflect loading/recovery depth, not
+   biology. *Fix:* both tools model this correctly — feed them counts per sample and let them handle
+   the normalization; never compare raw counts across samples yourself.
+
+6. **A p-value attached to Ro/e.** *Symptom:* "cell type X is significantly enriched in tumor,
+   χ² p < 1e-10". *Diagnosis:* a χ² test over a cell-type × tissue table treats every **cell** as an
+   independent observation — at 100k cells everything deviates from independence, and if each tissue
+   came from one patient the test is measuring that patient, not the tissue. It is the per-cell test
+   this doc rejects, wearing a different hat. *Fix:* report Ro/e as description (ratio + signed
+   residual, no p); if the claim needs inference, run §1/§2 over samples.
+
+## Figure checkpoints
+
+- **Stacked barplot of proportions per sample** (`sccoda.plot_stacked_barplot`) — do replicates
+  within a condition look alike? Wild within-condition spread means the test will (correctly) find
+  nothing; investigate that first.
+- **scCODA effects barplot** — is the credible type's direction consistent with the barplot above?
+- **Milo beeswarm** (`milo.plot_da_beeswarm`) — do shifted neighbourhoods cluster within one
+  annotated type, or scatter across many? Scattered = the annotation and the shift disagree.
+- **Ro/e heatmap** (cell type × tissue) — is the pattern driven by a handful of fine types with tiny
+  expected counts? Overlay or mask the `expected < 5` cells before showing it.
+
+Observe each before it backs a claim.
+
+## Grounding
+
+Build the `report` **from the returned objects** (do not hardcode), then `print(report)`:
+
+```python
+report = {
+    "method": "sccoda",
+    "pertpy_version": pt.__version__,
+    "formula": "condition",
+    "reference_cell_type": mdata["coda"].uns["scCODA_params"]["reference_cell_type"],
+    "n_samples_per_condition": adata.obs.drop_duplicates("sample_id")["condition"]
+                                    .value_counts().to_dict(),
+    "n_cell_types": int(adata.obs["cell_type"].nunique()),
+    "credible": credible[credible].index.tolist(),
+    "est_fdr": 0.05,
+}
+report
+```
+
+Record the **reference cell type**, the **number of samples per condition**, the design formula, and
+the FDR — a credible effect is meaningless without them.
+
+## Honesty
+
+- **Compositional effects are relative.** "Type A expanded" always means *relative to the reference
+  type*. Name the reference; never present scCODA output as an absolute abundance change.
+- **Credible ≠ significant.** scCODA reports credible intervals under a Bayesian model, not
+  frequentist p-values. Say "credible under scCODA at FDR x", not "p < 0.05".
+- **Samples are the replicates.** State the number of samples per condition next to any claim; a
+  compositional result from 2 donors is anecdote regardless of cell count.
+- **Milo's unit is a neighbourhood.** "12 neighbourhoods annotated as CD8 T shifted" is not "CD8 T
+  cells expanded" — the shift may involve a subset of that type.
+- **Ro/e describes, it does not test.** "Mph_SPP1 has Ro/e 2.3 in tumor" is a description of this
+  dataset's composition. It is not evidence that SPP1⁺ macrophages are enriched in tumors as a class —
+  that claim needs §1/§2 over biological replicates. Never write "significantly" next to a Ro/e.
+- **Abundance and expression are different questions.** A credible compositional shift says nothing
+  about which genes changed (`markers_de.md`), and vice versa.
+- **Validate orthogonally when the claim matters.** FACS, IF, or a held-out cohort — computational
+  abundance shifts are hypotheses about the tissue, filtered through dissociation and sorting bias.

@@ -1,5 +1,7 @@
 # Clonotype / clone definition (paired-chain, cross-donor comparable)
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Define clonotypes from the **receptor sequence** using **both** chains — not a vendor per-sample
 clonotype ID (`P1 clonotype12` ≠ `P2 clonotype12`; unique only within one sample, so it silently
 breaks cross-donor "public" discovery). Two engines: scirpy (flexible distance metrics) and

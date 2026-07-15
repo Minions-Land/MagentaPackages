@@ -1,5 +1,5 @@
 """
-Layout validator for AnnData/MuData/SpatialData objects.
+Layout validator for AnnData/MuData objects.
 
 Validates that required keys (layers, obsm, obs) are present per the
 data conventions. Imports all key constants from conventions.py —
@@ -95,7 +95,7 @@ def assert_layout(
     # Extract layout info
     n_obs = adata.n_obs
     n_vars = adata.n_vars
-    present_layers = list(adata.layers.keys()) if hasattr(adata, 'layers') else []
+    present_layers = list(adata.layers.keys()) if getattr(adata, 'layers', None) is not None else []
     present_obsm = list(adata.obsm.keys()) if hasattr(adata, 'obsm') else []
     present_obs = list(adata.obs.columns) if hasattr(adata, 'obs') else []
 
@@ -162,22 +162,38 @@ def describe_layout(adata) -> dict[str, Any]:
     dict
         Report with n_obs, n_vars, and all present keys
     """
-    n_obs = adata.n_obs
-    n_vars = adata.n_vars
-    present_layers = list(adata.layers.keys()) if hasattr(adata, 'layers') else []
+    # MuData: report per-modality structure. Its top-level .obsm holds modality
+    # membership arrays, not embeddings, so describing it as a flat AnnData would
+    # mislabel modalities as obsm keys and hide each modality's real content.
+    if hasattr(adata, "mod"):
+        return {
+            "type": "MuData",
+            "n_obs": int(adata.n_obs),
+            "modalities": {
+                name: {
+                    "n_obs": int(mod.n_obs),
+                    "n_vars": int(mod.n_vars),
+                    "layers": list(mod.layers.keys()),
+                    "obsm": list(mod.obsm.keys()),
+                    "obs_cols": list(mod.obs.columns),
+                    "recognized_embeddings": [k for k in mod.obsm.keys() if is_embedding_key(k)],
+                }
+                for name, mod in adata.mod.items()
+            },
+        }
+
+    present_layers = list(adata.layers.keys()) if getattr(adata, 'layers', None) is not None else []
     present_obsm = list(adata.obsm.keys()) if hasattr(adata, 'obsm') else []
     present_obs = list(adata.obs.columns) if hasattr(adata, 'obs') else []
 
-    # Identify recognized embeddings (any obsm key matching X_* namespace)
-    recognized_embeddings = [k for k in present_obsm if is_embedding_key(k)]
-
     report = {
-        "n_obs": int(n_obs),
-        "n_vars": int(n_vars),
+        "type": "AnnData",
+        "n_obs": int(adata.n_obs),
+        "n_vars": int(adata.n_vars),
         "layers": present_layers,
         "obsm": present_obsm,
         "obs_cols": present_obs,
-        "recognized_embeddings": recognized_embeddings,
+        "recognized_embeddings": [k for k in present_obsm if is_embedding_key(k)],
     }
 
     return report

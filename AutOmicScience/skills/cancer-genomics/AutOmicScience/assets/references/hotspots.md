@@ -1,5 +1,7 @@
 # Reference — Hotspots & Protein-Domain Filtering
 
+**Maturity: REFERENCE (domain knowledge — no code dependency).** Nothing here can go stale against a library version; it is the interpretive layer the runnable docs feed into.
+
 Restricting mutation analysis to specific protein positions (hotspots) or domains (functional regions) — often the difference between a meaningful result and a diluted, uninterpretable one.
 
 ## Parsing protein position

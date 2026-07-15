@@ -7,6 +7,12 @@ pixi_environment = "default"
 operation = "execute"
 read_only = false
 destructive = false
+# Trusted sandbox: subcommands write workspace outputs (--output) and the
+# functional ones (pathway_activity / enrichment) fetch gene sets over the network
+# (decoupler dc.op.*); scanpy workloads also need real memory/time and GPU env
+# vars. Without a tag the tool would fall to the least-privilege 'restricted'
+# sandbox (writes only .magenta/tmp, network denied), which breaks real analysis.
+tags = ["trusted"]
 
 [metadata]
 package = "AutOmicScience"
@@ -21,7 +27,7 @@ multiome = "task3"
 
 [parameters]
 type = "object"
-required = ["subcommand"]
+required = ["subcommand", "modality"]
 
 [parameters.properties.subcommand]
 type = "string"
@@ -39,19 +45,18 @@ enum = [
   "load_multiome",
   "pathway_activity",
   "enrichment",
-  "perturbation",
   "score",
 ]
-description = "Compute subcommand. Data-acquisition subcommands census_query and geo_fetch are intentionally excluded until their implementation modules are migrated."
+description = "Compute subcommand. Data-acquisition subcommands census_query and geo_fetch are intentionally excluded until their implementation modules are migrated. Perturbation/condition-response DE is intentionally NOT a subcommand: it is a hand-rolled PARTIAL path (see the single-cell rna skill's functional.md), so pertpy is not carried in the pinned env and must be provisioned into its own environment before use (omics-shared's AOSE_nonStandard_env.md)."
 
 [parameters.properties.modality]
 type = "string"
 enum = ["scrna", "spatial", "scatac", "multiome"]
-description = "Optional modality hint used by the execution layer to select a pinned environment."
+description = "Required. Execution-layer environment selector (scrna->task1, spatial->task2, scatac->task4, multiome->task3). Must match the subcommand's data: read_spatial->spatial; atac_qc/peak_calling/gene_activity->scatac; load_multiome->multiome; the scrna/bulk/functional subcommands (load_dataset, summarize, preprocess, marker_table, integrate, pathway_activity, enrichment, score) run in scrna (task1). It is required so a missing value cannot silently fall back to the scrna 'default' env and raise ModuleNotFoundError for spatial/scatac/multiome work."
 
 [parameters.properties.args]
 type = "object"
-description = "Compute flags keyed by subcommand flag names."
+description = "Compute flags keyed by subcommand flag names (without the leading '--'). The subcommand's argparse parser is the single source of truth for which flags exist and which are required, their choices, and their mutual exclusions — run `python -m aose_omics_runtime <subcommand> --help` to read it. Flags are deliberately not restated here: a second copy would drift from the implementation. Notable required inputs: the three scatac subcommands (atac_qc, peak_calling, gene_activity) all take an --adata produced by snapatac2.pp.import_fragments (they read insertions from obsm, so a plain feature matrix is rejected); gene_activity needs gtf-file, and atac_qc needs gtf-file when compute-tsse is set."
 
 [parameters.properties.pythonBin]
 type = "string"
