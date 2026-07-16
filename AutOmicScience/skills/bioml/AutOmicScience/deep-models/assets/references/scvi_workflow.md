@@ -3,7 +3,7 @@
 **Maturity: mixed.** **scVI / scANVI / MultiVI / totalVI are REFERENCE** — `scvi-tools` is pinned in
 `task1–4` (`scvi-tools = ">=1.1"`, resolved to **1.4.3**); you hand-write the calls. **scArches and
 scib are PARTIAL** — neither is in any pinned env; provision them per `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md` (§A, own solve-group, composing `["core","singlecell",…]`)
+`assets/references/AOSE_nonStandard_env.md` — an env of your own, beside your analysis outputs —
 before the blocks that use them. Never a bare `pip install`. `omics_preflight` covers only `task1–4`,
 so check the imports yourself and record the env + versions in the `report`.
 

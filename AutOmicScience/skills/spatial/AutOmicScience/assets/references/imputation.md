@@ -1,6 +1,6 @@
 # Gene Imputation for Targeted Panels
 
-**Maturity: PARTIAL** — gene imputation via **Tangram** (`project_genes`), hand-rolled in Python. Tangram is **not** in `task2`: provision it into its own env per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A, isolated `solve-group` — it pulls in **torch**, which is exactly why it must not go into `task2`). **The distribution name is `tangram-sc`**, not `tangram` — the latter is an unrelated package on PyPI; get this wrong in a spec and you install something else entirely. CPU is fine for cluster-mode maps; single-cell-mode mapping over a large reference wants a GPU (§B conda if the CUDA stack needs pinning). Imaging panels only. API below verified against `broadinstitute/Tangram` rev `4c68995`.
+**Maturity: PARTIAL** — gene imputation via **Tangram** (`project_genes`), hand-rolled in Python. Tangram is **not** in `task2`: provision it into its own env per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (it pulls in **torch**, which is exactly why it must not go into `task2`). **The distribution name is `tangram-sc`**, not `tangram` — the latter is an unrelated package on PyPI; get this wrong in a spec and you install something else entirely. CPU is fine for cluster-mode maps; single-cell-mode mapping over a large reference wants a GPU (a named conda env if the CUDA stack needs pinning). Imaging panels only. API below verified against `broadinstitute/Tangram` rev `4c68995`.
 
 ## Goal / When to Use
 

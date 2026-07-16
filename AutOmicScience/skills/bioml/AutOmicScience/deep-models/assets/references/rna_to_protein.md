@@ -1,6 +1,6 @@
 # Reference — scRNA → Protein Translation (CITE-seq Prediction)
 
-**Maturity: PARTIAL** — `sciPENN` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+**Maturity: PARTIAL** — `sciPENN` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Provision it into its own environment per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`, which carries the routing and the hard rules.
 
 Predicting surface-protein abundance from RNA-only single-cell data. The task: given scRNA-seq, output a protein-abundance matrix matching a CITE-seq panel.
 
@@ -73,17 +73,22 @@ the Maturity note above — never bare (`pip install sciPENN` on a bare `$PATH` 
 `base`):
 
 ```toml
-# tools/omics-environment/pixi.toml
-[feature.scipenn.pypi-dependencies]
-sciPENN = "*"
+# pixi.toml, at your analysis root
+[workspace]
+name = "scipenn"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
 
-[environments]
-scipenn = { features = ["core", "singlecell", "scipenn"], solve-group = "scipenn" }
+[dependencies]
+scanpy = "*"        # brings pandas / numpy / scipy transitively
+
+[pypi-dependencies]
+sciPENN = "*"
 ```
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e scipenn
-pixi run     --manifest-path tools/omics-environment/pixi.toml -e scipenn python -c "import sciPENN"
+pixi lock && pixi install --locked
+pixi run --frozen python -c "import sciPENN"
 ```
 
 ```python

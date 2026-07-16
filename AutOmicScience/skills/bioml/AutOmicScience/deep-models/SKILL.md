@@ -84,28 +84,33 @@ scArches is *not* pinned, so "first try scArches" costs you a provisioning step 
 
 Everything else in the menu (`scArches`, `scPoli`, `scib`, `SATURN`, `scGPT`, `Geneformer`,
 `sciPENN`, `PHLOWER`) is **not pinned**. Provision per `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md` — §A, a Pixi feature + environment with its **own
-solve-group**, composing `["core", "singlecell", <new>]` so the pinned stack comes with it:
+`assets/references/AOSE_nonStandard_env.md` — an env of your own, beside your analysis outputs,
+declaring what you import:
 
 ```toml
-# tools/omics-environment/pixi.toml
-[feature.scarches.pypi-dependencies]
+# pixi.toml, at your analysis root
+[workspace]
+name = "scarches"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+scanpy = "*"        # brings pandas / numpy / scipy transitively
+
+[pypi-dependencies]
 scarches = "*"
 scib = "*"
-
-[environments]
-scarches = { features = ["core", "singlecell", "scarches"], solve-group = "scarches" }
 ```
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e scarches
-pixi lock    --manifest-path tools/omics-environment/pixi.toml
+pixi lock && pixi install --locked
+pixi run --frozen python integrate.py
 ```
 
 > **Never `pip install scvi-tools`.** It is already there, so the install is pure risk: a bare `pip`
 > resolves against whatever `python` is first on `$PATH` — often conda `base` — and can downgrade the
 > `pandas`/`numpy` that `task1–4` are locked to. The rule is absolute: named env, or nothing. GPU
-> stacks that Pixi cannot solve are the §B conda-env case, still named, never `base`.
+> stacks that Pixi cannot solve are the named-conda-env case, still named, never `base`.
 
 Record the env and the resolved versions in the `report`. `omics_preflight` only validates `task1–4`,
 so check the import yourself after provisioning.

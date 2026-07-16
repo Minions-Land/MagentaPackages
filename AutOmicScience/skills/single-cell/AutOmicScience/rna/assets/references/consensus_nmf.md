@@ -2,8 +2,8 @@
 
 **Maturity: PARTIAL** — no compute subcommand, and `cnmf` is **not** in the pinned `task1` env, so it must
 be **provisioned into its own environment** first: follow `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md` (§A — a `cnmf` feature + env with its own `solve-group`; §B a
-**named** conda env if the solve fails). Never a bare `pip install` — the machine's `pip` may point at
+`assets/references/AOSE_nonStandard_env.md` — an env of your own with the `cnmf` spec, or a **named**
+conda env if the solve fails. Never a bare `pip install` — the machine's `pip` may point at
 conda `base` — and never add it to `task1`. Then run it in a Python script, emit a `report` dict and
 `print(report)` to stay grounded; record the env + version there, since `omics_preflight` does not cover
 non-standard envs. API below verified against **cNMF v1.7.1** (`dylkot/cNMF`, rev `5dbc5ba`).

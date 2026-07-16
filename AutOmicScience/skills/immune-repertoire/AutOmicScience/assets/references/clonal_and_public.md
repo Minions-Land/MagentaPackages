@@ -8,10 +8,9 @@
 - **You still need to *build* `clone_id` from chains** → see `clonotype_definition.md`. Distance-based
   clustering needs scirpy; **exact-identity matching does not** — it is a string key and a `groupby`.
 
-`scirpy` is in no pinned env (`task1–4`). When you do need it, provision per `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md` (§A a Pixi feature + env with its own solve-group; §B a
-named conda env). Never a bare `pip install`. `omics_preflight` does not cover non-standard envs —
-check the import yourself and record versions in the `report`.
+`scirpy` is in no pinned env (`task1–4`). When you do need it, provision it into its own
+environment per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`, which carries the
+routing and the hard rules.
 
 Downstream of a sequence-defined `clone_id` (see `clonotype_definition.md`). Two distinct concepts:
 **expansion** = within-donor clonal size; **public** = cross-donor sharing. Don't conflate them.

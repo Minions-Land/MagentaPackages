@@ -3,29 +3,32 @@
 **Maturity: REFERENCE** — annotate peaks to genes and classify them by genomic feature. A GTF is a TSV
 and a TSS is one coordinate, so **pandas on `task1` does this**; a multi-GB GTF reads fine with
 `pd.read_csv(..., chunksize=...)`. **Neither `pyranges` nor `gtfparse` is installed** — they are
-conveniences worth their own solve-group only if the interval work is intricate; not a gate. The
+conveniences worth an env of their own only if the interval work is intricate; not a gate. The
 pyranges/gtfparse API below is verified against `pyranges` **0.1.4** (executed) and `gtfparse` rev
 `cb3788e`, for when you do provision them.
 
-> **Provisioning — follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`** (§A: a new Pixi
-> feature + environment with its **own solve-group**, which keeps these pins away from `task1–4` and lands
-> the env in `pixi.lock`). Do **not** bare-`pip install` — the machine's `python`/`pip` may point at conda
-> `base`, and `pandas<3` would downgrade it. Do not add these to `task1–4` either: `pandas<3` conflicts with
-> the pinned stack, which is exactly what an isolated solve-group is for.
+> **Provisioning — follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`**: an env of your
+> own, beside your analysis outputs. Do **not** bare-`pip install` — the machine's `python`/`pip` may point
+> at conda `base`, and `pandas<3` would downgrade it. Do not add these to `task1–4` either: `pandas<3`
+> conflicts with the pinned stack, which is exactly why this gets a separate env.
 >
 > ```toml
-> # tools/omics-environment/pixi.toml
-> [feature.peaks.pypi-dependencies]
+> # pixi.toml, at your analysis root
+> [workspace]
+> name = "peaks"
+> channels = ["conda-forge"]
+> platforms = ["linux-64"]
+>
+> [dependencies]
+> pandas = "<3"
+>
+> [pypi-dependencies]
 > pyranges = "==0.1.4"
 > gtfparse = "*"
-> [feature.peaks.dependencies]
-> pandas = "<3"
-> [environments]
-> peaks = { features = ["core", "peaks"], solve-group = "peaks" }
 > ```
 > ```bash
-> pixi install --manifest-path tools/omics-environment/pixi.toml -e peaks
-> pixi run --manifest-path tools/omics-environment/pixi.toml -e peaks python annotate_peaks.py
+> pixi lock && pixi install --locked
+> pixi run --frozen python annotate_peaks.py
 > ```
 > One-off instead: `pixi exec --spec "pyranges==0.1.4" --spec "pandas<3" --spec gtfparse -- python annotate_peaks.py`
 > (ephemeral, **not** in the lock — record the versions in your report yourself).

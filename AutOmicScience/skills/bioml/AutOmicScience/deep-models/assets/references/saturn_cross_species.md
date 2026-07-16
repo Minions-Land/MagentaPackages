@@ -1,6 +1,6 @@
 # Reference — SATURN Cross-Species / Cross-Modality Matching
 
-**Maturity: PARTIAL** — `saturn` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), or §B a **named** conda env if Pixi can't solve it. Never a bare `pip install` (it can land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard envs — check the import yourself, and record the env + versions in the `report`. If it can be neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker method.
+**Maturity: PARTIAL** — `saturn` is **not in any pinned environment** (`task1–4`), so this method must be provisioned before it can run. Provision it into its own environment per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`, which carries the routing and the hard rules.
 
 SATURN aligns cells across species (human / mouse) or modalities (scRNA / scATAC) via a macrogene abstraction + VAE architecture. Use when simpler methods (scVI/scArches on shared genes) fail due to namespace mismatch.
 
@@ -74,8 +74,8 @@ Verify the exact required metric — some score ARI, some accuracy, some cosine 
 
 SATURN is a research repo (not on PyPI) and **has no `setup.py` or `pyproject.toml`**, so
 `pip install -e .` fails — there is nothing to install. Clone it and run the script in place, from an env
-provisioned per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A a Pixi env with its own
-solve-group for its torch stack; §B a named conda env if CUDA needs pinning):
+provisioned per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — an env of your own for its
+torch stack, or a named conda env if CUDA needs pinning:
 
 ```bash
 git clone https://github.com/snap-stanford/SATURN.git

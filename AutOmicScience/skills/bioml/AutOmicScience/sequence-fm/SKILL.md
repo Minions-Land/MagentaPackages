@@ -30,18 +30,23 @@ snippet below fails at the import until you provision it. Repo-based models (Hye
 GPN) additionally need their own clone + requirements.
 
 ```toml
-# tools/omics-environment/pixi.toml — §A; use §B (named conda env) if a CUDA build must be pinned
-[feature.seqfm.pypi-dependencies]
+# pixi.toml, at your analysis root — use a named conda env instead if a CUDA build must be pinned
+[workspace]
+name = "seqfm"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+pytorch = "*"
+
+[pypi-dependencies]
 transformers = "*"
 datasets = "*"
-
-[environments]
-seqfm = { features = ["core", "singlecell", "seqfm"], solve-group = "seqfm" }
 ```
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e seqfm
-pixi run     --manifest-path tools/omics-environment/pixi.toml -e seqfm python -c "import transformers"
+pixi lock && pixi install --locked
+pixi run --frozen python -c "import transformers"
 ```
 
 Never a bare `pip install transformers` — it resolves against whatever `python` leads `$PATH` (often

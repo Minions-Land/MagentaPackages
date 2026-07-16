@@ -28,8 +28,8 @@ replicates** — several samples per condition, not several cells.
   Descriptive only: no p-value, no inference, not a substitute for §1/§2.
 
 **`pertpy` is in no pinned env** — provision it per `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md` (§A: a `pertpy` feature + env with its own `solve-group`;
-spec `pertpy` for scCODA, `pertpy[milo-edger]` for Milo). Never a bare `pip install` — it can land in
+`assets/references/AOSE_nonStandard_env.md` — an env of your own, beside your analysis outputs; spec
+`pertpy` for scCODA, `pertpy[milo-edger]` for Milo. Never a bare `pip install` — it can land in
 `base`. Verified absent from `pixi.toml`/`pixi.lock`; a stale copy may linger in an un-rebuilt
 `.pixi/envs/task1`, so check the import in the env you actually run, not a previous session's.
 Tools are in `pt.tl`; **plots are methods on the tool object**, not in `pt.pl`.
@@ -181,8 +181,8 @@ significantly tumor-restricted.
 
 4. **`da_nhoods` fails to import rpy2 / R.** *Symptom:* `ImportError` or an rpy2/R error inside
    `da_nhoods`. *Diagnosis:* Milo's model is edgeR, called through rpy2 — the base pertpy install
-   has neither. *Fix:* provision an env with the `pertpy[milo-edger]` spec **and** R + edgeR in it (§A/§B
-   of `AOSE_nonStandard_env.md` — Milo's R dependency is a classic §B case);
+   has neither. *Fix:* provision an env with the `pertpy[milo-edger]` spec **and** R + edgeR in it (see
+   `AOSE_nonStandard_env.md`; Milo's R dependency is a classic named-conda-env case);
    if R isn't available, use scCODA instead rather than hand-rolling a proportion test.
 
 5. **Absolute counts compared instead of proportions.** *Symptom:* every type "increases" in the

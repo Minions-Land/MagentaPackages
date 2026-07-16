@@ -2,8 +2,8 @@
 
 **Maturity: REFERENCE** — peak files are TSVs and intervals are integers; **pandas on `task1` does all
 of it**, including merge, overlap and nearest. `pyranges` is a convenience for interval algebra, not a
-prerequisite — it is **not installed** here, and provisioning it costs a separate solve-group (it pins
-`pandas<3`, so it must never go into `task1–4`; see `omics-shared`'s `AOSE_nonStandard_env.md` §A).
+prerequisite — it is **not installed** here, and provisioning it costs an environment of its own (it pins
+`pandas<3`, so it must never go into `task1–4`; see `omics-shared`'s `AOSE_nonStandard_env.md`).
 Take it if the interval work is intricate enough to earn that; do not stop for it. API below verified
 against pyranges **0.1.4** (executed).
 

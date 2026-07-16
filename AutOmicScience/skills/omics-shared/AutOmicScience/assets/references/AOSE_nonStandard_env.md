@@ -7,101 +7,107 @@ the user explicitly names**. This is the operational how-to for standing that
 environment up **reproducibly and in isolation** — never by polluting `task1–4`
 or `base`.
 
+## The environment you build belongs to the analysis, not to the package
+
+AutOmicScience is normally **installed**, not checked out: the harness downloads a
+release archive, verifies its SHA-256, and extracts it to
+`~/.magenta/harness-packages/…`. When the version or origin no longer matches, the host
+**deletes that directory wholesale** and re-downloads it.
+
+So `tools/omics-environment/pixi.toml` is not yours to edit during an analysis. An env you
+add there looks fine today and is **gone** after the next package fetch — silently, with no
+error, taking your dependency declaration with it. It also entangles a one-off dependency
+with the package's published lock, and detaches the package from its provenance record.
+
+Build the environment **next to your analysis outputs** instead. It then lives as long as
+the analysis does, travels with it, and is reproducible from its own lock.
+
 ## One workflow, one environment
 
-A workflow whose steps are **partly pinned and partly PARTIAL still needs a single provisioned env
-for the whole thing** — not `task1` for some steps and a side env for the rest. Microbiome is the
-worked example: loading and CLR run on pinned scipy/pandas, DESeq2 on pinned pydeseq2, but diversity
-needs `scikit-bio` and per-taxon Cox needs `lifelines`, neither of which is in `task1–4`. Splitting
-that across two envs means writing intermediates to disk and re-reading them in the other
-interpreter, and the two halves can silently disagree on library versions.
+A workflow whose steps are **partly pinned and partly PARTIAL still needs a single
+provisioned env for the whole thing** — not `task1` for some steps and a side env for the
+rest. Microbiome is the worked example: loading and CLR run on scipy/pandas, DESeq2 on
+pydeseq2, but diversity needs `scikit-bio` and per-taxon Cox needs `lifelines`, neither of
+which is in `task1–4`. Splitting that across two envs means writing intermediates to disk
+and re-reading them in the other interpreter, and the two halves can silently disagree on
+library versions.
 
-Build one env that composes the pinned stack **plus** the extras (§A), and run every step there. The
-pinned features are the same objects `task1–4` compose, so you are not duplicating anything — you are
-adding to them under a separate solve-group.
-
-## Rule of thumb
-
-`task1–4` already covers the standard analysis stack. For anything else:
-
-1. **First choice — a new Pixi environment** (reproducible, recorded in
-   `pixi.lock`, isolated solve-group so it never disturbs `task1–4`).
-2. **Fall back to a named conda env** only when **Pixi can't do it** — Julia
-   toolchains, complex GPU/CUDA stacks, non-conda/PyPI builds, or a solve that
-   Pixi simply can't satisfy.
-
-Never install to `base`. Never add a version-conflicting package to `task1–4`.
+Build **one** env that has the stack you import **plus** the extras, and run every step
+there. Reading an `.h5ad` that `omics_compute` produced in `task1` is fine — that is a file
+hand-off, not a split workflow.
 
 ## Decision flow
 
 ```
 Need a package not in the modality env?
 │
-├─ Is it already importable in the task env?  → yes: just use it (you're done).
+├─ Already importable in the task env?  → yes: just use it (you're done).
 │
-└─ no → Can Pixi provision it? (a conda-forge / PyPI package, standard build,
-        solvable pins)
-        │
-        ├─ YES → §A  New Pixi environment (preferred)
-        │
-        └─ NO  (Julia · complex GPU/CUDA · non-standard build · Pixi solve fails)
-               → §B  Named conda env (fallback)
+├─ One-off exploration, nothing to reproduce?
+│      → `pixi exec --spec <pkg> --spec scanpy -- python probe.py`
+│        (ephemeral, not in any lock — record the resolved versions yourself)
+│
+├─ A real analysis that must reproduce?
+│      → a task-owned Pixi env, below.        ← the default
+│
+├─ Pixi can't do it? (Julia · a specific CUDA build · source builds · solve fails)
+│      → a named conda env, below.
+│
+└─ You are developing AutOmicScience itself and want this to become a
+   permanent package capability?
+       → editing the package manifest, below — needs the user's say-so.
 ```
 
-When in doubt, **try §A first**; if `pixi install`/`pixi lock` fails to solve
-(e.g. a hard old pin that can't coexist with the reader packages), drop to §B.
+## A task-owned Pixi environment (the default)
 
-## §A — New Pixi environment (preferred, reproducible)
-
-Add a **feature + environment with its own `solve-group`** to the workspace
-manifest `tools/omics-environment/pixi.toml`. The dedicated solve-group is what
-keeps its pins from ever touching `task1–4`.
+Write a `pixi.toml` **beside your analysis outputs** and declare what you import. Put it at
+the analysis root and `pixi run` finds it by itself — no `--manifest-path` needed.
 
 ```toml
-# tools/omics-environment/pixi.toml  — e.g. a SpaGCN env (coexists fine; needs PyTorch)
-[feature.spagcn.pypi-dependencies]
+# ~/analysis/spagcn-domains/pixi.toml
+[workspace]
+name = "spagcn-domains"
+channels = ["conda-forge", "bioconda"]   # bioconda only if you actually need it
+platforms = ["linux-64"]                 # your machine's platform; adding one you are not
+                                         # on makes the solve satisfy both, and fails if the
+                                         # package has no build for it
+
+[dependencies]
+scanpy = "*"        # pulls pandas / numpy / scipy transitively — declare what you import,
+h5py = "*"          # not every transitive dependency
+
+[pypi-dependencies]
 SpaGCN = "*"
 torch = "*"
-
-[environments]
-spagcn = { features = ["core", "singlecell", "spagcn"], solve-group = "spagcn" }
 ```
-
-**Compose `core` *and* `singlecell`, the way `task1–4` do** — every one of them is
-`{ features = ["core", "singlecell", ...] }`. The names are misleading: `core` is only
-jupyterlab + h5py + mudata, while the analysis stack you actually import (scanpy, and through it
-pandas / numpy / scipy, plus decoupler and pydeseq2) lives in **`singlecell`**. An env built as
-`["core", "spagcn"]` has no pandas and no scipy, so a script that touches anything beyond the new
-package fails on its first import.
-
-Then provision and run (resolve `--manifest-path` from the package root):
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e spagcn
-pixi lock    --manifest-path tools/omics-environment/pixi.toml        # updates pixi.lock
-pixi run     --manifest-path tools/omics-environment/pixi.toml -e spagcn python spagcn_domains.py
+cd ~/analysis/spagcn-domains
+pixi lock                       # solve → writes pixi.lock
+pixi install --locked           # materialise exactly what the lock says
+pixi run --frozen python spagcn_domains.py
 ```
 
-- **Isolated `solve-group`** → its versions are solved independently; `task1–4`
-  are untouched even if this env pins older/heavier deps.
-- **In `pixi.lock`** → the env is reproducible like `task1–4`.
-- **One-off / don't want to edit the manifest?** use `pixi exec` for an ephemeral
-  env: `pixi exec --spec SpaGCN --spec scanpy -- python spagcn_domains.py`
-  (not recorded in the lock — record versions yourself, see Hard rules).
+**Declare what you import, not a copy of `task1`.** The solver brings in transitive
+dependencies: `scanpy` gets you pandas, numpy and scipy. There is no list to reproduce and
+nothing to look up.
 
-Use §A for PARTIAL/REFERENCE methods whose packages are conda-forge/PyPI and
-solvable: SpaGCN, cell2location, Tangram, pySCENIC, gseapy, lifelines, scirpy,
-gwaslab, and most user-named Python packages.
+You may end up on different versions than `task1–4` — that is expected and usually
+harmless, because the whole workflow runs in this one env and data crosses env boundaries
+as `.h5ad`/`.h5mu`/Zarr, not as live objects. If you *do* want to match a task env, ask
+`omics_environment` what it declares (`dependencies`, `pypi_dependencies`, `channels`) and
+pin accordingly — useful occasionally, not a required step.
 
-## §B — Named conda env (fallback: what Pixi can't do)
+## A named conda env (when Pixi can't)
 
-Reach for conda **only** when §A can't apply. Always a **named** env — never
+Reach for conda **only** when Pixi genuinely can't: the Julia ecosystem, a specific CUDA
+build, a source build, or a solve Pixi can't satisfy. Always a **named** env — never
 `base`, never a `task` env.
 
 ```bash
 # Julia toolchain (Pixi manages conda/PyPI, not the Julia Pkg ecosystem):
 conda create -y -n aose-julia -c conda-forge julia
-conda run -n aose-julia julia --project=. -e 'using Pkg; Pkg.instantiate()' 
+conda run -n aose-julia julia --project=. -e 'using Pkg; Pkg.instantiate()'
 conda run -n aose-julia julia analysis.jl
 
 # Complex GPU/CUDA stack (specific cudatoolkit + framework matching is cleaner on conda):
@@ -115,33 +121,75 @@ conda run -n aose-multivelo pip install multivelo scvelo "pandas<=1.4.4" "scipy<
 conda run -n aose-multivelo python multivelo_run.py
 ```
 
-conda envs are **not** in `pixi.lock` → not automatically reproducible. Record
-exactly what you installed (see Hard rules).
+conda envs are in **no** lock → not automatically reproducible. Record exactly what you
+installed (see Hard rules).
 
-## Which route for which need
+## Editing the package's own manifest (package development only)
 
-| Need | Route |
-|------|-------|
-| PARTIAL/REFERENCE conda-forge/PyPI method, solvable (SpaGCN, cell2location, pySCENIC, gseapy, lifelines, scirpy, gwaslab) | **§A** new Pixi env |
-| User-named arbitrary Python package | **§A** if Pixi solves it, else **§B** |
-| **Julia** toolchain / Julia packages | **§B** conda |
-| **Complex GPU / specific CUDA** stack | **§B** conda |
-| Non-standard build (source compile, system libs) or Pixi solve **fails** | **§B** conda |
+**Only** when you are developing AutOmicScience itself — i.e. the harness is pointed at a
+local checkout with `--harness-packages-root`, this is a git working tree, and the user has
+asked for the capability to become a permanent part of the package. In an ordinary analysis
+this route does not apply; the edit would be discarded (see the top of this doc).
 
-## Hard rules (both routes)
+Here you add a **feature + environment with its own `solve-group`** to
+`tools/omics-environment/pixi.toml`, and the change is reviewed, locked and released like
+any other package change:
+
+```toml
+[feature.spagcn.pypi-dependencies]
+SpaGCN = "*"
+torch = "*"
+
+[environments]
+spagcn = { features = ["core", "singlecell", "spagcn"], solve-group = "spagcn" }
+```
+
+**Compose `core` *and* `singlecell`, the way `task1–4` do** — every one of them is
+`{ features = ["core", "singlecell", ...] }`. The names mislead: `core` is only
+jupyterlab + h5py + mudata + the spreadsheet/BAM readers, while the analysis stack you
+actually import (scanpy, and through it pandas / numpy / scipy, plus decoupler and
+pydeseq2) lives in **`singlecell`**. An env built as `["core", "spagcn"]` has no pandas and
+no scipy, so a script that touches anything beyond the new package fails on its first
+import. The dedicated `solve-group` is what keeps its pins from ever touching `task1–4`.
+
+This trap is specific to composing features. A task-owned env declares packages directly,
+so it does not arise there.
+
+## Hard rules
 
 - **Never install to `base`, never use the base env.** The machine's `$PATH`
   `python`/`pip` may point at conda `base`; a bare `pip install …` pollutes base
-  and can downgrade its `pandas`/`scipy`. Always a **named** env
-  (`-e <pixi env>` or `conda create -n aose-<tool>`).
-- **Never add a conflicting package to `task1–4`.** Isolate it (own Pixi
-  solve-group in §A, or a separate conda env in §B).
-- **Record provisioning in the `report`.** For §A, note the env name (it's in the
-  lock). For §B (not in the lock), record the exact tool + versions installed and
-  state plainly it was an external, non-locked env — so the run stays auditable.
+  and can downgrade its `pandas`/`scipy`. Every install goes into an environment you
+  declared — a task-owned `pixi.toml`, or `conda create -n aose-<tool>`.
+- **Never add a conflicting package to `task1–4`.** Isolate it (a task-owned env, or a
+  separate conda env).
+- **Never edit an installed package's `pixi.toml` / `pixi.lock`.** They are part of a
+  checksum-verified artifact the host may delete and re-fetch at any time, so the edit is
+  lost silently. *Exception — materialised environments:* `omics_install_env` writing
+  `.pixi/envs/` into the package tree is fine and expected. The test is **rebuildability**:
+  `.pixi/` regenerates from the committed lock with one command, so losing it costs a
+  reinstall; a manifest edit is a *declaration* and losing it costs your intent. Apply that
+  test to anything else you are tempted to write into a package.
+- **Run through the environment, never at its interpreter.** `pixi run --frozen …` from the
+  directory holding your `pixi.toml` (add `-e <env>` only if you declared named environments), or
+  `conda run -n <env> …` — never `.pixi/envs/<env>/bin/python` directly. Executing the
+  interpreter by path skips activation, and the shell's own variables survive: `$PATH` still
+  leads with the host's `bin`, so a subprocess (R, macs3, samtools) silently resolves to the
+  wrong binary; `PIXI_ENVIRONMENT_NAME` is absent; and `CONDA_PREFIX` keeps pointing at
+  **whatever conda env the calling shell had active** — not this env, and not necessarily
+  `base` either. Anything that locates resources through it (rpy2 → `R_HOME`, GDAL, SSL
+  certs) then reads from an unrelated environment. A wrong value is worse than a missing one:
+  nothing errors. Plain Python imports still work (`sys.prefix` is derived from the
+  interpreter's own path), which is why this stays hidden until something shells out.
+- **Record provisioning in the `report`.** For a task-owned env, note its path (its lock
+  pins the versions). For a conda env or `pixi exec` (in no lock), record the exact tool +
+  versions and say plainly it was external and non-locked — so the run stays auditable.
 - **Fail loud on absence.** A package that can be neither imported nor provisioned
   (offline, no GPU, unsolvable) is a **blocker with the install command**, never a
   silent fallback to a different method.
 - **Preflight doesn't cover these.** `omics_preflight` only validates `task1–4`;
-  after provisioning a §A/§B env, sanity-check the import yourself
-  (`pixi run -e <env> python -c "import <pkg>"` or `conda run -n <env> …`).
+  after provisioning, sanity-check the import yourself
+  (`pixi run --frozen python -c "import <pkg>"` or `conda run -n <env> …`).
+
+`pixi install --locked` refuses a lock that has drifted from the manifest, so `pixi lock`
+first whenever you change dependencies.

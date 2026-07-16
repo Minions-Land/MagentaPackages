@@ -48,31 +48,37 @@ workflow crosses the Python/R line in a single run (gwaslab harmonises, then orc
 splitting it across two envs means round-tripping through disk:
 
 ```toml
-# tools/omics-environment/pixi.toml
-[feature.statgen.dependencies]
+# pixi.toml, at your analysis root
+[workspace]
+name = "statgen"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
 r-base = "*"
 r-coloc = "*"
 r-susier = "*"
 rpy2 = "*"
-[feature.statgen.pypi-dependencies]
-gwaslab = "*"
+pandas = "*"
 
-[environments]
-statgen = { features = ["core", "singlecell", "statgen"], solve-group = "statgen" }
+[pypi-dependencies]
+gwaslab = "*"
 ```
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e statgen
-pixi lock    --manifest-path tools/omics-environment/pixi.toml
-pixi run     --manifest-path tools/omics-environment/pixi.toml -e statgen python -c "import gwaslab"
+pixi lock && pixi install --locked
+pixi run --frozen python -c "import gwaslab"
 ```
+
+Build it here rather than in the package — `tools/omics-environment/pixi.toml` is a
+checksum-verified artifact the host may delete and re-fetch, taking the edit with it.
 
 > **Never `pip install gwaslab` or `conda install` without `-n`.** A bare `pip` resolves against
 > whatever `python` leads `$PATH` — often conda `base` — and `conda install -c conda-forge r-coloc`
 > with no `-n <env>` installs into the **currently active** environment, which is `base` unless you
 > arranged otherwise. Both are the exact failure `AOSE_nonStandard_env.md` exists to prevent. If Pixi
-> cannot solve the R stack, fall back to §B — a **named** conda env (`conda create -n aose-statgen
-> ...`), never `base`.
+> cannot solve the R stack, fall back to a **named** conda env (`conda create -n aose-statgen ...`),
+> never `base`.
 
 `omics_preflight` does not cover this env; check the imports yourself and record the env + the
 `gwaslab`/`coloc` versions in the `report`.

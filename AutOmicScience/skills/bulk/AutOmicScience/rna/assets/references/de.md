@@ -59,9 +59,8 @@ deprecated; to force a reference, put it in the formula:
 > **PARTIAL — needs provisioning.** `DESeq2`/`edgeR`/`limma`/`apeglm` are in **no** environment here
 > (`r-env` is `r-base` + `r-essentials` only). **Recipe A gives the same model in Python and needs nothing**
 > — prefer it. If you specifically need the R implementations, stand up an R env per `omics-shared`'s
-> `assets/references/AOSE_nonStandard_env.md` (§A: a `deseq2-r` feature with
-> `bioconductor-deseq2`/`bioconductor-apeglm` from bioconda and its own `solve-group`; §B a **named** conda
-> env if the solve fails). Never bare-`pip`/`R -e install.packages` into a shared env, and never report a
+> `assets/references/AOSE_nonStandard_env.md` — an env of your own with `bioconductor-deseq2` /
+> `bioconductor-apeglm` from bioconda, or a **named** conda env if the solve fails. Never bare-`pip`/`R -e install.packages` into a shared env, and never report a
 > t-test on log-CPM as a substitute.
 
 ```r

@@ -46,10 +46,10 @@ Builds on `omics-shared` (loaded automatically). This is **repertoire** analysis
    rearrangement `.tsv`, or a per-cell table already annotated with both chains' V/J/CDR3.
 2. **Cell metadata**: at minimum a donor/patient column; ideally a GEX cell-type/state column.
 3. **Libraries** — neither `scirpy` nor `sc-dandelion` is in a pinned env; provision them per
-   `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A, specs `scirpy` + `sc-dandelion`;
-   scirpy ≥ 0.21, Python ≥ 3.12). Never a bare `pip install`. dandelion's **reannotation** additionally
+   `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — one env of your own with both specs
+   (`scirpy` ≥ 0.21, `sc-dandelion`; Python ≥ 3.12). Never a bare `pip install`. dandelion's **reannotation** additionally
    needs dandelion's **Singularity/Docker container** (IgBLAST, BLAST, changeo, TIgGER, R/SHazaM,
-   germline DBs) — a §B case, and a blocker to report if unavailable; all **downstream** steps are
+   germline DBs) — a container case, and a blocker to report if unavailable; all **downstream** steps are
    pure-Python.
 
 > **Pin `sc-dandelion` to 0.5.7 and index accordingly.** The released 0.5.7 exports `to_scirpy`/

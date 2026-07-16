@@ -41,9 +41,8 @@ not AnnData/scanpy. Use a count-based statistical model — this is the standard
    `limma`, `WGCNA`, `apeglm`, `rpy2`). `r-env` ships `r-base` + `r-essentials` only. `omics_install_env`
    only materializes envs already declared in `pixi.toml`/`pixi.lock`, so it cannot add them — but that is
    **not** a dead end: these are **PARTIAL** methods, and you provision them into their **own** environment
-   per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A a new Pixi env with an isolated
-   `solve-group`; §B a **named** conda env if the solve fails). Never bare-`pip install` (it can land in
-   `base`), never add pins to `task1–4`, and record the env + versions in the report.
+   per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`, which carries the routing and the
+   hard rules. Never bare-`pip install` (it can land in `base`), and record the env + versions in the report.
    **Check first whether you need them at all**: the Python path covers DE, VST, pseudobulk, ORA, and
    pre-ranked GSEA with zero provisioning. Only WGCNA has no Python equivalent here. Do **not** silently
    downgrade to a t-test on log-CPM.

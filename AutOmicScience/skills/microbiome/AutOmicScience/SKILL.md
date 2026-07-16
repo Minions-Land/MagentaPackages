@@ -36,30 +36,36 @@ This is **NOT** assembly/binning, **NOT** functional annotation (KEGG/MetaCyc pa
 
 ## Provision one environment for the whole workflow
 
-A real microbiome analysis crosses the pinned/PARTIAL line in a single run: loading + CLR on pinned
-`scipy`/`pandas`, DESeq2 on pinned `pydeseq2`, but diversity on `scikit-bio` and per-taxon Cox on
-`lifelines` — neither of which `task1–4` has. **Do not split it across two interpreters**; provision
-one env that composes the pinned stack plus the extras, and run every step there:
+A real microbiome analysis crosses the pinned/PARTIAL line in a single run: loading + CLR on
+`scipy`/`pandas`, DESeq2 on `pydeseq2`, but diversity on `scikit-bio` and per-taxon Cox on
+`lifelines` — neither of which `task1–4` has. **Do not split it across two interpreters**; build
+**one** env beside your analysis outputs that has all of it, and run every step there:
 
 ```toml
-# tools/omics-environment/pixi.toml
-[feature.microbiome.dependencies]
+# pixi.toml, at your analysis root
+[workspace]
+name = "microbiome"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+scanpy = "*"        # brings pandas / numpy / scipy transitively
 scikit-bio = "*"
 lifelines = "*"
 
-[environments]
-microbiome = { features = ["core", "singlecell", "microbiome"], solve-group = "microbiome" }
+[pypi-dependencies]
+pydeseq2 = "*"      # from PyPI, as task1–4 resolve it (bioconda also carries it)
 ```
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e microbiome
-pixi lock    --manifest-path tools/omics-environment/pixi.toml
+pixi lock && pixi install --locked
+pixi run --frozen python microbiome_run.py
 ```
 
-**`["core", "singlecell", ...]`, not `["core", ...]`** — `core` is only jupyterlab/h5py/mudata; the
-stack you import (scanpy, and through it pandas/numpy/scipy, plus `pydeseq2`) lives in `singlecell`,
-which is why every `task1–4` composes both. The separate `solve-group` keeps these pins away from
-`task1–4`. Full protocol: `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`.
+Declare what you import; the solver brings the rest. Build it here rather than in the package —
+`tools/omics-environment/pixi.toml` is a checksum-verified artifact the host may delete and
+re-fetch, taking the edit with it. Full protocol: `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md`.
 
 `omics_preflight` does not cover this env — check the imports yourself and record the env + versions
 in the `report`.

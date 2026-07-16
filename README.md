@@ -59,8 +59,11 @@ magenta --harness-package AutOmicScience
 # Load only selected profiles (comma-separated, package-defined)
 magenta --harness-package ClaudeScience:structure,design
 
-# Combine PantheonOS skills with their execution tools
-magenta --harness-package PantheonOS --harness-package MagentaWithPantheonOS
+# Skill packages whose skills call run_python / create_notebook / add_cell /
+# observe_figure need MagentaWithPantheonOS co-loaded — it supplies those tools,
+# which Magenta core does not have.
+magenta --harness-package PantheonOS     --harness-package MagentaWithPantheonOS
+magenta --harness-package AutOmicScience --harness-package MagentaWithPantheonOS
 ```
 
 The selector grammar is `PackageName[:profile1,profile2,...]`. Parsing and

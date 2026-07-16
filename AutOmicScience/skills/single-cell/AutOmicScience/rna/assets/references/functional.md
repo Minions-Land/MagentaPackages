@@ -111,7 +111,7 @@ For the genes question, use `markers_de.md` — it needs no install and states t
 
 `pertpy` is **not** in the pinned env (confirmed against `pixi.toml`/`pixi.lock` — a stale copy may linger
 in an un-rebuilt `.pixi/envs/task1`, so trust the lock, not a previous session's env). Provision it per
-`omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A, own `solve-group`); the `pertpy` spec
+`omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — an env of your own; the `pertpy` spec
 covers all three below. Never a bare `pip install`. Tools live in `pt.tl`; **plots are methods on the tool object** (`ag.plot_lollipop(...)`,
 `ms.plot_barplot(...)`), not in `pt.pl` — that namespace is empty in 1.1.1. (`pertpy[de]` /
 `pertpy[milo-edger]` exist for its DE and Milo backends, but §3 needs neither.)

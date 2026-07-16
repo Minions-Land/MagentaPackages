@@ -9,11 +9,10 @@
 | **ALDEx2** | R + Bioconductor `ALDEx2` + `rpy2` | not pinned, and costly: `pixi.toml`'s `r` feature is composed by no environment and lacks ALDEx2 — prefer ANCOM-BC |
 | **Per-taxon Cox** | `lifelines` | not pinned — provision (below) |
 
-Provision the missing ones per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`: §A a new
-Pixi feature + environment with its **own solve-group** (preferred — lands in `pixi.lock`), composing
-`["core", "singlecell", <new>]` so the pinned stack comes with it. Never a bare `pip install` (it can
-land in `base`), and never add these pins to `task1–4`. `omics_preflight` does not cover non-standard
-envs — check the import yourself and record the env + versions in the `report`. If a method can be
+Provision the missing ones into **one** env beside your analysis outputs per `omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md`, which carries the routing and the hard rules.
+`omics_preflight` does not cover it — check the import yourself and record the env + versions in the
+`report`. If a method can be
 neither imported nor provisioned, that is a **blocker**, not a cue to substitute a weaker one.
 
 Testing which taxa differ in abundance between conditions.

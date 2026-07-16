@@ -65,8 +65,8 @@ usually the cheaper move for a one-off table.
 > **Do not `pip install numpy pandas scikit-learn scipy`.** They are already here. A bare `pip`
 > resolves against whatever `python` leads `$PATH` — frequently conda `base` — and reinstalling these
 > four is the single most effective way to downgrade the versions `task1–4` are locked to and break
-> every other skill in the package. If you need a package that genuinely is missing, it goes in a
-> named env with its own solve-group. Never `base`, never a bare `pip`.
+> every other skill in the package. If you need a package that genuinely is missing, it goes in an
+> environment of its own, beside your analysis outputs. Never `base`, never a bare `pip`.
 
 ---
 

@@ -30,6 +30,10 @@ Excluded on purpose:
 
 Selection:
 
+- **Co-load `MagentaWithPantheonOS`.** 14 skills here declare `run_python` and 12 declare
+  `observe_figure` in `requiredTools`; Magenta core has neither, and
+  [`MagentaWithPantheonOS`](../MagentaWithPantheonOS/) supplies them:
+  `magenta --harness-package AutOmicScience --harness-package MagentaWithPantheonOS`.
 - `AutOmicScience` (bare) loads the brand, system prompt, all skills, and tools.
 - The package declares **3 profiles** for selective loading — `single-cell`
   (single-cell / spatial / immune-repertoire), `bulk-genomics` (bulk RNA-seq &
@@ -38,6 +42,22 @@ Selection:
   means the bare name loads every component. The cross-cutting `clinical-survival`
   and `bioml` skills are **dual-tagged into all three**; `omics-shared` is always
   loaded.
+
+## Environment model
+
+- **`task1–4` are the standard execution environments**, isolated per modality
+  (`scrna`→`task1`, `spatial`→`task2`, `multiome`→`task3`, `scatac`→`task4`); `all` is their
+  superset. A tool's `modality` argument **selects one of them** — it is not a claim about
+  what the data is.
+- **`omics_install_env` only materialises environments this package already declares.** It
+  cannot add a package.
+- **A method whose package is not in `task1–4`** (the `PARTIAL`/`REFERENCE` ones) gets its own
+  environment, built **beside the analysis outputs** — not inside the installed package, whose
+  manifest is a checksum-verified artifact the host may delete and re-fetch.
+
+The operational how-to lives in
+[`AOSE_nonStandard_env.md`](skills/omics-shared/AutOmicScience/assets/references/AOSE_nonStandard_env.md);
+this section is only the contract.
 
 ## Reference package
 
@@ -49,6 +69,8 @@ domain package, copy this layout.
 ## See Also
 
 - [Packages overview](../README.md) — how packages load and how to combine them
+- [`MagentaWithPantheonOS`](../MagentaWithPantheonOS/) — **co-load this**: the `run_python` /
+  `create_notebook` / `add_cell` / `observe_figure` tools these skills require
 - [`Biomni`](../Biomni/) — biomedical AI toolkit with executable tools
 - [`ClaudeScience`](../ClaudeScience/) — computational biology research skills by profile
 - [`PantheonOS`](../PantheonOS/) — bioinformatics workflow best practices

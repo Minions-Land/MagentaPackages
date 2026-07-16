@@ -1,6 +1,6 @@
 # Spatial Domains
 
-**Maturity: PARTIAL** — spatial domain detection. The opinionated default (**SpaGCN**) is not in `task2`; provision it into its own env per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A — that doc uses SpaGCN as its worked example: a `spagcn` feature + isolated `solve-group`). Never bare-`pip install`, and do not add it to `task2`. The **runnable baseline** (Leiden + majority-vote smoothing on the squidpy spatial graph) needs only the pinned stack and is verified to run on it. SpaGCN API verified against `jianhuupenn/SpaGCN` rev `dc7a1c2`; baseline verified against squidpy 1.8.1.
+**Maturity: PARTIAL** — spatial domain detection. The opinionated default (**SpaGCN**) is not in `task2`; provision it into its own env per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (that doc uses SpaGCN as its worked example). Never bare-`pip install`, and do not add it to `task2`. The **runnable baseline** (Leiden + majority-vote smoothing on the squidpy spatial graph) needs only the pinned stack and is verified to run on it. SpaGCN API verified against `jianhuupenn/SpaGCN` rev `dc7a1c2`; baseline verified against squidpy 1.8.1.
 
 > **Pin note.** The baseline builds its graph with `sq.gr.spatial_neighbors`, which is the API in the pinned squidpy 1.8.1. Upstream removes it in **1.9.0** in favour of `spatial_neighbors_knn`/`_radius`/`_delaunay`/`_grid` — names that **do not exist in 1.8.1**. `pixi.toml` pins `squidpy = ">=1.8,<1.9"`; do not "modernise" the call.
 

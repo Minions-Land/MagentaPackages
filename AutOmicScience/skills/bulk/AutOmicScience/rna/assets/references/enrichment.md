@@ -70,7 +70,7 @@ slightly different question — pick and state one.
 > **`gseapy` is not installed here, and the recipe above does not need it.** Reach for it only if you
 > specifically need Subramanian/fgsea parity (e.g. reproducing a paper's exact `prerank` output). It is a
 > **PARTIAL** method: provision it into its own env per `omics-shared`'s
-> `assets/references/AOSE_nonStandard_env.md` (§A — that doc names `gseapy` as an example), never a bare
+> `assets/references/AOSE_nonStandard_env.md` (that doc names `gseapy` as an example), never a bare
 > `pip install`. Note the numbers are **not interchangeable** with decoupler's: the two implement the same
 > idea with different normalization and permutation schemes, so report which one produced the NES.
 

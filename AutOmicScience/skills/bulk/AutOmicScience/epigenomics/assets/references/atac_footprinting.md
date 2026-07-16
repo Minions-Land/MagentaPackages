@@ -1,22 +1,25 @@
 # Reference — ATAC-seq TF Footprinting
 
 **Maturity: PARTIAL** — **TOBIAS is not installed in any environment here** (nor is HINT/RGT). Provision it
-into its own environment per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — §A, an isolated
-solve-group, because TOBIAS drags in a heavy tree (`pyBigWig`, `MOODS`) that has no business in `task1–4`:
+into its own environment per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — its own env,
+because TOBIAS drags in a heavy tree (`pyBigWig`, `MOODS`) that has no business in `task1–4`:
 
 ```toml
-# tools/omics-environment/pixi.toml
-[feature.tobias.dependencies]
+# pixi.toml, at your analysis root
+[workspace]
+name = "tobias"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
 tobias = "*"                      # bioconda
-[environments]
-tobias = { features = ["core", "tobias"], solve-group = "tobias" }
 ```
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e tobias
-pixi run --manifest-path tools/omics-environment/pixi.toml -e tobias TOBIAS ATACorrect --help
+pixi lock && pixi install --locked
+pixi run --frozen TOBIAS ATACorrect --help
 ```
-If that solve fails, fall back to §B (a **named** conda env — never `base`) and record the exact versions in
-the report, since a conda env is not in `pixi.lock`. Footprinting also needs BAMs + a genome FASTA, which
+If that solve fails, fall back to a **named** conda env — never `base` — and record the exact versions in
+the report, since a conda env is not in any lock. Footprinting also needs BAMs + a genome FASTA, which
 the `omics_compute` path never produces — if you have neither, that is a blocker to report, not a step to
 approximate. Commands below verified against `loosolab/TOBIAS` v0.14.0 and re-checked against `main`
 (0.17.4) — they hold on both.
@@ -96,7 +99,7 @@ rgt-motifanalysis matching --organism=hg38 \
 ```
 
 HINT is faster but less granular than TOBIAS for differential analysis. Like TOBIAS, RGT is **not installed
-here** — provision it per `AOSE_nonStandard_env.md` (`rgt` on PyPI; §B conda if the solve fails, since it
+here** — provision it per `AOSE_nonStandard_env.md` (`rgt` on PyPI; a named conda env if the solve fails, since it
 compiles C extensions).
 
 Both commands verified against `CostaLab/reg-gen` rev `66f5fbb`: `footprinting` is a real subcommand

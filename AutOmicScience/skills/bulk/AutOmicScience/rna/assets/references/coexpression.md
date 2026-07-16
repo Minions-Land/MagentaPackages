@@ -4,24 +4,27 @@
 
 **Maturity: PARTIAL — needs provisioning.** `WGCNA` is **not installed in any environment** here: `r-env`
 ships `r-base` + `r-essentials` (no Bioconductor DE stack, no WGCNA), and `omics_install_env` only
-materializes envs already declared in `pixi.toml`/`pixi.lock`. Stand up your own R env per `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md` (§A):
+materializes envs already declared in `pixi.toml`/`pixi.lock`. Stand up your own R env beside your
+analysis outputs per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`:
 
 ```toml
-# tools/omics-environment/pixi.toml   — conda-forge/bioconda are already the workspace channels
-[feature.wgcna.dependencies]
+# pixi.toml, at your analysis root
+[workspace]
+name = "wgcna"
+channels = ["conda-forge", "bioconda"]
+platforms = ["linux-64"]
+
+[dependencies]
 r-base = ">=4.3"
 r-wgcna = "*"
-[environments]
-wgcna = { features = ["core", "wgcna"], solve-group = "wgcna" }
 ```
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e wgcna
-pixi run --manifest-path tools/omics-environment/pixi.toml -e wgcna Rscript wgcna.R
+pixi lock && pixi install --locked
+pixi run --frozen Rscript wgcna.R
 ```
 
-If that solve fails, drop to §B (a **named** conda env) and record the versions, since conda envs are not in
-`pixi.lock`. Do **not** substitute the coherence shortcut below and call it WGCNA. The recipe was
+If that solve fails, drop to a **named** conda env and record the versions, since conda envs are not in
+any lock. Do **not** substitute the coherence shortcut below and call it WGCNA. The recipe was
 **verified against WGCNA 1.74 source (CRAN), not executed** (no R + WGCNA available here) — signatures and
 defaults are cited from source; treat runtime behaviour as unconfirmed.
 

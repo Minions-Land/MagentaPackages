@@ -107,8 +107,8 @@ A gene whose skew-t fit fails at every `nu` is **unscored**, not "normLRT = 0". 
 normal perfectly" — i.e. definitively *not* selective — so defaulting to it silently converts a fit
 failure into a substantive negative call. Count the NAs in the `report`.
 
-Provision R + `sn` per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A: a Pixi
-feature with its own solve-group, composing `["core", "singlecell", <new>]`), and drive it from Python
+Provision R + `sn` per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — an env of your
+own, beside your analysis outputs — and drive it from Python
 with `rpy2` or via `Rscript` on a CSV.
 
 **How expensive that is depends on where you are running, which you can see and this doc cannot.** R is

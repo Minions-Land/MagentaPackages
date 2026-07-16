@@ -22,7 +22,7 @@ omics_compute(
 ```
 
 - `args` keys are the subcommand's `--kebab-case` flags. A value of `""`/`"true"` is a bare store-true flag; `"false"` omits it.
-- The tool returns `{subcommand, pythonBin, report}`. The `report` dict carries the numbers — cite them in conclusions.
+- The tool prints a JSON report on stdout. Read it and cite its numbers in conclusions — don't restate them from memory.
 - For a method with **no** compute subcommand (a `REFERENCE` method), write it by hand and run it; print a trailing JSON `report` so the numbers are inspectable.
 - Implementation helpers live in the `aose_omics_runtime` package (single source of truth), imported by name — e.g. `from aose_omics_runtime.shared.layout import assert_layout`. Prefer the matching `omics_compute` subcommand; if you import a helper directly, put this package's `tools/omics-compute/python/` on `sys.path` first.
 

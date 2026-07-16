@@ -3,7 +3,7 @@
 **Maturity: REFERENCE** — hand-rolled, and the **VST path runs on the pinned stack** with no provisioning
 (`pydeseq2` 0.5.4 in `task1`, `modality="scrna"`). The **edgeR path is PARTIAL**: `edgeR` is **not
 installed in any environment**, so `filterByExpr` / `calcNormFactors` / `cpm` need their own env
-(`omics-shared`'s `assets/references/AOSE_nonStandard_env.md`, §A). The Python filter below is usually
+(`omics-shared`'s `assets/references/AOSE_nonStandard_env.md`). The Python filter below is usually
 enough — reach for R only if you specifically need edgeR's exact rule. Verified against pydeseq2 0.5.4.
 
 Pick normalization **by goal**. A common error is z-scoring raw counts, or using log-CPM as a differential-

@@ -19,24 +19,29 @@ This is **NOT** competing-risks analysis, **NOT** recurrent-event models, **NOT*
 2. **Context**: grouping variable (treatment, biomarker high/low) or continuous covariates (age, expression) for stratification/adjustment
 3. **Library**: `lifelines` (standard Python survival package) — **not in `task1–4`; provision it first**
 
-```toml
-# tools/omics-environment/pixi.toml
-[feature.survival.dependencies]
-lifelines = "*"
+Build the env **beside your analysis outputs** — not in the package, whose manifest is a
+checksum-verified artifact the host may delete and re-fetch (`omics-shared`'s
+`assets/references/AOSE_nonStandard_env.md` carries the routing and the hard rules):
 
-[environments]
-survival = { features = ["core", "singlecell", "survival"], solve-group = "survival" }
+```toml
+# pixi.toml, at your analysis root
+[workspace]
+name = "survival"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+lifelines = "*"
+scanpy = "*"      # only if you also read .h5ad here; it brings pandas/numpy/scipy/matplotlib
 ```
 
 ```bash
-pixi install --manifest-path tools/omics-environment/pixi.toml -e survival
-pixi lock    --manifest-path tools/omics-environment/pixi.toml
+pixi lock && pixi install --locked
+pixi run --frozen python survival.py
 ```
 
-`["core", "singlecell", ...]`, not `["core", ...]` — `core` is only jupyterlab/h5py/mudata; pandas,
-numpy, scipy and matplotlib come in via `singlecell`, which is why every `task1–4` composes both. Never
-a bare `pip install lifelines` (it can land in `base`). Full protocol: `omics-shared`'s
-`assets/references/AOSE_nonStandard_env.md`.
+Never a bare `pip install lifelines` — it resolves against whatever `python` leads `$PATH`,
+frequently conda `base`.
 
 ---
 

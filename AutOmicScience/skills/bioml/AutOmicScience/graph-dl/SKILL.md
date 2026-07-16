@@ -33,15 +33,14 @@ Built on **PyTorch Geometric (PyG)** — the standard library these methods use.
 > `master` and has never been released, so the claim could not have been true — and the `to_hetero`
 > recipe below in fact fails on both 2.8 and 2.9. Treat these snippets as source-checked, not executed.
 **Maturity: PARTIAL.** `torch_geometric` is in **no** pinned env (`torch` is; PyG is not), so nothing
-below runs until you provision it. The install must match your torch/CUDA build, which is exactly the
-case `AOSE_nonStandard_env.md` calls §B — a **named** conda env when Pixi can't solve a CUDA stack:
+below runs until you provision it. The install must match your torch/CUDA build — exactly the case
+`AOSE_nonStandard_env.md` routes to a **named** conda env, because Pixi cannot solve a pinned CUDA stack:
 
 ```bash
-# §A first — try Pixi (works when you don't need a specific CUDA build):
-#   [feature.pyg.pypi-dependencies]  torch_geometric = "*"
-#   [environments]  pyg = { features = ["core", "singlecell", "pyg"], solve-group = "pyg" }
-#
-# §B — named conda env when the CUDA build must be pinned. NEVER base, never a bare pip:
+# If you don't need a specific CUDA build, a Pixi env of your own is simpler — a pixi.toml beside your
+# analysis outputs with `pytorch` + a [pypi-dependencies] `torch_geometric`. Otherwise:
+
+# Named conda env, when the CUDA build must be pinned. NEVER base, never a bare pip:
 conda create -y -n aose-pyg -c conda-forge -c nvidia python=3.11 pytorch pytorch-cuda=12.1
 conda run -n aose-pyg pip install torch_geometric
 # PyG 2.8 routes knn_graph / radius_graph through pyg-lib (torch-cluster deprecated in 2.8.0, #10682):
@@ -51,7 +50,7 @@ conda run -n aose-pyg pip install e3nn    # only for true SE(3)/O(3) equivarianc
 
 A bare `pip install torch_geometric` resolves against whatever `python` leads `$PATH` — often conda
 `base` — and a PyG wheel drags its own torch pin with it, so this is a realistic way to downgrade the
-`torch` that `task1–4` are locked to. A §B env is not in `pixi.lock`, so record the exact versions in
+`torch` that `task1–4` are locked to. A conda env is in no lock, so record the exact versions in
 the `report`.
 
 ---

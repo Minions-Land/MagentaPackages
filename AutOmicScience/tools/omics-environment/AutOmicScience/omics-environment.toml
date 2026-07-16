@@ -1,9 +1,11 @@
 kind = "tool"
 name = "omics_environment"
-description = "Describe the Pixi environments used by AutOmicScience omics tools. Returns the workspace's environments (name, features, dependencies, tasks) as JSON via `pixi info --json`. Map a modality to its pinned environment using metadata.environments_by_modality."
+description = "Describe the Pixi environments used by AutOmicScience omics tools. Returns the workspace's environments (name, features, dependencies, channels, tasks) as JSON via `pixi info --json`. Map a modality to its pinned environment: scrna->task1, spatial->task2, scatac->task4, multiome->task3."
 runtime = "process"
 command = "pixi"
-args = ["info", "--json"]
+# --manifest-path is explicit rather than relying on pixi's upward search happening
+# to pass through the parent directory: the same contract omics-install.toml follows.
+args = ["info", "--json", "--manifest-path", "../pixi.toml"]
 operation = "read"
 read_only = true
 destructive = false
@@ -11,15 +13,7 @@ timeout_ms = 60000
 
 [metadata]
 package = "AutOmicScience"
-env_manifest = "pixi.toml"
-env_lock = "pixi.lock"
 compute_tool = "omics_compute"
-
-[metadata.environments_by_modality]
-scrna = "task1"
-spatial = "task2"
-scatac = "task4"
-multiome = "task3"
 
 [parameters]
 type = "object"

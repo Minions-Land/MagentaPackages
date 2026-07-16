@@ -27,8 +27,8 @@ Bulk work routes to a **subskill** by data type. This parent does routing plus t
   epigenomics toolchain (`pyranges`/`gtfparse`/`bedtools`/`TOBIAS`/`ChIPseeker`/`DiffBind`). Each subskill's
   menu marks what runs today (**READY** = `omics_compute` subcommand; **REFERENCE** = library present, you
   write the script) vs what must be **provisioned first** (**PARTIAL** = not in any env). For PARTIAL,
-  follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — its own Pixi env with an isolated
-  solve-group, or a named conda env; never `base`, never a bare `pip install`, never new pins in `task1–4`.
+  follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` — a Pixi env of your own beside the
+  analysis outputs, or a named conda env; never `base`, never a bare `pip install`, never new pins in `task1–4`.
 - **Count-based models** — raw counts → DESeq2/edgeR/limma-voom (negative-binomial / voom); a Welch t-test or OLS on log-CPM is statistically weaker. Normalize by goal: VST/rlog for clustering/PCA, TMM+logCPM or size-factors for the DE model input; never z-score raw counts.
 - **Effect size ≠ significance** — shrink fold changes (apeglm/ashr) before ranking or GSEA; rank by shrunken |log2FC| with an FDR gate, and report both axes.
 - **Model covariates in the design** — batch/sex/age/RIN/library-prep/site when present; an unmodeled confound is the most common silent error. State the design formula.

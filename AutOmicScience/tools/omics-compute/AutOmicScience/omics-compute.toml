@@ -28,6 +28,11 @@ multiome = "task3"
 [parameters]
 type = "object"
 required = ["subcommand", "modality"]
+# Closed at the top level on purpose. The host turns any unrecognised top-level key into a
+# `--flag`, which argparse rejects loudly — except `pythonBin`, which it would instead route
+# to the launcher, silently replacing `pixi run --frozen --environment <task*>` with a bare
+# interpreter (no env activation). Per-subcommand flags stay free-form under `args`.
+additionalProperties = false
 
 [parameters.properties.subcommand]
 type = "string"
@@ -57,7 +62,3 @@ description = "Required. Execution-layer environment selector (scrna->task1, spa
 [parameters.properties.args]
 type = "object"
 description = "Compute flags keyed by subcommand flag names (without the leading '--'). The subcommand's argparse parser is the single source of truth for which flags exist and which are required, their choices, and their mutual exclusions — run `python -m aose_omics_runtime <subcommand> --help` to read it. Flags are deliberately not restated here: a second copy would drift from the implementation. Notable required inputs: the three scatac subcommands (atac_qc, peak_calling, gene_activity) all take an --adata produced by snapatac2.pp.import_fragments (they read insertions from obsm, so a plain feature matrix is rejected); gene_activity needs gtf-file, and atac_qc needs gtf-file when compute-tsse is set."
-
-[parameters.properties.pythonBin]
-type = "string"
-description = "Optional explicit Python interpreter."

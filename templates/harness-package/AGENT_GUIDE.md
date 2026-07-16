@@ -562,11 +562,31 @@ How they wire together (frozen alignment with the main session):
 - A `runtime = "aose_omics_runtime"` tool descriptor names a `python-runtime`
   component. The host resolves the runtime, imports its `module`, and dispatches
   the tool call — the package ships no `AgentTool`, only the module + descriptor.
-- `metadata.env_manifest = "pixi.toml"` / `env_lock = "pixi.lock"` tie the tool
-  to the pinned `env` / `env-lock`, so the host provisions the right
-  environment before running.
+- A **Python** tool is bound to the environment by the host looking up the package's
+  `kind = "env"` / `name = "pixi"` component and launching `pixi run --manifest-path
+  <that component, resolved absolute> --frozen --executable python -m <module>`. Which
+  environment is chosen comes from the descriptor's `pixi_environment`, or per call from
+  `[metadata.pixi_environment_by_modality]` keyed on the `modality` parameter.
+- A **process** tool gets no such resolution — the host passes `args` through verbatim
+  and runs it with cwd = **the descriptor's own directory**. So a process tool that needs
+  the workspace manifest must pass `--manifest-path` itself; nothing infers it.
+- `--frozen` installs from the lock but never solves. **The host does not provision**;
+  materialising an environment is `omics_install_env`'s job.
 - Keep these assets **beside the tool item** (`tools/omics-compute/python/`,
   `tools/omics-environment/pixi.toml`), not at package root.
+
+> Know which parts of a descriptor are actually read, by whom:
+> - **The model** sees `name`, `description` and `parameters` — nothing else.
+> - **The sandbox / process runtime** reads the top-level `operation`, `read_only`,
+>   `destructive` and `tags` to pick a profile; the model never sees them.
+> - **The host** reads only `pixi_environment` / `environment` /
+>   `pixi_environment_by_modality` out of `[metadata]`.
+> - **`[metadata]` is otherwise free-form and read by nothing.** Keys like `env_manifest`
+>   read as contracts and are not.
+>
+> So state a fact where something consumes it: in `description` (the model reads it) or in
+> `args` (the process runs it) — never in invented metadata, and never point the model at
+> `[metadata]`, which it cannot see.
 
 **Do not** give infra components an `HcpMagnet.ts` or a `<source>/` directory —
 they are plain paths, not magnets. Adding one will not break the validator but
