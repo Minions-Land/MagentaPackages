@@ -18,6 +18,20 @@ expression  = pd.read_csv("OmicsExpressionProteinCodingGenesTPMLogp1.csv", index
 symbol_to_col = {c.split(" (")[0]: c for c in gene_effect.columns}
 ```
 
+## When the evidence is already integrated
+
+Every recipe below computes convergence **from raw matrices**. A published supplement often ships the
+convergence already done, as a flag or a tier column. Such a column **already encodes an AND**, over
+conditions its authors chose.
+
+Re-applying your own filter on top is not extra rigour — it is a **second, different AND**, and it can
+remove exactly what the published analysis meant to keep. It fails silently: the list gets shorter and
+looks more conservative. Read what a derived column already means before combining it with anything.
+
+The same applies upstream: if an activating-site flag is already a column, do not re-derive it from a
+licence-gated PhosphoSitePlus download; if druggability tiers ship in the file, do not re-query Pharos
+gene by gene. Those recipes exist for when the annotation is *absent*.
+
 ## The integration principle
 
 A target with **converging evidence** across data types is more credible than one supported by a

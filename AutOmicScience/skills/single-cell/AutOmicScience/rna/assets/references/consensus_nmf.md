@@ -85,9 +85,10 @@ falls monotonically with k, so it is not a criterion on its own. Upstream's own 
 Take the largest k that is still reasonably stable, or a local stability maximum, and say which.
 
 **cNMF does not compute a cophenetic coefficient.** That is Brunet et al. 2004's criterion for a
-different consensus-NMF formulation (built on a cells × cells consensus matrix); it appears nowhere in
-this package. cNMF's k-selection lineage is Alexandrov et al. 2013. If a plan says "pick k where
-cophenetic peaks", it is not describing cNMF.
+different consensus-NMF formulation (built on a sample × sample consensus matrix). cNMF's k-selection
+lineage is Alexandrov et al. 2013. If a plan says "pick k where cophenetic peaks", it is not
+describing cNMF — it is describing Brunet's, which is a different analysis on a different matrix and
+is not blocked here: see `omics-shared`'s `assets/references/unsupervised_structure.md`.
 
 ## Choosing density_threshold — run consensus twice
 

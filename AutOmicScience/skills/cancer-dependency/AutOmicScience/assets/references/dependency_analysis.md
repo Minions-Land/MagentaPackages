@@ -109,9 +109,12 @@ failure into a substantive negative call. Count the NAs in the `report`.
 
 Provision R + `sn` per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A: a Pixi
 feature with its own solve-group, composing `["core", "singlecell", <new>]`), and drive it from Python
-with `rpy2` or via `Rscript` on a CSV. This is a real provisioning cost — take it only when you need
-the published score. If you only need "is gene X more essential in *this* group", the next section
-answers that in the pinned stack.
+with `rpy2` or via `Rscript` on a CSV.
+
+**How expensive that is depends on where you are running, which you can see and this doc cannot.** R is
+absent from `task1–4`, but many analysis containers ship `r-base`, in which case `install.packages("sn")`
+is the whole cost. Check before deciding. The next section answers a **different question**, not a
+cheaper version of this one — pick on the question, then price it.
 
 ## Group-comparison selective dependency (REFERENCE — pinned stack)
 

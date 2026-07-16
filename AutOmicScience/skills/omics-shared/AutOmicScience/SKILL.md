@@ -67,8 +67,16 @@ After `omics_preflight` confirms the modality, read its skill and the specific m
 |-------|-------|-------------|
 | Survival analysis (KM / Cox on features from any modality) | `../../clinical-survival/AutOmicScience/SKILL.md` | `../../clinical-survival/AutOmicScience/assets/references/*.md` |
 | ML engineering / deep models (reproduce DL methods, foundation models) | `../../bioml/AutOmicScience/SKILL.md` | routes to `repro/`, `deep-models/`, `sequence-fm/`, `coding/`, `figure-check/` subskills |
+| **Association testing** — feature × phenotype, covariate adjustment, correlation screens, interaction, FDR-family scoping | *(this skill)* | `assets/references/association_testing.md` |
+| **Unsupervised structure on a sample × feature table** — sample clustering, patient stratification, correlation heatmaps, PCA/SVD/NMF, cluster-vs-covariate testing | *(this skill)* | `assets/references/unsupervised_structure.md` |
 
 Routing notes for ambiguous cases:
+- **The unit of analysis is the patient, not the assay** (a `patient × score` table, a `patient × cell-type`
+  matrix built from metadata, a cohort to stratify) → the two cross-cutting layers above. The modality
+  table indexes by assay, so these have no row there — that is expected, not a gap.
+- **The input is a published results table** (a DE table, a supplementary matrix, precomputed scores)
+  → the modality skill still owns the interpretation, but do not let its "raw counts" prerequisite
+  bounce you: it applies to *running* the analysis, not to reading its output.
 - **Tumor bulk/single-cell RNA-seq** → the resolution skill (`bulk` / `single-cell`), not `cancer-genomics`. `cancer-genomics` handles somatic DNA variants (MAF/CNA) only, not expression.
 - **"Associate features with patient survival"** → first the data skill to derive features, then `clinical-survival` for the KM/Cox step.
 - **Foundation-model application (scGPT, Geneformer, UCE, perturbation prediction)** → `bioml`, not the resolution skill.

@@ -69,15 +69,19 @@ Builds on `omics-shared` (loaded automatically). This is **repertoire** analysis
 | Load annotated AIRR; tool interop | **PARTIAL** — not pinned | both | `ir.io.read_airr` / `ddl.read_airr` / `ddl.to_scirpy` ↔ `ir.io.from_dandelion` | `assets/references/data_loading.md` |
 | Paired-chain clonotype definition | **PARTIAL** — not pinned | scirpy | `ir.pp.ir_dist` + `ir.tl.define_clonotype(_clusters)` | `assets/references/clonotype_definition.md` |
 | Clone calling by junction identity | **PARTIAL** — not pinned | dandelion | `ddl.tl.find_clones` (`ddl.tl.define_clones` for BCR) | `assets/references/clonotype_definition.md` |
-| Clonal expansion / clone size | **PARTIAL** — not pinned | both | `ir.tl.clonal_expansion` / `ddl.tl.clone_size` | `assets/references/clonal_and_public.md` |
-| Public / shared clonotypes across donors | **PARTIAL** — not pinned | scirpy + pandas | groupby `clone_id` × donor | `assets/references/clonal_and_public.md` |
+| Clonal expansion / clone size | **REFERENCE** — pandas, given a `clone_id` | pandas (or `ir.tl.clonal_expansion` / `ddl.tl.clone_size`) | groupby `(donor, clone_id)` | `assets/references/clonal_and_public.md` |
+| Public / shared clonotypes across donors | **REFERENCE** — pandas, given a `clone_id` | pandas | groupby `clone_id` × donor | `assets/references/clonal_and_public.md` |
 | Clonality → GEX phenotype linkage | **PARTIAL** — not pinned | both | `ddl.tl.transfer` / `ir.get.airr_context` | `assets/references/clonal_and_public.md` |
 
-**Everything is PARTIAL** — neither `scirpy` nor `sc-dandelion` is in `task1–4`, so provision before
-planning a run (Prerequisites §3). Reannotation is doubly gated: it also needs dandelion's
-Singularity/Docker container. Every step *downstream* of reannotation is pure Python once the env
-exists. `omics_preflight` covers only `task1–4` — check the imports yourself and record the env +
-versions in the `report`.
+**What is gated is *building* the clonotype, not analysing it.** Reannotation needs dandelion's
+container; distance-based clonotype clustering needs `scirpy`; neither is in `task1–4` (provision per
+Prerequisites §3). But once each cell carries a sequence-defined `clone_id` and a donor label — which
+an already-annotated table often does — expansion and public-clonotype analysis are `groupby`s on the
+pinned stack. **Exact-identity clonotype matching also needs no scirpy**: it is a string key, and
+`scirpy`'s `define_clonotype_clusters` is *distance*-based, so it answers a different question.
+
+`omics_preflight` covers only `task1–4` — check the imports yourself and record the env + versions in
+the `report`.
 
 Read the method doc before running each capability.
 

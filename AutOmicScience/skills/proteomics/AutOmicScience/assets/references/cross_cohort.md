@@ -87,16 +87,18 @@ discordant = (
 
 Report concordant vs discordant separately. Discordance suggests batch effects or biological heterogeneity.
 
-## Effect-size threshold alignment
+## The hit definition is a decision, not a constant
 
-If cohort A uses `log2FC > 0.5` and cohort B uses `log2FC > 1.0`, the "hit" definitions differ. **Align thresholds** before computing overlap:
+`padj < 0.05 & log2FC > 0.5` above is an example, not the rule. The question sets it: FDR only, FDR +
+effect, a top-N ranked list, or every feature carrying an estimate. Two cohorts screened at different
+cutoffs are not comparable, so if both sides are thresholded, say which cutoff you applied to each and
+why.
 
-```python
-# Use same cutoff for both
-threshold = 0.5
-up_A = set(de_A[(de_A.padj < 0.05) & (de_A.log2FC > threshold)].protein)
-up_B = set(de_B[(de_B.padj < 0.05) & (de_B.log2FC > threshold)].protein)
-```
+> **Do not carry an effect-size cutoff across cohorts whose estimates are in different units.**
+> An NPX log2 delta and a per-unit regression β are not the same quantity. A 0.5 cutoff that keeps
+> hundreds on one side can keep ~0 on the other, and the overlap then comes out **empty with no
+> error** — the analysis looks completed and finds nothing. `de_A.estimate.abs().describe()` next to
+> `de_B.estimate.abs().describe()` shows this in one line; check before importing a threshold.
 
 ## Full example: cross-cohort replication
 

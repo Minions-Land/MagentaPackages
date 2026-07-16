@@ -1,6 +1,6 @@
 ---
 name: single-cell
-description: Single-cell omics analysis (RNA-seq, ATAC-seq, multiome) — QC, preprocessing, integration, clustering, annotation, trajectory, cell-cell communication, chromatin accessibility, joint embeddings. Use when the user asks to analyze single-cell RNA-seq data (scRNA-seq, 10x), single-cell ATAC-seq (scATAC-seq, chromatin accessibility), or paired multiome (RNA+ATAC) datasets.
+description: Single-cell omics analysis (RNA-seq, ATAC-seq, multiome) — QC, preprocessing, integration, clustering, annotation, trajectory, cell-cell communication, chromatin accessibility, joint embeddings; cell-type composition and abundance across tissues or conditions (Ro/e tissue enrichment, per-donor proportions, compositional testing). Use when the user asks to analyze single-cell RNA-seq data (scRNA-seq, 10x), single-cell ATAC-seq (scATAC-seq, chromatin accessibility), paired multiome (RNA+ATAC) datasets, or a per-cell metadata table with cell-type labels — including questions about which cell types are enriched, depleted, or associated with a phenotype.
 requiredTools: [run_python, create_notebook, add_cell, observe_figure, omics_preflight, omics_compute]
 tags: [omics, single-cell, scrna, scatac, multiome, scanpy, scverse, muon, snapatac2]
 ---

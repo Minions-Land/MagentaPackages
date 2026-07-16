@@ -22,8 +22,13 @@ res["padj"] = multipletests(res.p, method="fdr_bh")[1]
 ```
 
 ## Thresholds
-- Positive association: `coef > 0` AND `padj < 0.05`
 - Directionality matters: positive coef = metabolite↑ when phenotype↑
+- **BH-FDR is the default gate**, because a per-metabolite screen is hundreds to thousands of tests
+  and the uncorrected count is mostly noise at typical cohort sizes.
+- **When the question states a threshold, that is the gate** — report counts at exactly the thresholds
+  asked for, and put the FDR-adjusted count beside them. A screen reported at raw p is
+  hypothesis-generating; say so and it is honest. Silently substituting a stricter gate answers a
+  different question than the one asked.
 
 ## Pitfalls
 - Wrong direction interpreted

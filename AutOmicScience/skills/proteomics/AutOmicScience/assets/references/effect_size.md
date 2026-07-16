@@ -13,20 +13,27 @@ A protein with log2FC=3.0, p=0.03 changed **more** than one with log2FC=0.4, p=1
 
 ## The rule
 
-**When asked "which change most / are most different / largest change":**
-1. Apply an FDR gate first (padj < 0.05) — keep only statistically credible hits
-2. **Rank the survivors by |effect size|** (|log2FC| or |estimate|)
+**"Which change most / are most different / largest change"** is a question about **magnitude**, so
+rank by |effect size| — and gate on FDR first, so you are ranking among hits the data supports:
 
 ```python
-# WRONG (ranks by evidence, not magnitude):
-top = de.sort_values("p").head(10)
-
-# RIGHT (FDR gate, then rank by magnitude):
 credible = de[de.padj < 0.05]
 top = credible.reindex(credible.log2FC.abs().sort_values(ascending=False).index).head(10)
 ```
 
-**When asked "which are most significant / strongest evidence":** rank by p-value (that's the right axis then).
+**"Which are most significant / strongest evidence"** is a question about **evidence**, so rank by
+p-value. Same analysis, different axis — read the question.
+
+### When the gate empties the table
+
+An FDR gate returning nothing is a **result**, not a failure: it says the data does not support any
+hit at that threshold, and that belongs in the report as a number (`n_sig = 0` of n tested). It is
+also common and unremarkable at small n.
+
+What you do next is a judgement about what was asked. If a ranked shortlist is wanted regardless, a
+raw-p ranking answers that, provided you show the FDR column beside it and say the set is exploratory.
+Silently returning an empty table answers nothing; silently dropping the FDR column overclaims.
+Neither extreme is the honest move.
 
 ## Why the ranking axis matters
 

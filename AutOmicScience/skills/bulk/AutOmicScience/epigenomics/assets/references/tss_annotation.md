@@ -1,9 +1,11 @@
 # Reference — TSS Annotation & Genomic Feature Classification
 
-**Maturity: PARTIAL** — annotate peaks to genes and classify them by genomic feature. **Neither `pyranges`
-nor `gtfparse` is installed in any environment here**, so this method must be **provisioned into its own
-environment** before it can run. API verified against `pyranges` **0.1.4** (executed) and `gtfparse` rev
-`cb3788e`.
+**Maturity: REFERENCE** — annotate peaks to genes and classify them by genomic feature. A GTF is a TSV
+and a TSS is one coordinate, so **pandas on `task1` does this**; a multi-GB GTF reads fine with
+`pd.read_csv(..., chunksize=...)`. **Neither `pyranges` nor `gtfparse` is installed** — they are
+conveniences worth their own solve-group only if the interval work is intricate; not a gate. The
+pyranges/gtfparse API below is verified against `pyranges` **0.1.4** (executed) and `gtfparse` rev
+`cb3788e`, for when you do provision them.
 
 > **Provisioning — follow `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`** (§A: a new Pixi
 > feature + environment with its **own solve-group**, which keeps these pins away from `task1–4` and lands

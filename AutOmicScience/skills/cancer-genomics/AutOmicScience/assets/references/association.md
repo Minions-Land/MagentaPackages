@@ -86,18 +86,32 @@ Phenotype variables often need cleaning before testing:
 
 **T-stage collapse**:
 ```python
-# Collapse substages T1a/T1b/T1c → T1, then to early/late
-clinical["T_stage"] = clinical["ajcc_T"].str.extract(r"(T\d)")   # T2a → T2
-clinical = clinical[~clinical.T_stage.isin([None, "TX"])]         # drop unknowns
-# Prefer pathological over clinical staging:
+clinical["T_stage"] = clinical["ajcc_T"].str.extract(r"(T\d)")   # T2a → T2; non-matches become NaN
+clinical = clinical.dropna(subset=["T_stage"])
+```
+
+`.str.extract` turns every unparseable value — `TX`, `[Not Available]`, `[Discrepancy]` — into `NaN`,
+so `dropna` is what removes them. **`.isin([None, "TX"])` does not**: `isin` never matches `NaN`, so
+that filter drops zero rows and the sentinels survive into the test. Same trap on the pathologic/clinical
+fallback — `fillna` is a no-op when the missing value is the *string* `"[Not Available]"` rather than
+`NaN`. Normalise sentinels to `NaN` first:
+
+```python
+clinical = clinical.replace(r"^\[.*\]$", np.nan, regex=True)
 clinical["stage"] = clinical["path_T"].fillna(clinical["clin_T"])
 ```
 
 **Response mapping** (irRECIST → binary):
 ```python
-# CR/PR → Responder; SD/PD → Non-responder (or per protocol)
-clinical["responder"] = clinical.irRECIST.isin(["CR", "PR"])
+responder = clinical.irRECIST.isin(["CR", "PR"])
+assert responder.any(), f"no responders matched; observed labels: {clinical.irRECIST.unique()}"
+clinical["responder"] = responder
 ```
+
+The `assert` is the point. irRECIST is written both as `CR`/`PR` and as `Complete Response`/`Partial
+Response`, and a literal `isin(["CR","PR"])` against the long form returns **zero responders without
+raising** — every downstream test then runs on an empty group and reports a clean null. Read the
+observed labels before mapping them.
 
 Drop ambiguous values ("Discrepancy", "Indeterminate", NA) explicitly.
 

@@ -16,6 +16,11 @@ jupyterlab = "*"
 h5py = ">=3.10"
 mudata = ">=0.3"
 # numpy unpinned on purpose — scanpy provides it; lets isolated envs differ
+# pandas raises ImportError on .xlsx/.xls without these.
+openpyxl = "*"
+xlrd = ">=2.0.1"
+# snapatac2 pulls pysam into task3/task4 only; a transitive dep is not a contract.
+pysam = "*"
 
 [feature.singlecell.dependencies]
 scanpy = ">=1.10"

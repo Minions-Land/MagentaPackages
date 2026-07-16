@@ -22,9 +22,8 @@ replicates** — several samples per condition, not several cells.
   differential abundance over kNN neighbourhoods, so it catches a subpopulation shifting without
   needing a cluster label for it. Needs `pertpy[milo-edger]` **and a working R** (it calls edgeR
   through rpy2).
-- **Never a per-type proportion test** (t-test/Mann-Whitney on proportions). Proportions sum to 1,
-  so one type expanding mechanically shrinks every other — a per-type test scores that artifact as
-  a real effect, usually as several types "changing" in opposite directions.
+- **Per-type proportion tests** (Mann-Whitney/WLS on proportions, + BH) — the compositional caveat and
+  when it binds, below.
 - **Only *describing* which types sit in which tissue** (a TME-atlas style figure) → **Ro/e** (§3).
   Descriptive only: no p-value, no inference, not a substitute for §1/§2.
 
@@ -34,6 +33,30 @@ spec `pertpy` for scCODA, `pertpy[milo-edger]` for Milo). Never a bare `pip inst
 `base`. Verified absent from `pixi.toml`/`pixi.lock`; a stale copy may linger in an un-rebuilt
 `.pixi/envs/task1`, so check the import in the env you actually run, not a previous session's.
 Tools are in `pt.tl`; **plots are methods on the tool object**, not in `pt.pl`.
+
+### The compositional caveat, and when it binds
+
+Proportions sum to 1, so one type expanding mechanically shrinks every other. A per-type test can
+score that artifact as a real effect — classically, several types "changing" in opposite directions
+when only one moved. scCODA exists because of this: it models the counts as compositional against a
+reference type.
+
+That failure is worst where it is easiest to hit: **few samples, two conditions, one large type
+dominating the shift.** It weakens as the design gets wider — with a few hundred donors and BH across
+types, a per-type screen is standard practice in the field and is what much of the published
+literature reports.
+
+So this is a judgement, not a rule. What the two paths actually give you differs, and that usually
+decides it:
+
+- **scCODA** returns credible effects against a reference type — **no FDR-adjusted p-value per type**
+  (see the "credible ≠ significant" note below). If the question asks for per-type p and q, it cannot
+  answer it, however correct it is.
+- **A per-type screen** (WLS weighted by donor cell count, or Mann-Whitney; + BH) returns exactly that
+  table, and carries the compositional caveat with it — which belongs in the interpretation, not in a
+  refusal to run.
+
+Say which you ran and why, and report the caveat alongside the numbers.
 
 ## 1. scCODA — sample-level compositional test
 

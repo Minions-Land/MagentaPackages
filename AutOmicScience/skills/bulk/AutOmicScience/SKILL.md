@@ -1,6 +1,6 @@
 ---
 name: bulk
-description: Bulk RNA & epigenomics analysis — normalization (TMM / VST / logCPM),count-based differential expression (DESeq2 / edgeR / limma-voom), pathway enrichment (GSEA / ORA), co-expression networks (WGCNA). Use when the user has a bulk or pseudobulk gene-count matrix with sample metadata (not single-cell data).
+description: Bulk RNA & epigenomics analysis — normalization (TMM / VST / logCPM), count-based differential expression (DESeq2 / edgeR / limma-voom) including continuous-trait designs, pathway enrichment (GSEA / ORA on a gene list), co-expression networks (WGCNA) and gene-set coherence; ChIP-seq / bulk ATAC-seq peak files (narrowPeak / BED / BAM) — differential occupancy, TSS annotation, chromatin accessibility. Use when the user has a bulk or pseudobulk gene-count matrix with sample metadata, a peak/BAM set from ChIP-seq or bulk ATAC-seq, a bare gene list, or a pre-computed differential-expression table (DESeq2 / edgeR / Cuffdiff `gene_exp.diff`) to interpret. Not single-cell data.
 requiredTools: [run_python, bash, read, write, omics_preflight, omics_compute]
 tags: [omics, bulk, bulk-rna, rna-seq, differential-expression, deseq2, gsea, wgcna]
 ---

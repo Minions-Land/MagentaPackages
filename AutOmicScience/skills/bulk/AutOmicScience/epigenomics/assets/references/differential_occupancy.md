@@ -1,31 +1,33 @@
 # Reference — Differential Occupancy / Accessibility
 
-**Maturity: REFERENCE** — hand-rolled, and **this is the one capability in this subskill that runs on the
-pinned stack**: given a peak × sample count matrix, `pydeseq2` 0.5.4 is in `task1` (`modality="scrna"` —
-an environment selector, not a claim about your data). Getting *to* that matrix is **PARTIAL**: `bedtools`
-is **not installed in any environment** here, so bring a count matrix from your pipeline (`featureCounts`,
-`bedtools multicov`, nf-core/chipseq output) rather than expecting to produce one in-session. Verified
-against pydeseq2 0.5.4 (executed).
+**Maturity: REFERENCE** — hand-rolled on the pinned stack. `pydeseq2` 0.5.4 and `pysam` are both in
+`task1` (`modality="scrna"` — an environment selector, not a claim about your data). Verified against
+pydeseq2 0.5.4 (executed).
 
 ## The count matrix
 
-Count reads in consensus peaks per sample (peaks × samples). **`bedtools` is not in any environment here** —
-run this upstream in your pipeline and bring `peak_counts.txt` in:
+Count reads in consensus peaks per sample (peaks × samples).
 
-```bash
-# bedtools multicov: count reads from each BAM in each peak
-bedtools multicov -bams cond1_r1.bam cond1_r2.bam cond2_r1.bam cond2_r2.bam \
-  -bed consensus_peaks.bed > peak_counts.txt
-```
+**The `bedtools` CLI is not installed — `pysam` is, and it does this.** `AlignmentFile.count(chrom,
+start, end)` is what `bedtools multicov` computes per interval, and `.mapped` gives the library size
+for CPM without a second pass. Counting a genome-wide peak set is cheap enough to do in-session.
+
+If your pipeline already produced a count matrix (`featureCounts`, `bedtools multicov`,
+nf-core/chipseq), read it instead — but the absence of `bedtools` is not a reason to stop.
 
 ```python
 import pandas as pd
 counts = pd.read_csv("peak_counts.txt", sep="\t", header=None)
-peak_ids = counts.iloc[:, :3].astype(str).agg("_".join, axis=1)  # chr_start_end
-count_matrix = counts.iloc[:, 3:]  # samples in columns
+peak_ids = counts.iloc[:, :3].astype(str).agg("_".join, axis=1)
+count_matrix = counts.iloc[:, 3:]
 count_matrix.index = peak_ids
 count_matrix.columns = sample_names
 ```
+
+**Replicates decide the test, not the tool.** `pydeseq2` estimates dispersion across replicates; with
+n=1 per condition it has nothing to estimate from. That is a property of the design — pick a test that
+matches it (a count model on the two libraries, an exact test, a permutation) and say which, rather
+than reporting a fold-change with no p-value.
 
 ## Method 1: DiffBind (R, gold standard) — PARTIAL, not installed
 

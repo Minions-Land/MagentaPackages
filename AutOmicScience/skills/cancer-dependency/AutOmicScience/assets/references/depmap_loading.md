@@ -6,7 +6,7 @@ DepMap (Dependency Map) is a genome-wide CRISPR knockout screen across ~1,100 ca
 doc pins down the two things every downstream script depends on: **the matrix orientation** and **the
 current file/column names**.
 
-## The matrix is cell lines × genes
+## The stock release is cell lines × genes
 
 `CRISPRGeneEffect.csv` has **one row per cell line and one column per gene** — not the other way
 round. Verified against the released file (26Q1 / 24Q4):
@@ -35,19 +35,26 @@ Everything follows from this:
 number per line, indexed by `ACH-######`, and every downstream `[gene]` lookup then raises `KeyError`.
 That is the good case; a transposed `.loc` that happens to hit a valid label fails silently instead.
 
-## Gene columns carry an Entrez suffix — always
+**This holds for the stock release, not for every file called a DepMap score matrix.** Anything
+re-exported — a subset, a paper's supplement, a model's output — may be transposed, and two such files
+can disagree with each other. The first column settles it in one look: `ACH-######` means rows are
+models, a gene symbol means they are not. Look, rather than assume.
 
-Every column is `SYMBOL (EntrezID)`: `A1BG (1)`, `A1CF (29974)`. This is not an occasional
-paralog disambiguator — DepMap's pipeline builds every name that way, falling back to
-`SYMBOL (Unknown)` when no Entrez ID maps
+## Gene columns carry an Entrez suffix
+
+Every column of the stock release is `SYMBOL (EntrezID)`: `A1BG (1)`, `A1CF (29974)` — built that way
+by DepMap's pipeline, falling back to `SYMBOL (Unknown)` when no Entrez ID maps
 ([`depmap_omics/depmapomics/dm_omics.py`](https://github.com/broadinstitute/depmap_omics)). So a bare
 `gene_effect["EGFR"]` raises `KeyError`.
 
 ```python
-# Map bare HGNC symbol -> the release's column label; build once, reuse.
 symbol_to_col = {c.split(" (")[0]: c for c in gene_effect.columns}
 egfr = gene_effect[symbol_to_col["EGFR"]]
 ```
+
+**A file that went through R arrives mangled.** `make.names` rewrites `A1BG (1)` to `A1BG..1.`, so the
+`split(" (")` above yields the whole string back and the lookup `KeyError`s. Match on the label shape
+you actually see rather than on the one the release documents.
 
 Strip the suffix only if you have a reason to; the Entrez ID is what disambiguates symbols that HGNC
 has since merged or retired. Never strip it off `.index` — the index is cell lines.

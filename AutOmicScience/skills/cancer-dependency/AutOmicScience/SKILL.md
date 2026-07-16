@@ -64,9 +64,9 @@ design decisions, not a missing tool.
 **normLRT is PARTIAL** for a different reason: the published score is a normal-vs-**skew-t**
 likelihood ratio, and no Python package fits Azzalini's skew-t (`scipy.stats.skewnorm` is a different
 family; `scipy.stats.jf_skew_t` is Jones–Faddy; PyPI's `SkewT` is a meteorology plotting tool). It
-needs R (`sn`, `MASS`) provisioned per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`.
-If you can name the group you care about, the pinned group-comparison test answers that question
-without R — see the reference doc.
+needs R (`sn`, `MASS`) provisioned per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` —
+cheap where the environment already ships `r-base`, which many analysis containers do. The
+group-comparison test is not a substitute for it; it answers a different question (see §4).
 
 ---
 
@@ -194,8 +194,11 @@ screen quality, so it is not the same set and not what "common essential" means.
 
 **normLRT** asks "is this gene selective in *some* subset?" — it fits the gene's distribution across
 *all* lines (skew-t vs normal) and never sees a group label. The **group comparison** asks "is this
-gene more essential in cancer type A?" — you supply the subset. If you can name the group, use the
-group test; it runs in the pinned stack, while normLRT needs R.
+gene more essential in cancer type A?" — you supply the subset.
+
+Neither is the other's fallback. A gene can be strongly selective with no signal in the lineage you
+happened to name, and vice versa. Pick on the question; then price it — R is absent from `task1–4` but
+present in many analysis containers, and you can see which you are in.
 
 ### 5. Therapeutic window = dependent in cancer, tolerated in normal
 

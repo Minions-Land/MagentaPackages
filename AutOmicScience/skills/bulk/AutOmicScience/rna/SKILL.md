@@ -28,8 +28,12 @@ not AnnData/scanpy. Use a count-based statistical model — this is the standard
 
 ## Prerequisites
 
-1. A **raw integer count** matrix (genes × samples) — do not start DE from TPM/FPKM/normalized values.
-2. A **sample metadata** table aligning each column to its condition + covariates (batch, sex, age, RIN, …).
+1. **If you are running DE**: a **raw integer count** matrix (genes × samples) — do not start DE from
+   TPM/FPKM/normalized values — plus a **sample metadata** table aligning each column to its condition +
+   covariates (batch, sex, age, RIN, …).
+2. **If the DE is already run** (a `gene_exp.diff`, a DESeq2/edgeR results table, a paper's supplement),
+   you need none of that — see `assets/references/de.md` § "Parsing a pre-computed DE table". Filtering,
+   ranking and enrichment start from there.
 3. **What is actually in `task1`** (verified): **Python** `pydeseq2` 0.5.4, `decoupler` 2.1.6,
    `statsmodels`, `pandas`, `scipy`, `numpy`. That is enough for the whole default path — count-model DE,
    VST, pseudobulk, ORA, and pre-ranked GSEA.
@@ -83,10 +87,12 @@ collection, thresholds, interpretation) even when a subcommand exists.
 4. **Enrichment** — **pre-ranked GSEA** (rank by log2FC or shrunken LFC) against **MSigDB Hallmark (H)**,
    report NES + adjusted-p; or **ORA** (Fisher/hypergeometric) with an explicitly-stated background universe
    + BH-FDR. (`assets/references/enrichment.md`)
-5. **Networks (if asked)** — WGCNA on VST/TMM-logCPM data: justified soft-power, signed adjacency, TOM,
-   module eigengenes, module–trait association. **WGCNA is not installed here** — say so rather than
-   substituting the within-set correlation shortcut, which finds no modules.
-   (`assets/references/coexpression.md`)
+5. **Networks (if asked)** — two different questions, don't substitute one for the other:
+   - **"Find the modules"** → WGCNA on VST/TMM-logCPM: justified soft-power, signed adjacency, TOM,
+     module eigengenes, module–trait association. **WGCNA is not installed here** — provision it, or
+     report the blocker. The within-set correlation shortcut **discovers no modules** and cannot stand in.
+   - **"Is *this* gene set co-expressed?"** → the within-set coherence path answers exactly that, on the
+     pinned stack, with no provisioning. (`assets/references/coexpression.md`)
 6. **Ground** — cite exact numbers (log2FC, padj, NES, module sizes) from the emitted report; inspect
    any volcano/MA/heatmap before it backs a claim.
 

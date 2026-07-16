@@ -10,7 +10,14 @@ TMB = the count of somatic mutations, a biomarker for immunotherapy response.
 
 Two common forms:
 - **Raw count**: total non-synonymous mutations per sample
-- **Per-Mb**: count / panel_size_Mb (e.g., MSK-IMPACT ≈ 1.2 Mb, whole-exome ≈ 30–50 Mb)
+- **Per-Mb**: count / panel_size_Mb (e.g. MSK-IMPACT ≈ 1.2 Mb, whole-exome ≈ 30–50 Mb)
+
+**If the clinical table already ships a TMB column, prefer it and state its convention.** The
+denominator is a convention, not a measurement, and exports do not agree: cBioPortal's MSK
+`TMB_NONSYNONYMOUS` normalises to a fixed **30 Mb** exome-equivalent, not the ~1.2 Mb panel footprint —
+so recomputing from the panel size disagrees with the column sitting in the same file by ~25×. Neither
+is wrong; a number that contradicts the provided data without saying why is. You can check which
+denominator a column used: divide it back out and see which choice yields integer counts.
 
 ```python
 # Non-synonymous = coding, protein-altering

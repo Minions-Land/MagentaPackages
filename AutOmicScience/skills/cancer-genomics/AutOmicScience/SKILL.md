@@ -19,10 +19,14 @@ This is **NOT** germline GWAS, **NOT** WGS/WES alignment/calling (assumes MAF al
 2. **Context**: `omics_compute summarize` on the MAF to thread sample counts + cancer types forward
 3. **Clinical annotation**: patient metadata table (response, stage, survival) if testing associations
 
-Standard GDC MAF columns: `Hugo_Symbol` (1), `Chromosome` (5), `Start_Position` (6), `End_Position`
-(7), `Variant_Classification` (9), `Variant_Type` (10), `Tumor_Sample_Barcode` (16), `HGVSp_Short`
-(37), `Protein_position` (55). There is **no `Protein_Change` column** in a GDC MAF — that name is
-cBioPortal's; check the header rather than assuming it.
+Common MAF columns: `Hugo_Symbol`, `Chromosome`, `Start_Position`, `End_Position`,
+`Variant_Classification`, `Variant_Type`, `Tumor_Sample_Barcode`, `HGVSp_Short`, `Protein_position`.
+
+**Read the header; do not index by position or assume a column exists.** "MAF" is a family, not a
+format. Exports differ by the pipeline that wrote them: some carry `Protein_Change` (an
+Oncotator/Firehose column, absent elsewhere), and many insert `Consequence` ahead of
+`Variant_Classification`, shifting every later column by one against the GDC spec. Two files from the
+same portal can disagree on both.
 
 > **The cohort is not "the samples in the MAF".** Filtering to pathogenic variants drops every patient
 > whose calls were all silent, and a tumour with zero calls never appears in the MAF at all. Pin

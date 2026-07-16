@@ -25,31 +25,32 @@ This subskill covers **bulk epigenomic assays**: ChIP-seq (histone marks, TF bin
 |------------|----------|-------------|---------------|
 | Differential occupancy (peak DE) | **REFERENCE** | pydeseq2 on a peak × sample count matrix — **runs on `task1`**; DiffBind not installed | `assets/references/differential_occupancy.md` |
 | Histone mark interpretation | **REFERENCE** | domain knowledge — no dependency | `assets/references/histone_marks.md` |
-| BED peak loading & QC | **PARTIAL** | pyranges — **install** (`pyranges==0.1.4` + `pandas<3`); pandas fallback runs today | `assets/references/peak_loading.md` |
-| TSS annotation & distance | **PARTIAL** | pyranges + gtfparse — **install**; ChIPseeker not installed | `assets/references/tss_annotation.md` |
+| Read counts in intervals from BAM | **REFERENCE** | `pysam` — **pinned** (`.count()` per interval, `.mapped` for library size); the `bedtools` CLI is not installed and is not needed | `assets/references/differential_occupancy.md` |
+| BED / narrowPeak loading & QC | **REFERENCE** | pandas — **runs on `task1`**; `pyranges` is an optional convenience | `assets/references/peak_loading.md` |
+| Interval merge / overlap / nearest | **REFERENCE** | pandas; `pyranges` if the algebra earns a solve-group | `assets/references/peak_loading.md` |
+| TSS annotation & distance | **REFERENCE** | pandas + a chunked GTF read; `gtfparse`/`ChIPseeker` optional | `assets/references/tss_annotation.md` |
 | ATAC TF footprinting | **PARTIAL** | TOBIAS — **install**; HINT/RGT unverified | `assets/references/atac_footprinting.md` |
 
 Everything here is hand-rolled (no `omics_compute` subcommand) because peak analysis requires
 study-specific judgment: which peaks to merge, how to define promoters vs enhancers, which distance bands
 matter, TSS precedence rules.
 
-> **Environment reality — read before planning a run.** This subskill's toolchain is largely **not
-> installed**: `pyranges`, `gtfparse`, `pybedtools`, `bedtools`, `DiffBind`, `ChIPseeker`, `TOBIAS`, and
-> `rpy2` are in **no** environment, and `r-env` carries `r-base` + `r-essentials` only (no Bioconductor DE
-> stack). `omics_install_env` only materializes envs that `pixi.toml`/`pixi.lock` already declare — it
-> **cannot** add a package.
+> **Environment reality — read before planning a run.** The **named domain tools are absent**
+> (`bedtools`, `pyranges`, `gtfparse`, `pybedtools`, `DiffBind`, `ChIPseeker`, `TOBIAS`, `rpy2`; `r-env`
+> carries `r-base` + `r-essentials` only). **The work is not.** On `task1` (`modality="scrna"` — an
+> environment selector, not a claim about your data): peak/BED files are TSVs for **pandas**; interval
+> merge, overlap and nearest are sorts and searches; **`pysam` reads BAMs** (`.count()` per interval is
+> what `bedtools multicov` computes, `.mapped` gives library size); `pydeseq2` does peak DE; `scipy`
+> does the tests.
 >
-> **That is not a dead end — it is the PARTIAL workflow.** Provision each PARTIAL method into its **own**
-> environment following `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A a new Pixi
-> feature + env with an isolated `solve-group`, §B a **named** conda env when Pixi can't solve it). Never
-> bare-`pip install` (it can land in `base`), and never add these pins to `task1–4`. Record the env and
-> versions in the report; `omics_preflight` does **not** cover non-standard envs, so check the import
-> yourself after provisioning.
->
-> What runs today with no provisioning at all, on `task1` (`modality="scrna"` — an environment selector,
-> not a claim about your data): **pydeseq2 peak DE** given a count matrix, `scipy` Fisher tests, and
-> pandas-based BED/QC. If a method can be neither imported nor provisioned, that is a **blocker with the
-> install command** — say it was not run rather than substituting a weaker one.
+> The absence of a tool is a reason to check whether you need it — not a reason to stop. What genuinely
+> needs provisioning is the specialised modelling: **TOBIAS** footprinting, **DiffBind**'s peak-set
+> semantics, R DE stacks. Provision those per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md`
+> (§A a Pixi feature + env with an isolated `solve-group`, §B a **named** conda env). Never
+> bare-`pip install`; never add pins to `task1–4`. Record the env and versions in the report;
+> `omics_preflight` does **not** cover non-standard envs. If a method can be neither imported nor
+> provisioned, that is a **blocker with the install command** — say it was not run rather than
+> substituting a weaker one.
 
 ---
 

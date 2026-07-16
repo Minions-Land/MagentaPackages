@@ -1,9 +1,10 @@
 # Reference — Peak Loading & QC (BED / narrowPeak)
 
-**Maturity: PARTIAL** — **`pyranges` is not installed in any environment here.** Provision it into its own
-environment per `omics-shared`'s `assets/references/AOSE_nonStandard_env.md` (§A — the `peaks` env in
-`tss_annotation.md` covers this doc too; `pandas<3` is why it needs its **own solve-group** and must never
-go into `task1–4`). Or use the **pandas fallback** below, which needs nothing beyond `task1`. API verified
+**Maturity: REFERENCE** — peak files are TSVs and intervals are integers; **pandas on `task1` does all
+of it**, including merge, overlap and nearest. `pyranges` is a convenience for interval algebra, not a
+prerequisite — it is **not installed** here, and provisioning it costs a separate solve-group (it pins
+`pandas<3`, so it must never go into `task1–4`; see `omics-shared`'s `AOSE_nonStandard_env.md` §A).
+Take it if the interval work is intricate enough to earn that; do not stop for it. API below verified
 against pyranges **0.1.4** (executed).
 
 > **`import pyranges as pr` is the v0 API, and 0.1.4 is the current release.** There is no 1.x on PyPI under
