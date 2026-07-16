@@ -141,6 +141,15 @@ class TestSaveLoadH5ad:
         # Uncompressed should be larger
         assert report_none["size_bytes"] > report_gzip["size_bytes"]
 
+        # lzf is checked by round-trip rather than size: on this fixture (high-entropy
+        # float32 X plus many small obs/var datasets) lzf's per-chunk overhead nets ~7%
+        # *larger* than uncompressed, so a size assertion would encode a false expectation.
+        loaded_lzf, _ = load_h5ad(path=path_lzf)
+        assert (report_lzf["n_obs"], report_lzf["n_vars"]) == small_adata.shape
+        assert loaded_lzf.shape == small_adata.shape
+        np.testing.assert_allclose(loaded_lzf.X, small_adata.X)
+        np.testing.assert_allclose(loaded_lzf.layers["counts"], small_adata.layers["counts"])
+
     def test_backed_mode(self, small_adata, temp_dir):
         """Should support backed mode for lazy loading."""
         output_path = temp_dir / "backed.h5ad"

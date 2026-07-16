@@ -150,13 +150,21 @@ def test_f03_unified_cli_rejects_use_raw_with_layer():
 def test_f03_standalone_parsers_also_reject_use_raw_with_layer():
     # The standalone module parsers must carry the same exclusivity as the unified CLI.
     # Run them as real subprocesses so this asserts the shipped CLI, not an in-process shim.
+    import os
     import subprocess
     import sys
+    from pathlib import Path
+    # aose_omics_runtime is a PYTHONPATH root, not an installed package (see pytest.ini), and a
+    # subprocess inherits neither pytest's sys.path nor its cwd-implicit equivalent. Pass the root
+    # explicitly so this holds from any directory pytest is invoked from.
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(
+        p for p in (str(Path(__file__).resolve().parents[2]), os.environ.get("PYTHONPATH")) if p
+    )}
     for mod, argv in [
         ("aose_omics_runtime.functional.decoupler_pathway_activity",
          ["--adata", "a", "--output", "o", "--use-raw", "--layer", "counts"]),
     ]:
-        r = subprocess.run([sys.executable, "-m", mod] + argv, capture_output=True, text=True)
+        r = subprocess.run([sys.executable, "-m", mod] + argv, capture_output=True, text=True, env=env)
         assert r.returncode != 0, f"{mod} accepted --use-raw with --layer"
         assert "not allowed with" in r.stderr, r.stderr[-200:]
 

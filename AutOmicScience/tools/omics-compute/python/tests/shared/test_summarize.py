@@ -149,13 +149,13 @@ class TestSummarizeAdata:
         obsm_idx = next(i for i, line in enumerate(lines) if "Embeddings" in line or "obsm" in line)
         obsm_line = lines[obsm_idx + 1]
 
-        # Extract keys (rough check - they should appear in sorted order)
-        keys = ["X_pca", "X_pca_harmony", "X_tsne", "X_umap", "proportions", "spatial"]
-        indices = {k: obsm_line.index(k) if k in obsm_line else float("inf") for k in keys}
+        # Parse the ", "-joined key list back out rather than substring-searching it:
+        # "X_pca" is a prefix of "X_pca_harmony" and would also match inside it.
+        emitted = [k.strip() for k in obsm_line.split(",")]
 
-        # Check relative ordering of keys that appear
-        present_keys = [k for k in keys if k in obsm_line]
-        assert present_keys == sorted(present_keys)
+        # Assert presence first — a truncated/empty line would make sortedness vacuous.
+        assert set(emitted) == set(adata_with_multiple_embeddings.obsm.keys())
+        assert emitted == sorted(emitted), obsm_line
 
     def test_numeric_formatting(self):
         """Should format numeric values with scientific notation when appropriate."""
