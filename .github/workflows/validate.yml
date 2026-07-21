@@ -13,9 +13,9 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.13"
 
@@ -24,13 +24,14 @@ jobs:
 
       - name: Test package validation and release assembly
         run: |
+          python scripts/test_workflow_security.py
           python scripts/test_validate_packages.py
           python scripts/test_build_release_artifact.py
 
       - name: Test PantheonOS package contracts
         run: python -m unittest discover -s PantheonOS/tests -v
 
-      - uses: prefix-dev/setup-pixi@v0.10.0
+      - uses: prefix-dev/setup-pixi@a09b6247153796b190642a2b53fac4241043cf6f # v0.10.0
         with:
           pixi-version: v0.70.2
           run-install: false

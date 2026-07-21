@@ -34,7 +34,7 @@ the how-to.
 
 2. **Create the package directory** under repo root:
    ```bash
-   cd /Users/mjm/MagentaPackages
+   cd $HOME/src/MagentaPackages
    mkdir QuantumChem
    cd QuantumChem
    ```
@@ -87,7 +87,7 @@ the how-to.
 
 7. **Validate**:
    ```bash
-   cd /Users/mjm/MagentaPackages
+   cd $HOME/src/MagentaPackages
    python3 scripts/validate_packages.py --package QuantumChem
    ```
 
@@ -109,7 +109,7 @@ the how-to.
 
 1. **Navigate**:
    ```bash
-   cd /Users/mjm/MagentaPackages/ClaudeScience
+   cd $HOME/src/MagentaPackages/ClaudeScience
    ```
 
 2. **Create the skill source directory**:
@@ -183,7 +183,7 @@ the how-to.
 
 6. **Validate**:
    ```bash
-   cd /Users/mjm/MagentaPackages
+   cd $HOME/src/MagentaPackages
    python3 scripts/validate_packages.py --package ClaudeScience
    ```
 
@@ -212,7 +212,7 @@ put sub-skill directories **under the source dir** (e.g.
 
 1. **Create the tool source directory**:
    ```bash
-   cd /Users/mjm/MagentaPackages/QuantumChem
+   cd $HOME/src/MagentaPackages/QuantumChem
    mkdir -p tools/rosetta-dock/QuantumChem
    ```
 
@@ -327,7 +327,7 @@ put sub-skill directories **under the source dir** (e.g.
 
 7. **Validate**:
    ```bash
-   cd /Users/mjm/MagentaPackages
+   cd $HOME/src/MagentaPackages
    python3 scripts/validate_packages.py --package QuantumChem
    ```
 
@@ -609,7 +609,7 @@ source has its own `<module>/<source>/HcpMagnet.ts` tree.
 
 1. **Navigate**:
    ```bash
-   cd /Users/mjm/MagentaPackages/Biomni
+   cd $HOME/src/MagentaPackages/Biomni
    ```
 
 2. **Create the new source directories**:
@@ -638,7 +638,7 @@ source has its own `<module>/<source>/HcpMagnet.ts` tree.
 
 5. **Validate**:
    ```bash
-   cd /Users/mjm/MagentaPackages
+   cd $HOME/src/MagentaPackages
    python3 scripts/validate_packages.py --package Biomni
    ```
 
@@ -664,7 +664,7 @@ last-writer-wins.
 
 1. **Verify the version in `package.toml` matches**:
    ```bash
-   cd /Users/mjm/MagentaPackages
+   cd $HOME/src/MagentaPackages
    python3 scripts/package_version.py AutOmicScience
    # Should print "1.1.0"
    ```
@@ -712,7 +712,7 @@ downloads it into Magenta's origin-, version-, and platform-scoped cache.
 **Before every commit**, run:
 
 ```bash
-cd /Users/mjm/MagentaPackages
+cd $HOME/src/MagentaPackages
 python3 scripts/validate_packages.py
 ```
 
@@ -780,7 +780,7 @@ or construct the `AgentTool` themselves. Skills/brands/system-prompts call
   `theme`, `prompt-templates`. Only one of each per package.
 
 Match the host structure. Check
-`/Users/mjm/Magenta3/HarnessComponentProtocol/<module>/` to see how the host
+`$HOME/src/Magenta3/HarnessComponentProtocol/<module>/` to see how the host
 organizes that module.
 
 ### "My magnet imports a harness interface and the validator complains"
@@ -800,7 +800,7 @@ in `SKILL.md` and optionally link to `assets/references/*.md` from within it.
 ---
 
 **Still stuck?** Read the live reference package
-(`/Users/mjm/MagentaPackages/AutOmicScience/`) and compare your structure to
+(`$HOME/src/MagentaPackages/AutOmicScience/`) and compare your structure to
 it. Or grep the repo for an example of what you're trying to do — the four
 packages cover skills, tools (process/mcp/python), brands, system prompts, and
 package-local runtimes/envs.

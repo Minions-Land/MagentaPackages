@@ -27,5 +27,6 @@ target/
 
 # Local logs and scratch output
 *.log
+.tmp/
 tmp/
 scratch/
