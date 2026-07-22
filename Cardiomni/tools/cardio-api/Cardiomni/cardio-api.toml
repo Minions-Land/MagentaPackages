@@ -1,0 +1,37 @@
+kind = "tool"
+name = "cardiofetch"
+description = "CardioFetch: unified read-only access to cardiovascular reference databases and scholarly literature, served over MCP by a Python stdio server. 8 atomic tools, namespaced cardiofetch_<op>. LOCAL (offline): cardiofetch_standards_lookup (CAD-RADS/SYNTAX/TIMI/Rentrop/ACC-AHA/Agatston/high-risk-plaque definitions), cardiofetch_icd_lookup (cardiovascular ICD-10 codes), cardiofetch_drug_reference (antiplatelet/statin/anticoagulant/beta-blocker/nitrate info). LITERATURE (network, 5 atomic sources): cardiofetch_pubmed_search (NCBI PubMed), cardiofetch_europepmc_search (Europe PMC — papers+preprints+guidelines+OA full text), cardiofetch_clinicaltrials_search (ClinicalTrials.gov v2 — landmark CV RCTs), cardiofetch_crossref_lookup (DOI resolution + citation counts), cardiofetch_semantic_scholar_search (semantic ranking + citation graph). Each literature tool is single-source/single-responsibility; the agent orchestrates which to call, fallback, and DOI cross-checking. All tools degrade gracefully (return error payload, never crash) on network failure or rate-limit."
+runtime = "mcp"
+
+# Command launches the Python MCP server over stdio via a wrapper script that sets
+# up sys.path correctly. The wrapper (run_cardio_api_server.py) lives next to this
+# descriptor and adds ../python to sys.path before importing cardio_api_server.
+command = "python3"
+args = ["run_cardio_api_server.py"]
+
+# Namespace remote tools so they surface as cardiofetch_<tool> in the local tool
+# address space. The remote tools are named <db>_<op> (e.g. standards_lookup),
+# yielding cardiofetch_standards_lookup.
+name_prefix = "cardiofetch"
+
+# Per-request timeout. Literature search over network can be slow; local KB lookups
+# are fast. 60s accommodates network variability.
+timeout_ms = 60000
+
+[metadata]
+package = "Cardiomni"
+source = "cardio_api_server.server"
+tools = [
+    # Local, offline (bundled KB) — deterministic ground-truth lookups
+    "cardiofetch_standards_lookup - CAD-RADS/SYNTAX/TIMI/Rentrop/ACC-AHA/Agatston/high-risk-plaque definitions (local KB)",
+    "cardiofetch_icd_lookup - cardiovascular ICD-10 code lookup (local)",
+    "cardiofetch_drug_reference - cardiovascular drug info: antiplatelet/statin/anticoagulant/beta-blocker/nitrate (local)",
+    # Literature & trials — 5 atomic network sources; agent orchestrates fallback/cross-check
+    "cardiofetch_pubmed_search - NCBI PubMed E-utilities (network)",
+    "cardiofetch_europepmc_search - Europe PMC: papers+preprints+guidelines+OA full text (network)",
+    "cardiofetch_clinicaltrials_search - ClinicalTrials.gov v2: landmark cardiovascular RCTs (network)",
+    "cardiofetch_crossref_lookup - Crossref DOI resolution + citation counts (network)",
+    "cardiofetch_semantic_scholar_search - Semantic Scholar semantic ranking + citation graph (network)",
+]
+requires = ["mcp>=1.0.0"]  # literature tools use only Python stdlib urllib (no requests dependency)
+design_note = "Literature tools are strictly atomic (one source each). Cross-source orchestration, fallback laddering, and DOI cross-checking are the LLM agent's job, not baked into the server."

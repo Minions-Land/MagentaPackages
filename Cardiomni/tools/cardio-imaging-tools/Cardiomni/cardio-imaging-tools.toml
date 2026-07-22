@@ -1,0 +1,119 @@
+kind = "tool"
+name = "cardio_imaging_tools"
+source = "Cardiomni"
+display_name = "Cardiovascular Imaging Tools"
+description = "Medical imaging format readers and scientific computing utilities for CTA/DSA analysis. Includes synthetic DICOM generation for testing without patient data."
+version = "0.1.0"
+operation = "execute"
+read_only = false
+destructive = false
+runtime = "process"
+command = "python3"
+args = ["-m", "cardio_imaging_runtime"]
+# Command is resolved relative to the package root; cardio_imaging_runtime module
+# lives at tools/cardio-imaging-tools/python/cardio_imaging_runtime/
+
+[environment]
+requires = [
+    "numpy>=1.24.0",
+    "pydicom>=2.3.0",
+    "nibabel>=5.0.0",
+    "SimpleITK>=2.2.0",
+    "scipy>=1.10.0",
+    "scikit-image>=0.20.0",
+]
+
+optional = [
+    "opencv-python>=4.7.0",
+    "vtk>=9.2.0",
+    "monai>=1.1.0",
+]
+
+[parameters]
+type = "object"
+required = ["subcommand"]
+additionalProperties = false
+
+[parameters.properties.subcommand]
+type = "string"
+enum = [
+    "make_synthetic_dicom",
+    "load_series",
+    "load_dsa",
+    "window",
+    "quantify_stenosis",
+    "evaluate"
+]
+description = "Runtime subcommand. make_synthetic_dicom generates simulated CTA (multi-slice series) and DSA (cine multi-frame) DICOM files for testing without patient data. load_series/load_dsa read DICOM and report shape+HU statistics. window applies cardiac windowing. quantify_stenosis calculates stenosis percentage via diameter or area methods. evaluate runs evaluation against expert annotations."
+
+[parameters.properties.args]
+type = "object"
+description = "Subcommand-specific arguments (flag names without leading '--'). Run python -m cardio_imaging_runtime <subcommand> --help for details. Notable args: make_synthetic_dicom takes output_dir (required), cta_shape (Z,Y,X default 64,256,256), dsa_frames (default 30), dsa_shape (Y,X default 512,512). load_series/load_dsa take input (path) and output (JSON path). quantify_stenosis requires method (diameter|area) and corresponding measurement args."
+
+[functions]
+
+[[functions.make_synthetic_cta_dicom]]
+description = "Generate synthetic CTA DICOM series (multi-slice CT) for testing"
+subcommand = "make_synthetic_dicom"
+parameters = ["output_dir", "shape", "slice_thickness", "pixel_spacing"]
+
+[[functions.make_synthetic_dsa_dicom]]
+description = "Generate synthetic DSA cine DICOM (multi-frame XA) for testing"
+subcommand = "make_synthetic_dicom"
+parameters = ["output_path", "frames", "shape", "frame_time"]
+
+[[functions.load_dicom_series]]
+description = "Load a DICOM series from a directory and report metadata+HU statistics"
+subcommand = "load_series"
+parameters = ["directory_path"]
+returns = "tuple[ndarray, dict]"
+
+[[functions.load_dsa_cine]]
+description = "Load DSA cine DICOM (multi-frame) and return frames array"
+subcommand = "load_dsa"
+parameters = ["file_path"]
+returns = "tuple[ndarray, dict]"
+
+[[functions.load_nifti_volume]]
+description = "Load a NIfTI volume file"
+parameters = ["file_path"]
+returns = "tuple[ndarray, ndarray]"
+
+[[functions.preprocess_cta]]
+description = "Preprocess CTA volume with resampling and denoising"
+parameters = ["volume", "target_spacing", "denoise", "normalize"]
+returns = "ndarray"
+
+[[functions.apply_cardiac_window]]
+description = "Apply cardiac windowing to CT volume (HU → [0,1])"
+subcommand = "window"
+parameters = ["volume", "center", "width"]
+returns = "ndarray"
+
+[[functions.analyze_vessel_stenosis]]
+description = "Analyze vessel stenosis percentage in a specific segment (placeholder)"
+parameters = ["image_volume", "vessel_name", "segment", "method"]
+returns = "dict"
+
+[[functions.calculate_diameter_stenosis]]
+description = "Calculate stenosis percentage using diameter method"
+subcommand = "quantify_stenosis"
+parameters = ["min_diameter", "reference_diameter"]
+returns = "float"
+
+[[functions.calculate_area_stenosis]]
+description = "Calculate stenosis percentage using area method"
+subcommand = "quantify_stenosis"
+parameters = ["stenotic_cross_section", "reference_cross_section"]
+returns = "float"
+
+[[functions.extract_vessel_centerlines]]
+description = "Extract vessel centerlines from segmented volume (placeholder)"
+parameters = ["segmentation_volume", "vessel_label"]
+returns = "ndarray"
+
+[[functions.evaluate_against_expert]]
+description = "Evaluate AI stenosis assessment against expert annotations"
+subcommand = "evaluate"
+parameters = ["ai_report", "expert_annotation", "rubric"]
+returns = "dict"

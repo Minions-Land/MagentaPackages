@@ -1,0 +1,5 @@
+kind = "append-system-prompt"
+name = "system-prompt"
+description = "Cardiomni cardiovascular diagnosis domain system prompt."
+source = "Cardiomni"
+content_path = "SYSTEM.md"

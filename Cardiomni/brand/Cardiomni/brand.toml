@@ -1,0 +1,22 @@
+kind = "brand"
+name = "Cardiomni"
+display_name = "Cardiomni"
+description = "Cardiomni autonomous cardiovascular diagnosis agent brand theme."
+source = "Cardiomni"
+config_path = "Cardiomni.brand.ts"
+
+[theme]
+primaryColor = "#C41E3A"
+accentColor = "#2E86AB"
+successColor = "#06A77D"
+warningColor = "#E07A5F"
+errorColor = "#C1121F"
+linkColor = "#2E86AB"
+mutedColor = "#6C757D"
+panelColor = "#1A1A1A"
+
+[cli]
+binaryName = "cardiomni"
+description = "Autonomous cardiovascular diagnosis from paired CTA/DSA DICOM"
+welcomeMessage = "Welcome to Cardiomni — Cardiovascular Diagnosis Agent"
+prompt = "cardiomni>"

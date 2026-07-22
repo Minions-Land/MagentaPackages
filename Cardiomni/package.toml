@@ -1,0 +1,116 @@
+schema_version = "magenta.package.v2"
+id = "Cardiomni"
+name = "Cardiomni"
+version = "0.1.0"
+kind = "domain"
+domain = "cardiovascular-ai"
+description = "Cardiomni: an autonomous cardiovascular diagnosis agent. Reads paired CTA + DSA DICOM, performs expert-level vascular reading (anatomy -> perception -> fusion -> scoring -> decision), and emits a structured, evidence-anchored diagnostic report with an explicit clinical reasoning trace. Companion method to the CardiomniBench-VD benchmark."
+source = "Cardiomni"
+
+# Default profiles: load both imaging and clinical by default so the full Cardiomni
+# agent (CTA/DSA reading + report writing + evaluation) is available out-of-box.
+# Users can narrow with Cardiomni:imaging or Cardiomni:clinical if needed.
+default_profiles = ["imaging", "clinical"]
+
+# === Profiles for selective loading ===
+
+[[profiles]]
+name = "imaging"
+description = "CTA and DSA medical image reading and vessel perception"
+extends = []
+
+[[profiles]]
+name = "clinical"
+description = "Clinical cardiovascular assessment, reporting, and evaluation"
+extends = []
+
+# === Components ===
+
+[[components]]
+kind = "brand"
+name = "Cardiomni"
+source = "Cardiomni"
+path = "brand/Cardiomni"
+
+[[components]]
+kind = "system-prompt"
+name = "system-prompt"
+source = "Cardiomni"
+path = "system-prompt/Cardiomni"
+
+[[components]]
+kind = "skill"
+name = "diagnosis-analysis"
+source = "Cardiomni"
+path = "skills/diagnosis-analysis/Cardiomni"
+description = "Autonomous CTA/DSA reading workflow: tool orchestration, cardio-api queries, and the 5-stage clinical reading chain (anatomy -> perception -> fusion -> scoring -> decision) with capability-boundary awareness."
+include_in_context = true
+profiles = ["imaging", "clinical"]
+
+[[components]]
+kind = "skill"
+name = "report-writing"
+source = "Cardiomni"
+path = "skills/report-writing/Cardiomni"
+description = "Standard cardiovascular diagnostic report format: structured sections, SYNTAX/CAD-RADS anchoring, and an explicit clinical reasoning trace."
+include_in_context = true
+profiles = ["clinical"]
+
+[[components]]
+kind = "skill"
+name = "evaluation-rubric"
+source = "Cardiomni"
+path = "skills/evaluation-rubric/Cardiomni"
+description = "Evaluation dimensions that keep report output objective and evidence-anchored, mirroring the CardiomniBench-VD rubric (anti-hallucination, standard-anchored)."
+include_in_context = true
+profiles = ["clinical"]
+
+[[components]]
+kind = "tool"
+name = "cardio_imaging_tools"
+source = "Cardiomni"
+path = "tools/cardio-imaging-tools/Cardiomni"
+description = "DICOM/NIfTI readers (incl. synthetic grayscale DICOM for testing) and scientific-computing utilities for CTA/DSA vessel analysis and stenosis quantification."
+
+[[components]]
+kind = "tool"
+name = "cardio_api"
+source = "Cardiomni"
+path = "tools/cardio-api/Cardiomni"
+description = "CardioFetch: unified read-only access to cardiovascular reference databases (clinical grading standards, drug reference, ICD codes, literature) served over MCP. Tools namespaced cardiofetch_<db>_<op>."
+
+[[components]]
+kind = "tool"
+name = "cardio_environment"
+source = "Cardiomni"
+path = "tools/cardio-environment/Cardiomni"
+description = "Describe the UV-managed Python environment used by Cardiomni tools (Python-only stack)."
+
+# === Package-local infrastructure (no host module counterpart) ===
+# These back the tools above but are not themselves module/source/magnet HCP
+# components: a Python runtime, its tests, and the pinned UV env + lock. They
+# ship inside the package and are referenced by the tool descriptors.
+
+[[components]]
+kind = "python-runtime"
+name = "cardio_imaging_runtime"
+source = "Cardiomni"
+path = "tools/cardio-imaging-tools/python/cardio_imaging_runtime"
+
+[[components]]
+kind = "runtime-tests"
+name = "cardio_imaging_runtime_tests"
+source = "Cardiomni"
+path = "tools/cardio-imaging-tools/python/tests"
+
+[[components]]
+kind = "env"
+name = "uv"
+source = "Cardiomni"
+path = "tools/cardio-environment/pyproject.toml"
+
+[[components]]
+kind = "env-lock"
+name = "uv"
+source = "Cardiomni"
+path = "tools/cardio-environment/uv.lock"

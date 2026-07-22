@@ -1,0 +1,207 @@
+{
+  "cad_rads": {
+    "description": "Coronary Artery Disease Reporting and Data System",
+    "version": "2.0",
+    "grades": {
+      "0": {
+        "stenosis": "0%",
+        "description": "Zero: absence of CAD",
+        "plaque": "No identifiable plaque",
+        "clinical_significance": "Normal coronary arteries"
+      },
+      "1": {
+        "stenosis": "1-24%",
+        "description": "Minimal: minimal non-obstructive CAD",
+        "plaque": "Minimal plaque burden",
+        "clinical_significance": "Minimal atherosclerosis"
+      },
+      "2": {
+        "stenosis": "25-49%",
+        "description": "Mild: mild non-obstructive CAD",
+        "plaque": "Mild plaque burden",
+        "clinical_significance": "Mild atherosclerosis, non-obstructive"
+      },
+      "3": {
+        "stenosis": "50-69%",
+        "description": "Moderate: moderate stenosis",
+        "plaque": "Moderate plaque burden",
+        "clinical_significance": "Moderate stenosis, may require functional assessment"
+      },
+      "4": {
+        "stenosis": "70-99%",
+        "description": "Severe: severe stenosis",
+        "plaque": "Severe plaque burden",
+        "clinical_significance": "Severe stenosis, likely hemodynamically significant"
+      },
+      "5": {
+        "stenosis": "100%",
+        "description": "Total occlusion",
+        "plaque": "Complete vessel occlusion",
+        "clinical_significance": "Total occlusion of vessel"
+      }
+    },
+    "modifiers": {
+      "N": "Non-diagnostic study",
+      "S": "Stent (in-stent restenosis assessment)",
+      "G": "Graft (coronary artery bypass graft assessment)",
+      "V": "Vulnerability (high-risk plaque features)"
+    },
+    "high_risk_plaque_features": [
+      "Positive remodeling (remodeling index >1.1)",
+      "Low attenuation plaque (<30 HU)",
+      "Spotty calcification",
+      "Napkin-ring sign"
+    ]
+  },
+  "syntax_score": {
+    "description": "SYNTAX Score for Coronary Artery Disease Complexity",
+    "version": "2.0",
+    "segments": {
+      "RCA": ["1", "2", "3", "4", "16"],
+      "LM": ["5"],
+      "LAD": ["6", "7", "8", "9", "10"],
+      "LCX": ["11", "12", "13", "14", "15"]
+    },
+    "segment_names": {
+      "1": "RCA proximal",
+      "2": "RCA mid",
+      "3": "RCA distal",
+      "4": "Posterior descending artery (PDA)",
+      "5": "Left main (LM)",
+      "6": "LAD proximal",
+      "7": "LAD mid",
+      "8": "LAD distal",
+      "9": "First diagonal (D1)",
+      "10": "Second diagonal (D2)",
+      "11": "LCX proximal",
+      "12": "First obtuse marginal (OM1)",
+      "13": "LCX mid/distal",
+      "14": "Second obtuse marginal (OM2)",
+      "15": "LCX posterolateral",
+      "16": "Posterior left ventricular (PLV)"
+    },
+    "scoring": {
+      "lesion_location_weight": {
+        "5": 5,
+        "6": 3.5,
+        "11": 3.5,
+        "1": 1,
+        "2": 1,
+        "3": 1,
+        "7": 1,
+        "13": 1
+      },
+      "additional_factors": [
+        "Total occlusion (+5)",
+        "Trifurcation (+1)",
+        "Bifurcation (+1-2)",
+        "Aorto-ostial lesion (+1)",
+        "Severe tortuosity (+1)",
+        "Lesion length >20mm (+1)",
+        "Heavy calcification (+1)",
+        "Thrombus (+1)"
+      ]
+    },
+    "risk_stratification": {
+      "low": {"range": "0-22", "description": "Low complexity"},
+      "intermediate": {"range": "23-32", "description": "Intermediate complexity"},
+      "high": {"range": "≥33", "description": "High complexity"}
+    }
+  },
+  "timi_flow": {
+    "description": "TIMI Flow Grade (Thrombolysis In Myocardial Infarction)",
+    "grades": {
+      "0": "No perfusion: no antegrade flow beyond occlusion",
+      "1": "Penetration without perfusion: contrast passes beyond obstruction but fails to opacify distal bed",
+      "2": "Partial perfusion: contrast opacifies distal bed but clearance is slower than normal",
+      "3": "Complete perfusion: normal flow with complete filling and clearance"
+    }
+  },
+  "timi_thrombus": {
+    "description": "TIMI Thrombus Grade",
+    "grades": {
+      "0": "No angiographic thrombus",
+      "1": "Possible thrombus: reduced contrast density, haziness, irregular lesion contour",
+      "2": "Small thrombus: definite thrombus, greatest dimension ≤1/2 vessel diameter",
+      "3": "Moderate thrombus: definite thrombus >1/2 but <2 vessel diameters",
+      "4": "Large thrombus: definite thrombus ≥2 vessel diameters",
+      "5": "Total occlusion: complete thrombotic occlusion"
+    }
+  },
+  "rentrop_collaterals": {
+    "description": "Rentrop Collateral Grading System",
+    "grades": {
+      "0": "No visible collateral circulation",
+      "1": "Filling of side branches via collaterals without visualization of epicardial artery",
+      "2": "Partial filling of epicardial artery via collaterals",
+      "3": "Complete filling of epicardial artery via collaterals"
+    }
+  },
+  "acc_aha_lesion_classification": {
+    "description": "ACC/AHA Lesion Classification",
+    "types": {
+      "A": {
+        "characteristics": [
+          "Discrete (<10mm length)",
+          "Concentric",
+          "Readily accessible",
+          "Non-angulated segment (<45°)",
+          "Smooth contour",
+          "Little or no calcification",
+          "Not ostial",
+          "No major branch involvement",
+          "Absence of thrombus"
+        ],
+        "success_rate": ">85%",
+        "risk": "Low"
+      },
+      "B1": {
+        "characteristics": [
+          "One B characteristic",
+          "Tubular (10-20mm length)",
+          "Eccentric",
+          "Moderate tortuosity",
+          "Moderately angulated (45-90°)",
+          "Irregular contour",
+          "Moderate/heavy calcification",
+          "Ostial location",
+          "Bifurcation requiring protection",
+          "Thrombus present"
+        ],
+        "success_rate": "60-85%",
+        "risk": "Moderate"
+      },
+      "B2": {
+        "characteristics": ["Two or more B characteristics"],
+        "success_rate": "60-85%",
+        "risk": "Moderate-high"
+      },
+      "C": {
+        "characteristics": [
+          "Diffuse (>20mm length)",
+          "Excessive tortuosity",
+          "Extremely angulated (>90°)",
+          "Total occlusion >3 months",
+          "Inability to protect major side branch",
+          "Degenerated vein graft"
+        ],
+        "success_rate": "<60%",
+        "risk": "High"
+      }
+    }
+  },
+  "agatston_score": {
+    "description": "Agatston Coronary Artery Calcium Score",
+    "categories": {
+      "0": {"description": "No identifiable plaque", "risk": "Very low"},
+      "1-10": {"description": "Minimal plaque", "risk": "Low"},
+      "11-100": {"description": "Mild plaque", "risk": "Mild"},
+      "101-400": {"description": "Moderate plaque", "risk": "Moderate"},
+      ">400": {"description": "Extensive plaque", "risk": "High"}
+    },
+    "percentiles": {
+      "description": "Age and sex-matched percentile rankings",
+      "interpretation": "<25th percentile: below average; 25-50th: average; 50-75th: moderate; >75th: high"
+    }
+  }
+}

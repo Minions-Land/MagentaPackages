@@ -30,3 +30,6 @@ target/
 .tmp/
 tmp/
 scratch/
+
+# Examples and temporary files
+*.example

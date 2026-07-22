@@ -1,0 +1,22 @@
+kind = "tool"
+name = "cardio_environment"
+description = "Describe the UV Python environment used by Cardiomni cardiovascular tools. Returns the environment's installed packages as JSON via `uv pip list --format json`. The environment includes numpy, pydicom, nibabel, SimpleITK, scipy, scikit-image, mcp, requests, pytest, and optional imaging extras (opencv-python, vtk, monai)."
+runtime = "process"
+command = "uv"
+# Run uv pip list from the environment's root directory to report installed packages
+# --format json provides structured output; this is a read-only operation
+args = ["pip", "list", "--format", "json"]
+# Resolve relative to this descriptor: ../pyproject.toml defines the environment
+cwd = ".."
+operation = "read"
+read_only = true
+destructive = false
+timeout_ms = 60000
+
+[metadata]
+package = "Cardiomni"
+environment_definition = "../pyproject.toml"
+environment_lock = "../uv.lock"
+
+[parameters]
+type = "object"
