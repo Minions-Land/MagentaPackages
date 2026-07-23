@@ -11,6 +11,7 @@ export interface BrandConfig {
   displayName: string;
   description: string;
   source: string;
+  version: string;
   theme: ThemeConfig;
   cli?: CLIConfig;
 }
@@ -39,6 +40,7 @@ export const CardiomniBrand: BrandConfig = {
   displayName: 'Cardiomni',
   description: 'Cardiomni package brand inspired by cardiovascular medical imaging and clinical interfaces.',
   source: 'Cardiomni',
+  version: '0.1.0',
   theme: {
     primaryColor: '#C41E3A',      // Crimson Red - cardiovascular focus
     accentColor: '#2E86AB',       // Clinical Blue - medical imaging
