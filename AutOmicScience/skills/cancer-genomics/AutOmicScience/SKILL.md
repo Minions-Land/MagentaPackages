@@ -106,6 +106,14 @@ Filter to pathogenic mutations. **This is a design decision, not a default** —
 - Grounded: CGC tier 1/2 gene-context rules — any LoF in a TSG, but only *hotspot* missense in an
   oncogene. "All missense is pathogenic" inflates every oncogene's recurrence
 - Sources: Cancer Gene Census, COSMIC hotspots, ClinVar — name the one you used
+- **Prefer the file's own annotation columns.** Many MAFs carry curated driver flags — Cancer-Gene-Census
+  membership, OncoKB / hotspot annotations, or any curated driver flag the file already carries. Define
+  the oncogenic set by **unioning** the non-silent functional classes with those columns, not a
+  hand-curated literature gene list, which silently drops drivers the file already flags
+- **Activating / resistance-mutation questions** → make the **domain- or hotspot-restricted rate the
+  primary definition** (activating and resistance mutations cluster in a functional domain or hotspot);
+  report the whole-gene alteration rate only as a secondary / sensitivity check, because a whole-gene
+  rate dilutes the driver signal. Take domain coordinates from UniProt / Pfam and cite them
 
 → `assets/references/variant_classification.md`
 
@@ -175,6 +183,12 @@ TMB distribution is right-skewed (hypermutators). Report median and interquartil
 
 A pathway is "altered" if ≥1 gene in the set has a pathogenic mutation. Don't sum mutation counts — that double-counts patients with multiple hits.
 
+When a question names a signaling pathway, **define its gene set from a named curated source** (MSigDB
+Hallmark / KEGG / Reactome, or an established pathway paper) and use the **full membership** — do not
+hand-pick a few "canonical" genes or narrow the set to sharpen the story. A hand-drawn subset changes
+the reported frequency and cannot be audited. Apply the per-member event rule (LoF / deletion for
+tumour suppressors; hotspot-missense / amplification for oncogenes), not a blanket "any protein-altering".
+
 ### 4. Fisher test sidedness matters
 
 - **Two-sided**: enrichment or depletion (most associations)
@@ -226,5 +240,12 @@ Every analysis emits:
 - **MAF provenance**: source (TCGA/GDC/local), n_samples, n_variants, cancer types
 - **Variant-classification rule**: which pathogenicity criteria (CGC/COSMIC/ClinVar)
 - **Association test**: Fisher sidedness, FDR method, minimum-support gate
+- **Recurrence vs association contrast**: when both are computed, state them side by side — name the
+  most-frequent genes that are **not** outcome-associated, and the associated genes that are not the most
+  frequent; the two lists are rarely identical, and reporting both distinguishes recurrence from
+  outcome-association
+- **Biological consequence of each key gene**: for an outcome-associated driver, state its known
+  functional consequence and therapeutic implication with a citation — a bare gene name and a p-value is
+  a result, not an interpretation
 
 See reference docs for per-analysis reporting templates.

@@ -42,6 +42,18 @@ signal.
 
 Testing all pairs is `n²/2` tests — **FDR-correct** (`multipletests(..., method="fdr_bh")`) and say so.
 
+**Beyond the pairwise Fisher test** — three standard extensions to reach for when the flat pairwise test
+is not enough:
+- **Permutation null** — shuffle the alteration labels many times to build an empirical null for the
+  co-alteration count; the permutation p-value is robust when cells are sparse or the Fisher
+  approximation is shaky.
+- **Observed-vs-expected co-occurrence** — report the observed double-altered count against the count
+  expected under independence (from the row/column marginals), per pair or per cell line; that ratio /
+  log-ratio is often what is wanted over a bare p-value.
+- **Greedy / iterative set cover (UNCOVER-style)** — to find a mutually-exclusive *module* (a gene set
+  jointly covering a sample set with minimal overlap), rank pairs first, then grow the set greedily; a
+  single flat pairwise ranking will not surface the module.
+
 ## Detection strategy 2: dependency conditioned on genotype
 
 Using DepMap: is gene B a stronger dependency in cell lines that have lost gene A? This is the direct
@@ -71,10 +83,17 @@ Paralogs (duplicated genes with redundant function) are enriched for SL — losi
 the other, so the pair is only lethal together.
 
 ```python
-# Ensembl BioMart paralog table, or a curated list; filter on sequence identity
-paralog_pairs = pd.read_csv("ensembl_paralogs.csv")
-paralog_pairs = paralog_pairs[paralog_pairs.identity > 0.3]
+# Get paralogs from a real source, not a hardcoded shortlist — the paralog SL prior should reflect the
+# whole paralog space. Ensembl BioMart `hsapiens_paralog` attributes (gene name, paralog name, %identity)
+# are the canonical source; `biofetch_ensembl_*` reaches Ensembl, or fetch the BioMart paralogy table
+# once and cache it. Then threshold on sequence identity:
+paralog_pairs = fetch_ensembl_paralogs()          # columns: gene, paralog, identity
+paralog_pairs = paralog_pairs[paralog_pairs.identity > 0.3]   # redundancy threshold; tune per analysis
 ```
+
+A handful of remembered pairs is **not** a paralog prior. Enumerate paralog families from the retrieved
+table so that every redundancy-buffered pair is covered, then intersect with your dependency/alteration
+data — do not hardcode a shortlist and treat it as complete.
 
 ## Priors: protein–protein interaction (STRING)
 

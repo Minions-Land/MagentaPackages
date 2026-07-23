@@ -23,10 +23,23 @@ pixi lock && pixi install --locked
 pixi run --frozen Rscript wgcna.R
 ```
 
+Those two dependencies are the **whole** module-detection pipeline — `r-wgcna` pulls `impute`,
+`preprocessCore`, `AnnotationDbi`, `fastcluster`, and `dynamicTreeCut` transitively, so
+`pickSoftThreshold → blockwiseModules → moduleEigengenes → module–trait` all run as-is (verified).
+**Do not add `bioconductor-go.db`** (or an `org.*.eg.db`) by reflex: `library(WGCNA)` loads and every
+function above works without it. GO.db is a Bioconductor **data** package needed *only* if you call
+WGCNA's built-in `GOenrichmentAnalysis` — and you rarely should, because module functional annotation
+is normally done separately (enrichment against pathway sets, or against marker sets the task provides).
+Adding GO.db when nothing calls it just pulls in a data package the analysis never reads.
+
 If that solve fails, drop to a **named** conda env and record the versions, since conda envs are not in
-any lock. Do **not** substitute the coherence shortcut below and call it WGCNA. The recipe was
-**verified against WGCNA 1.74 source (CRAN), not executed** (no R + WGCNA available here) — signatures and
-defaults are cited from source; treat runtime behaviour as unconfirmed.
+any lock. **There is no Python substitute for WGCNA here:** do not fall back to the coherence shortcut
+below, and do not hand-write your own adjacency → TOM → clustering → eigengene pipeline, and then report
+either one as WGCNA. Provision the R package and run it; if it genuinely cannot be installed, that is a
+blocker to report, not a cue to substitute.
+
+The recipe was **verified against WGCNA 1.74 source (CRAN), not executed** (no R + WGCNA available
+here) — signatures and defaults are cited from source; treat runtime behaviour as unconfirmed.
 
 Standard pipeline on **variance-stabilized** expression (VST / TMM-logCPM), genes in columns, samples in rows.
 

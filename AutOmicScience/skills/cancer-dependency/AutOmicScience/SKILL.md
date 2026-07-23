@@ -42,6 +42,7 @@ DepMap releases quarterly. The current file is **`CRISPRGeneEffect.csv`**: rows 
 | **Selective dependency** | | | |
 | normLRT score (published, skew-t vs normal) | **PARTIAL** | R `sn::st.mple` + `MASS::fitdistr` — not pinned, no Python equivalent | `assets/references/dependency_analysis.md` |
 | Group-comparison selective dependency | **REFERENCE** | `scipy.stats.mannwhitneyu` — pinned | `assets/references/dependency_analysis.md` |
+| SSD selectivity proxy (Python, no R) | **REFERENCE** | Python (`((x - x.mean())**2).sum()` per gene) | `assets/references/dependency_analysis.md` |
 | Per-cancer-type dependency frequency | **REFERENCE** | Python | `assets/references/dependency_analysis.md` |
 | **Druggability** | | | |
 | Pharos target annotation (Tclin/Tchem/Tbio/Tdark) | **REFERENCE** | Pharos API / download | `assets/references/druggability.md` |
@@ -118,6 +119,16 @@ Pick the one you are actually asking; they are not interchangeable.
 - **"More essential in cancer type A than elsewhere?"** → a directional Mann-Whitney (`alternative
   ="less"`), in the pinned stack. FDR-correct, and report group sizes — a "significant" delta over six
   lines is noise
+- **"A dependency in one screen modality / cohort but not another?"** (e.g. patient-level predicted
+  scores vs cell-line screens) → characterize
+  each gene's dependency-score **distribution separately in each cohort** — normLRT where R is
+  available, or the **SSD** dispersion proxy in the pinned Python stack — classify each distribution
+  (single-normal vs heavy-tailed / selective), contrast the cohorts, then keep only druggable
+  survivors. A cross-cohort *expression* correlation answers a different, weaker question.
+  **Order it cheap-first for tractability:** compute the per-gene selectivity statistic and druggability
+  filter *first*, reducing to a small candidate set, and only then run the cross-cohort comparison on
+  that set — an all-pairs biomarker×target matrix (every gene × every gene) is quadratic and overruns
+  the time budget; the per-gene stats are linear and do the discriminating work
 
 → `assets/references/dependency_analysis.md`
 
@@ -159,6 +170,11 @@ Fisher exact on the 2×2, one-sided for depletion of the double-altered cell, th
   *and* CDK6, which no pairwise prior can express
 - STRING's `limit` defaults to **10** — BRCA1 has 373 partners at score > 700 and PARP1 is not in the
   top 10, so the default call misses the canonical pair
+- **Go beyond a single flat pairwise Fisher.** Report **observed-vs-expected co-occurrence** per pair
+  (and per sample / cell line where resolution allows), not just the 2×2 counts; assess significance by
+  **permutation** as well as analytic Fisher (state the permutation count and threshold); and use a
+  **greedy / iterative set-cover** (UNCOVER-style) to surface mutually-exclusive *modules* a flat
+  pairwise ranking misses
 
 → `assets/references/synthetic_lethality.md`
 
@@ -218,6 +234,15 @@ its evidence *creates* false positives with a confident label on them — `KRAS`
 2011, and `VHL`–`CDK6` requires losing CDK4 *and* CDK6, which no pairwise prior can express. Curate
 the list against replication, and use **HGNC approved symbols** so entries actually match.
 
+Derive the paralog prior **programmatically** from a curated ortholog / paralog resource (Ensembl /
+biomaRt, HCOP) with a stated **sequence-identity threshold**, and **enumerate the paralog space to
+test each pair directly** — do not hardcode a remembered shortlist or confine the screen to a
+hand-picked target list. A curated-target-only screen makes high-identity paralog pairs — which are
+prime synthetic-lethal candidates — structurally invisible. Enumerate paralogs **genome-wide, not only
+paralogs of the mutated / altered genes**: paralog buffering does not require the compensated loss to
+be a coding mutation (it can be low expression or copy loss), so keying the enumeration on a
+mutation list hides exactly the highest-identity essential pairs the analysis is looking for.
+
 ### 7. Multi-omic integration amplifies candidates
 
 Dependency alone: "this gene is essential in cancer X." Dependency + phospho upregulation: "this kinase is *both* essential *and* hyperactivated" → stronger therapeutic rationale.
@@ -249,5 +274,9 @@ Every analysis emits:
 - **Dependency calls**: gene, mean gene-effect in target cancer, threshold used, n lines
 - **Druggability**: Pharos tier, evidence (TTD phase, DrugBank count)
 - **SL pairs**: mutual-exclusivity odds ratio, p-value, prior applied (paralog/PPI/canonical)
+- **Per prioritized target** (a ranked list is not yet a prioritization): its pathway / mechanism in the
+  disease context; a named approved drug or clinical-trial precedent where one exists; what its tier
+  means (approved-class vs clinical-stage vs novel-chemistry — and which tiers form the repurposing
+  pool); and a concrete experimental-validation next step
 
 See reference docs for per-analysis reporting templates.

@@ -82,6 +82,13 @@ call. There is no Python substitute either: `scipy.stats.jf_skew_t` is the Jones
 Azzalini's, and the PyPI package named `SkewT` is a meteorology plotting tool. **Do not approximate
 this score and keep calling it normLRT.**
 
+**A Python-native dispersion alternative: SSD.** When R is not available (or as a fast pre-rank), the
+sum-of-squared-deviations of a gene's effect across cell lines — `((effect - effect.mean())**2).sum()`
+per gene — ranks genes by how spread-out (selective) their dependency is: pan-essential and
+never-essential genes both have low SSD, a gene lethal in a subset has high SSD. It is a crude,
+distribution-free proxy, not a significance test — use it to rank/shortlist, then confirm with normLRT
+(R) or a group-comparison test; report it as "SSD-ranked selectivity", never as normLRT.
+
 The reference implementation is R (`sn` ≥ 2.1, `MASS`), matching the published method — normal via
 `MASS::fitdistr` (`$loglik`), skew-t via `sn::st.mple` (`$logL`), with the paper's degrees-of-freedom
 fallback ladder when the free-`nu` fit fails to converge:

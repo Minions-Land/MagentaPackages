@@ -61,7 +61,11 @@ specifically wants rlog, that is an R env to provision, not a synonym to swap in
 - **Do not** feed TPM/FPKM or log-CPM to a count model (DESeq2/edgeR) as if they were counts.
 - **Do not** z-score raw counts for clustering — variance scales with the mean; variance-stabilize (VST/rlog) first.
 - For very sparse / low-count matrices, a variance-stabilizing transform before PCA (or a sparse-aware
-  decomposition) is more appropriate than dense PCA on raw counts.
+  decomposition such as `TruncatedSVD`) is more appropriate than dense PCA on raw counts.
+- **Sample clustering**: after variance-stabilization + dimensionality reduction (PCA, or `TruncatedSVD`
+  for sparse), cluster samples with either **k-means** (choose *k* by silhouette / elbow / a stated prior)
+  or **hierarchical/Ward** — both are standard; a fixed-*k* partition (k-means) and a dendrogram cut answer
+  slightly different questions. Report the reduction, the algorithm, and *k*/cut so the grouping is reproducible.
 - State the exact normalization + filter thresholds you used, so the analysis is reproducible.
 
 ## Sources

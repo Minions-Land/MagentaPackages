@@ -80,6 +80,13 @@ your pipeline (featureCounts / nf-core/chipseq / bedtools upstream).
   and the next attribute access dies
 - **Shrink before ranking** (`lfc_shrink`). Peak counts are noisier than gene counts, so this matters
   more here than in RNA — and the parent skill requires it
+- **Identify differential peaks with a significance gate, not fold-change alone** — a one-sided test in
+  the asked direction (depletion / gain) with **BH-FDR** across all intervals, an effect-size cut, and a
+  minimum-coverage filter. This holds **even with one library per condition**: use a count-based exact
+  test (Poisson / negative-binomial with a fixed dispersion) on the two libraries and treat its FDR as
+  the *identification gate* (a label-permutation null is degenerate at one library per condition). A fold-change
+  plus a minimum-signal cutoff is a *ranking*, not a significance call — computing the p-values and then
+  labelling them "descriptive only" abandons the gate the question asks for
 
 → `assets/references/differential_occupancy.md`
 
@@ -141,6 +148,16 @@ installed here**; `pyranges`' `combined.merge(count=True)` does the same in a si
 
 ATAC signal has a **TF footprint** (depletion at the motif center, flanked by high signal). TOBIAS / HINT-ATAC detect these. Differential footprinting = differential TF activity. TOBIAS is **not installed**; its chain is ATACorrect → **ScoreBigwig** → BINDetect, and each step must consume the previous step's output (`assets/references/atac_footprinting.md`).
 
+### 5. A provided TF ChIP-seq anchors a specific gene's enhancers
+
+When a task provides a **sequence-specific transcription-factor ChIP-seq** alongside the histone mark
+and the question targets a **specific gene's** regulatory response, use the TF peaks and their treatment
+response to define that gene's **candidate distal enhancers** — TF-bound intervals within distal distance
+windows of the gene — then report the histone-mark change at each anchor. Do not stop at the genome-wide
+differential scan: the provided TF track is the signpost to the specific regulatory elements the question
+is about, and pairing it with the mark is what identifies the responsive enhancers rather than a
+chromosome-wide list.
+
 ---
 
 ## Pitfalls
@@ -155,7 +172,9 @@ ATAC signal has a **TF footprint** (depletion at the motif center, flanked by hi
   its return value gives `None` and the next attribute access dies.
 - **Ranking unshrunk peak LFCs** — shrink first; peak counts are noisier than gene counts, so this matters
   more here, and the parent skill requires it.
-- **No FDR** — testing thousands of peaks needs BH correction
+- **No FDR** — testing thousands of peaks needs BH correction; and the FDR must be the *identification
+  gate*, not a "descriptive" column next to a fold-change + min-signal call (true even at n=1 per
+  condition — use a count-based exact test, e.g. fixed-dispersion NB/Poisson)
 - **Histone mark misinterpretation** — H3K27me3 ≠ active; it's repressive
 - **Judging a broad mark by TF-ChIP FRiP** — the >1% rule is TF-ChIP-specific; broad marks are expected to
   score low.

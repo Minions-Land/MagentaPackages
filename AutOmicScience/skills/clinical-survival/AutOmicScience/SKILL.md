@@ -74,6 +74,12 @@ Each step names the decisions it forces and the traps that do not announce thems
 recipe lives in the reference doc** — read it before writing the step. All of it needs the provisioned
 `survival` env (Prerequisites).
 
+A **landmark / fixed-horizon question** (one asking about survival, or an outcome, at a specific time
+point) is still a survival question: stratify the biomarker (median split, or a stated cut) and run
+KM + log-rank — and Cox for adjustment — on the **full** time-to-event data as the **primary** analysis.
+Do **not** reduce it to a binary outcome at the horizon and a rank test; that discards censoring and the
+shape of the curve, and its p-values will not match the log-rank result the endpoint implies.
+
 ### 1. Kaplan-Meier curves
 
 Per-group survival curves, with a risk table.
@@ -134,6 +140,22 @@ HR > 1 → increased hazard (worse outcome). HR < 1 → protective. Always repor
 ### 5. PH assumption check
 
 Cox PH requires proportional hazards (group hazard ratio constant over time). Check with Schoenfeld residuals. If violated, use stratification or time-varying coefficients.
+
+### 6. "Favorable *despite* lacking X" → benchmark against the group that HAS X
+
+When a question frames a subgroup's outcome as favorable **despite** its lacking a feature, the implied
+reference is the group that **has** the feature. Build the comparison explicitly: include the
+has-feature group as a distinct arm in the KM + log-rank, and fit a Cox model with the
+**has-feature group as the reference level**; then pre-specify an explicit **equivalence-style**
+criterion for "comparable to the reference" and state it before looking. "As good as those who have X"
+is a between-group claim — a within-subgroup median split alone does not test it.
+
+### 7. One measurement scale per feature
+
+When a biomarker/feature is reported on multiple measurement scales (e.g. percent-of-parent vs
+percent-of-leukocytes in flow cytometry, or raw vs normalized units), pick **one** scale consistent with
+the question and **never mix scales** within a single feature set — mixing pulls in duplicate or
+incomparable features, changing both the feature list and the cohort that survives filtering.
 
 ---
 
