@@ -33,6 +33,11 @@ print(res.summary())   # ACME (indirect), ADE (direct), Total effect, Prop. medi
 - **Identify/nominate mediating species** from DE + correlation: integration heuristic (DE∩correlation)
 - **Estimate a causal/indirect effect**: formal mediation (causal pathway)
 
+The word *mediate/mediating* in a question does **not** by itself call for formal mediation. "Which
+species mediate X?" asks you to **nominate** candidates → integration heuristic (the default; run DE and
+correlation separately, then intersect). Reserve formal mediation for an explicit request to **estimate**
+an indirect effect (ACME/proportion mediated).
+
 > **Do not call `.fit()` on the models first.** `Mediation` needs the model objects, not their
 > results — passing `smf.ols(...).fit()` raises `AttributeError: 'OLSResults' object has no attribute
 > 'exog'`, which names nothing useful about the actual mistake.

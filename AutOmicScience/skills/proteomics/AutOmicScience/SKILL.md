@@ -111,6 +111,15 @@ Test whether two cohorts' upregulated sets overlap more than chance.
 - "Which changed **most**" → FDR gate first, then rank by **|effect size|**
 - "Which are **most significant**" → rank by p-value; that is the right axis for *that* question
 - Same analysis, different ranking axis — read the question before choosing
+- **Supported across multiple modalities** → the ranking axis **is** a single combined effect-size
+  score: compute the **product** (or minimum) of the per-modality effect sizes — standardizing within
+  each modality first **only if** their scales differ widely enough that one would otherwise dominate —
+  then **sort the candidates by it and present the ranked table**. A qualitative summary, an unranked
+  list, a mean-magnitude, or alphabetical order is *not* the ranking. State the combination rule and
+  whether you standardized
+- **A semicolon-delimited protein/gene-ID field is a protein *group*** (multiple identifiers for one
+  measurement). For cross-modality gene matching, **drop** the multi-gene (`;`) entries — do not expand
+  them into separate genes; expansion fabricates matches from an ambiguous group
 
 → `assets/references/effect_size.md`
 
@@ -140,6 +149,13 @@ The denominator is **all proteins measured in both cohorts**, not the full human
 
 Cross-cohort "overlap" means **directionally concordant** (both up or both down), not just significant in both. A protein up in cohort A and down in cohort B is a discordance, not a replicate.
 
+The concordance **denominator is a decision**: features significant in *both* datasets, or the
+discovery-significant features scored by the comparator's effect **sign regardless of the comparator's
+own significance**. For "is signature X consistent with condition Y" questions the latter is usually
+intended — restricting to doubly-significant features shrinks the denominator and silently drops
+sign-flippers; state which convention you used. Report concordance by **naming the specific concordant
+and discordant features**, not counts/percentages alone.
+
 ### 6. Effect-size ranking before pathway interpretation
 
 Rank by effect size (log2FC, t-statistic), not by p-value. A protein with log2FC=0.1 and p<1e-10 (from huge sample size) is less biologically interesting than log2FC=2.0 with p=0.01.
@@ -147,6 +163,27 @@ Rank by effect size (log2FC, t-statistic), not by p-value. A protein with log2FC
 ### 7. Phosphoproteomics = site-specific
 
 Phosphoproteomics measures **phosphosites** (e.g., `TP53_S15`), not total protein. Activating sites (kinase substrates) are a small functional subset — filter before interpretation.
+
+### 8. Multi-arm / multi-treatment designs
+
+Test each treatment arm **separately** and report the per-arm significant counts, then form the
+cross-arm sets — **shared** (significant in all arms) vs **arm-unique**. An interaction or contrast
+model across arms is a valid complement but does **not** replace the per-arm significant-set comparison
+a "which features differ, and in which arm" question asks for.
+
+### 9. Target-prioritization questions ship their own annotation table
+
+When the objective is druggable / therapeutic-target prioritization and the data ships a companion
+drug-target or annotation table, **join it to your final candidate list** and report the concrete
+annotations (drug names, approval / clinical status) for the top hits. Loading the table without
+surfacing its contents does not answer a prioritization question.
+
+### 10. "Top / most X-associated" is a ranked top-N, not a threshold
+
+When a question refers to the "top" or "most [X]-associated" features without stating a size, define that
+set as a **ranked top-N small subset** (tens to low hundreds) on the association-strength metric (−log10
+p or effect size), **not** a significance threshold. A p/FDR cutoff can admit most of the tested universe
+— that is not a "top" set, and every overlap / hypergeometric test against it is inflated toward triviality.
 
 ---
 

@@ -130,6 +130,15 @@ Distance-based clonotype calling: `ir.pp.ir_dist` then `ir.tl.define_clonotype(_
 - **Public** = the same sequence-defined receptor in **≥2 donors**
 - These are different questions; keep them separate. Conflating them turns a big clone in one patient
   into a "public" response
+- **Gate on a per-(donor, clonotype) cell-count filter you compute yourself** (a small per-donor minimum
+  you choose and state explicitly), applied **within each donor, never pooled**, and make it the
+  **PRIMARY** expansion definition. A vendor or precomputed "expanded"/clonotype flag is at most a
+  **secondary cross-check, not the primary criterion** — report the self-computed-count result as the
+  headline; leading with the vendor flag (even if you also compute the count as a robustness check)
+  lets the expansion call ride on whichever cutoff the upstream pipeline happened to apply
+- **Subset to the exact annotated category.** When the question names an *expanded + specific* cell state
+  and an annotation column already carries exactly that label, subset to that **exact category** — do not
+  union broad substring matches across annotation columns, which pulls in adjacent / non-expanded states
 
 → `assets/references/clonal_and_public.md`
 
@@ -189,6 +198,11 @@ Every analysis emits:
   V/J + CDR3), donors carrying it, per-donor cell counts.
 - **BCR (if applicable)**: SHM frequency per subregion, isotype distribution, lineage summary.
 - **Phenotype**: clonotype × cell-state cross-tab where relevant.
+- **Clinical prioritization** (when a response / outcome label is provided): join it, rank the public
+  candidates by responder-enrichment, and report **in the final answer** (not only an intermediate file)
+  each candidate's per-patient response breakdown plus the biological rationale — chronic-antigen
+  exposure → terminal exhaustion; per-donor clonal expansion → antigen-driven selection; public across
+  patients → a shared antigen. A candidate list without the response context is not a prioritization.
 - Inspect figures/networks before they back a claim; cite dandelion + scirpy.
 
 See the reference docs for per-capability templates.

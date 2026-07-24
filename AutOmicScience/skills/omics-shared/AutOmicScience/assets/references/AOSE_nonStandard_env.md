@@ -88,6 +88,13 @@ pixi install --locked           # materialise exactly what the lock says
 pixi run --frozen python spagcn_domains.py
 ```
 
+**Provision the method's real package — don't skip it and hand-roll a substitute in its place.**
+Writing your own approximation of a PARTIAL / REFERENCE method and reporting it as that method is
+exactly the failure this document exists to prevent. (A package that genuinely *cannot* be
+provisioned is a different case — a blocker to report, per "Fail loud on absence" below.) If you do
+legitimately run a different method, name it as what it is in the `report`, never as the method you
+did not run.
+
 **Declare what you import, not a copy of `task1`.** The solver brings in transitive
 dependencies: `scanpy` gets you pandas, numpy and scipy. There is no list to reproduce and
 nothing to look up.

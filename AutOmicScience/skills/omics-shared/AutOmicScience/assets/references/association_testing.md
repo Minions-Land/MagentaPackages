@@ -59,6 +59,13 @@ smf.ols("pct ~ disease * ethnicity", df).fit()   # the disease:ethnicity coeffic
 
 Stratified estimates describe each group; the interaction tests whether they really differ.
 
+For a **balanced factorial design** (two categorical factors, e.g. condition × group), the same model is
+conventionally reported as a **two-way ANOVA** — `anova_lm(model, typ=2)` gives the interaction
+**F-statistic and partial η²**, which many fields expect over the raw OLS coefficient. When the outcome is
+a clinical/physiological or metabolic-phenotype index, the `metabolomics` skill's
+`assets/references/clinical_metabolic.md` carries the index precedence and the two-way-ANOVA template for
+exactly this kind of condition × group question.
+
 ## Pitfalls
 
 - **One global BH across pooled + per-stratum tests** — mixes families; correct within each

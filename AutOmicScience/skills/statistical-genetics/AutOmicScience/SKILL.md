@@ -34,6 +34,12 @@ summary-statistic level: no raw-genotype calling/imputation.
 - **sdY** (quantitative-trait SD) scales the ABF prior; if unknown, coloc estimates it from
   `varbeta`, `MAF`, `N`.
 
+**`coloc.abf` runs on summary statistics alone** — per-trait `beta`/`SE` (or p + effect direction),
+`MAF`, and `N` — with **no LD matrix and no individual-level genotypes**. So "we lack an LD matrix / the
+per-cohort sample sizes" is **not** a reason to skip colocalization: sdY is estimated from `varbeta`/`MAF`/`N`,
+and any needed statistics are completed by gwaslab. When a question asks whether traits **share genetic
+factors** at shared loci, colocalization is the expected test, not an optional extra.
+
 ---
 
 ## Prerequisites

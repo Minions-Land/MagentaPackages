@@ -107,6 +107,32 @@ collection, thresholds, interpretation) even when a subcommand exists.
   an unmodeled confound is the most common silent error.
 - **Pseudobulk before DE** for single-cell data: sum **raw** counts per (donor × group), then run a
   count-based model on the pseudobulk matrix — not a per-cell test.
+- **A continuous phenotype is a modeling problem, not a correlation screen.** To associate expression
+  with a continuous trait (duration, dose, age, a clinical score), fit the **count model with the trait
+  as a continuous design term** (`pyDESeq2` — installed in `task1`; limma/voom is the R alternative but
+  is **not** installed here), apply **LFC shrinkage**, and rank by shrunken **|log2FC|** with an FDR
+  gate. A bare Spearman/Pearson screen — **or an OLS / cluster-robust regression on log-CPM** — is *not*
+  the count model: it ignores the count mean–variance relationship, the covariates (batch, sex, age,
+  RIN), and variance moderation, and is the same statistical downgrade as a bare t-test.
+  When samples span tissues/regions and the question is tissue-specific, **fit the model per tissue and
+  compare yield across tissues** — do not pool with a tissue covariate or average expression across
+  regions.
+- **Sample clustering / "which samples are most similar"** — variance-stabilize (VST) or logCPM →
+  reduce dimensions (**PCA**, or **TruncatedSVD** for a sparse UMI matrix, to avoid densifying a large
+  matrix) → partition with **k-means** (choose *k* from a stated prior or silhouette) or **Ward**, then
+  **cross-tabulate the clusters against the known sample labels** to quantify concordance. A pairwise
+  distance or a PERMANOVA summary is not a partition and does not answer "which samples group together".
+  (`assets/references/normalization.md`)
+- **Use the dataset's own subset flags.** When a metadata column already marks the exact subset the
+  question asks for (a control / vehicle flag, a specific dose or concentration), filter on that flag
+  rather than pooling a looser superset — a superset changes every downstream frequency, cluster, and
+  contrast.
+- **Discrete-timepoint DE → characterize the temporal pattern explicitly.** For a small number of
+  discrete timepoints, one robust approach is to encode each timepoint's direction (Up / Down / n.s. at a
+  stated |log2FC| + significance rule) into a per-timepoint **state string** and group features by
+  identical strings ("shared across strata" = identical string in both; "stratum-specific" = the pattern
+  appears in only one stratum). For many or continuous timepoints a trajectory model (spline /
+  maSigPro-style) fits better. State the per-timepoint significance rule you use.
 - **State your conventions** — normalization, shrinkage estimator, ranking metric, FDR method, background
   universe. A result is only interpretable and reproducible alongside its method.
 - **GSEA ranks by log2FoldChange** (or shrunken LFC), and use the **Hallmark (H)** collection when Hallmark
@@ -130,6 +156,10 @@ collection, thresholds, interpretation) even when a subcommand exists.
   align ids to the gene-set namespace first.
 - **WGCNA collapses to one giant module** → soft-power too low or unsigned network; re-pick power via
   `pickSoftThreshold` scale-free fit, use a signed TOM.
+- **OOM / kernel kill (rc 137) on a wide matrix** → you densified the full gene×sample matrix. A
+  ~10k×60k dense `float64` is several GB and its transient copies blow a 16 GB cap. Keep the **sparse**
+  representation, **subset genes/samples first**, and use **TruncatedSVD** (not dense PCA) for
+  dimensionality reduction — never `.toarray()` the whole matrix.
 
 ## Provenance
 
